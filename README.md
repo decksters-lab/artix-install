@@ -18,9 +18,10 @@ chmod +x artix-install.sh
 or (the original way)
 ```
 curl -sL https://githubusercontent.com/decksters-lab/main/artix-install | bash
+```
 For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `artix`, user `user`):
 ```
-```
+
 ./artix-install.sh --test
 ```
 
