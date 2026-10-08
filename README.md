@@ -1,6 +1,6 @@
 # artix-install
 
-A whiptail-driven installer for Artix Linux, published at [github.com/decksters-lab/artix-install](https://github.com/decksters-lab/artix-install). Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
+A whiptail-driven installer for Artix Linux. Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
 
 ## Requirements
 
