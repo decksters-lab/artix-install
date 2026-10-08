@@ -7,7 +7,7 @@ A whiptail-driven installer for Artix Linux. Originally based on a script from `
 - Booted from the Artix live ISO, with a network connection
 - Must be run as root
 
-## Usage
+## Usage (if you are using a graphical iso, run it as root user / su )
 
 ```
 git clone https://github.com/decksters-lab/artix-install.git
