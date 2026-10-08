@@ -15,9 +15,11 @@ cd artix-install
 chmod +x artix-install.sh
 ./artix-install.sh
 ```
-
+or (the original way)
+```
+curl -sL https://githubusercontent.com/decksters-lab/main/artix-install | bash
 For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `artix`, user `user`):
-
+```
 ```
 ./artix-install.sh --test
 ```
@@ -69,7 +71,7 @@ Things flagged during review but intentionally left as-is, or not yet verified:
 
 - **doas config** ships `permit nopass :wheel cmd pacman` — effectively passwordless root for anyone in `wheel`, since pacman can run arbitrary code as root (install scriptlets, `--hookdir`, `--config`). Left in deliberately; edit `/etc/doas.conf` after install if you want it removed or pinned to specific args (e.g. `args -Syu`).
 - **Dual-boot EFI formatting** — the "do NOT format" warning shown in dual-boot mode isn't currently enforced. The Format EFI step has no dual-boot guard and will format an existing EFI partition — e.g. wiping a Windows bootloader — if you choose "Format" there. Avoid formatting your ESP in dual-boot mode.
-- **Untested paths** — Cinnamon, MangoWM, Niri, Wayfire, and noctalia-greeter have been reviewed, syntax-checked, and exercised against mocked network/chroot calls, but not yet run end-to-end on real hardware or a live ISO. Worth a VM run before relying on them.
+- **Untested paths** — Cinnamon, MangoWM, Niri, Wayfire, and noctalia-greeter have been reviewed, syntax-checked, and exercised against mocked network/chroot calls, but not yet run end-to-end on real hardware or a live ISO (noctalia greeter and mangowm working confirmed via vm install). Worth a VM run before relying on them.
 
 ## Changes from the original upstream fork
 
