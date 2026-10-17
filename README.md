@@ -77,6 +77,7 @@ Things flagged during review but intentionally left as-is, or not yet verified:
 
 ## Changes from the original upstream fork
 
+- Removed **Xlibre**, this was added to the original script when xlibre was the artix default x session. I switched it back to **X11** to match artix team recommendation on using it.
 - Added **Cinnamon**, **Plasma**, **Niri**, and **Wayfire** as desktop options
 - Added **MangoWM**, gated on live availability in Arch `[extra]` or the CachyOS repo
 - Added **noctalia-greeter** as an optional greetd greeter, gated the same way
