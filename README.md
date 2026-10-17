@@ -10,6 +10,9 @@ A whiptail-driven installer for Artix Linux. Originally based on a script from `
 ## Usage (if you are using a graphical iso, run it as root user / su )
 
 ```
+su
+pacman -Syy
+pacman -S git
 git clone https://github.com/decksters-lab/artix-install.git
 cd artix-install
 chmod +x artix-install.sh
