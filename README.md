@@ -11,7 +11,10 @@ A whiptail-driven installer for Artix Linux. Originally based on a script from `
 ## Usage (if you are using a graphical iso, run it as root user / su )
 
 ```
-su
+su (must be ran FIRST. then hit enter)
+
+then:
+
 pacman -Syy
 pacman -S git
 git clone https://github.com/decksters-lab/artix-install.git
@@ -57,9 +60,9 @@ Display manager is chosen automatically, by priority: Cosmic > noctalia-greeter 
 
 ### noctalia-greeter
 
-noctalia-greeter is now offered for any desktop/WM selection — including pure X11 picks like Plasma alone — with only Cosmic excluded (it brings its own dedicated cosmic-greeter, which always wins anyway). The uncertain-X11-support warning is gone since x11 sessions have been confirmed working.
+noctalia-greeter is now offered for any desktop/WM selection — including pure X11 picks like Plasma alone — with only Cosmic excluded (it brings its own dedicated cosmic-greeter, which always wins anyway). The uncertain-X11-support warning is gone since x11 sessions have been confirmed working(see note).
 A fallback bug this surfaced: with the old restriction, a failed noctalia-greeter install always had a real Wayland WM to fall back to. With it gone, I found two cases where the old fallback would’ve pointed greetd at a binary that was never installed — Plasma-only (would’ve tried mango) and a bare-WM-only pick like i3-only (same problem). Both now correctly fall back to actually installing the right thing instead: sddm/lightdm get installed live if that’s what would’ve been used, and the bare-WM case now falls back to the WM’s real command (e.g. i3) rather than mango.
-
+NOTE: ON TEST RUNS IVE HAD ISSUES WITH CINNAMON SHOWING UP IN THE SESSION LIST ON THE GREETER.  IF YOU INSTALL CINNAMON WITH NOCTALIA GREETER ITS A GOOD IDEA TO ALSO SELECT A SECOND DESKTOP AS WELL IN CASE CINNAMON DOESNT SHOW UP FROM THE GREETER. FROM THERE YOU CAN REPLACE NOCTALIA-GREETER WITH THE GIT VERSION FROM THE AUR (THIS VERSION WILL SEE ALL SESSIONS)
 
 ## Kernels
 
@@ -70,15 +73,15 @@ Multi-select checklist — install one or more:
 
 ## Known caveats
 
-Things flagged during review but intentionally left as-is, or not yet verified:
+Things flagged during review but intentionally left as-is:
 
-- **doas config** ships `permit nopass :wheel cmd pacman` — effectively passwordless root for anyone in `wheel`, since pacman can run arbitrary code as root (install scriptlets, `--hookdir`, `--config`). Left in deliberately; edit `/etc/doas.conf` after install if you want it removed or pinned to specific args (e.g. `args -Syu`).
+- **doas config** ships `permit nopass :wheel cmd pacman` — effectively passwordless root for anyone in `wheel`, since pacman can run arbitrary code as root (install scriptlets, `--hookdir`, `--config`). Left in deliberately; edit `/etc/doas.conf` and remove the second line (it should just read as permit persist :wheel)  after install if you want it removed or pinned to specific args (e.g. `args -Syu`)WARNING: IF YOU DON"T REMOVE THIS AFTER INSTALL PACMAN WILL NO LONGER PROMPT FOR PASSWORD!!!!
 - **Dual-boot EFI formatting** — the "do NOT format" warning shown in dual-boot mode isn't currently enforced. The Format EFI step has no dual-boot guard and will format an existing EFI partition — e.g. wiping a Windows bootloader — if you choose "Format" there. Avoid formatting your ESP in dual-boot mode.
 
 
 ## Changes from the original upstream fork
 
-- Removed **Xlibre**, this was added to the original script when xlibre was the artix default x session. I switched it back to **X11** to match artix team recommendation on using it.
+- Removed **Xlibre**, this was added to the original script when xlibre was the artix default x session. I switched it back to **X11** as xlibre is no longer officially supported on artix.
 - Added **Cinnamon**, **Plasma**, **Niri**, and **Wayfire** as desktop options
 - Added **MangoWM**, gated on live availability in Arch `[extra]` or the CachyOS repo
 - Added **noctalia-greeter** as an optional greetd greeter, gated the same way
