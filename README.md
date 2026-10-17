@@ -53,7 +53,9 @@ Display manager is chosen automatically, by priority: Cosmic > noctalia-greeter 
 
 ### noctalia-greeter
 
-Offered whenever at least one of Hyprland / MangoWM / Niri / Wayfire is selected (and Cosmic isn't), and the package is found in Arch `[extra]` or the CachyOS repo. Accepting it makes it the **only** login screen — even if an X11 desktop was also selected — since it isn't confirmed to list non-Wayland sessions. The wizard warns about this before you confirm.
+noctalia-greeter is now offered for any desktop/WM selection — including pure X11 picks like Plasma alone — with only Cosmic excluded (it brings its own dedicated cosmic-greeter, which always wins anyway). The uncertain-X11-support warning is gone since x11 sessions have been confirmed working.
+A fallback bug this surfaced: with the old restriction, a failed noctalia-greeter install always had a real Wayland WM to fall back to. With it gone, I found two cases where the old fallback would’ve pointed greetd at a binary that was never installed — Plasma-only (would’ve tried mango) and a bare-WM-only pick like i3-only (same problem). Both now correctly fall back to actually installing the right thing instead: sddm/lightdm get installed live if that’s what would’ve been used, and the bare-WM case now falls back to the WM’s real command (e.g. i3) rather than mango.
+
 
 ## Kernels
 
@@ -68,7 +70,7 @@ Things flagged during review but intentionally left as-is, or not yet verified:
 
 - **doas config** ships `permit nopass :wheel cmd pacman` — effectively passwordless root for anyone in `wheel`, since pacman can run arbitrary code as root (install scriptlets, `--hookdir`, `--config`). Left in deliberately; edit `/etc/doas.conf` after install if you want it removed or pinned to specific args (e.g. `args -Syu`).
 - **Dual-boot EFI formatting** — the "do NOT format" warning shown in dual-boot mode isn't currently enforced. The Format EFI step has no dual-boot guard and will format an existing EFI partition — e.g. wiping a Windows bootloader — if you choose "Format" there. Avoid formatting your ESP in dual-boot mode.
-- **Untested paths** — Cinnamon, MangoWM, Niri, Wayfire, and noctalia-greeter have been reviewed, syntax-checked, and exercised against mocked network/chroot calls, but not yet run end-to-end on real hardware or a live ISO (noctalia greeter and mangowm working confirmed via vm install). Worth a VM run before relying on them.
+
 
 ## Changes from the original upstream fork
 
