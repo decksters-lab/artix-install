@@ -411,37 +411,20 @@ case "$STEP" in
             3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
         DE_CHOICES=$(echo "$DE_CHOICES" | tr -d '"')
 
-        # noctalia-greeter: a greetd greeter, so it's offered whenever at least one
-        # selected session is one it can hand off to (Hyprland/MangoWM/Niri/Wayfire),
-        # even alongside an X11 DE — but not alongside Cosmic, which brings its own
-        # dedicated cosmic-greeter and always wins (see the DM/install logic below).
-        # Also gated on it actually being available in Arch extra or the CachyOS repo.
-        _ng_has_wayland=0
-        _ng_has_cosmic=0
-        for _d in $DE_CHOICES; do
-            case "$_d" in
-                Hyprland|MangoWM|Niri|Wayfire) _ng_has_wayland=1 ;;
-                Cosmic) _ng_has_cosmic=1 ;;
-            esac
-        done
-        if [ "$_ng_has_wayland" = "1" ] && [ "$_ng_has_cosmic" = "0" ]; then
+        # noctalia-greeter: a greetd greeter, offered for any desktop selection —
+        # confirmed to handle X11 sessions (e.g. Plasma) fine, not just Wayland ones —
+        # except alongside Cosmic, which brings its own dedicated cosmic-greeter and
+        # always wins (see the DM/install logic below). Also gated on it actually
+        # being available in Arch extra or the CachyOS repo.
+        if [ -n "$DE_CHOICES" ] && ! echo "$DE_CHOICES" | grep -qw "Cosmic"; then
             if [ "$NOCTALIA_GREETER_CHECKED" = "0" ]; then
                 whiptail --title "$TITLE" --infobox "Checking Arch extra / CachyOS repos for noctalia-greeter..." 7 65
             fi
             check_noctalia_greeter_repo
             if [ -n "$NOCTALIA_GREETER_REPO" ]; then
-                _ng_msg="Use noctalia-greeter  [9/$STEP_MAX]\n\nA GUI login/session picker (from $NOCTALIA_GREETER_REPO), instead of plain greetd?"
-                _ng_mixed=""
-                for _d in $DE_CHOICES; do
-                    case "$_d" in
-                        Hyprland|MangoWM|Niri|Wayfire) ;;
-                        *) _ng_mixed="$_d" ;;
-                    esac
-                done
-                if [ -n "$_ng_mixed" ]; then
-                    _ng_msg="Use noctalia-greeter  [9/$STEP_MAX]\n\nThis becomes the ONLY login screen, replacing the one $_ng_mixed would otherwise use. It isn't confirmed to list non-Wayland sessions, so $_ng_mixed may not be reachable from it.\n\nUse noctalia-greeter anyway?"
-                fi
-                if whiptail --title "$TITLE" --yesno "$_ng_msg" 13 72; then
+                if whiptail --title "$TITLE" --yesno \
+                    "Use noctalia-greeter  [9/$STEP_MAX]\n\nA GUI login/session picker (from $NOCTALIA_GREETER_REPO), instead of plain greetd?" \
+                    11 70; then
                     NOCTALIA_GREETER_SELECTED="yes"
                 else
                     NOCTALIA_GREETER_SELECTED=""
@@ -1231,21 +1214,25 @@ chown -R "${USER_UID}:${USER_GID}" /mnt/home/"$USERNAME"
 # DM priority: Cosmic/Hyprland need greetd, Plasma needs sddm, X11 DEs use lightdm.
 # MangoWM alone uses greetd; alongside an X11 DE it's registered as a wayland-session
 # in that DE's DM instead (sddm reads /usr/share/wayland-sessions; so do recent lightdm).
-# Accepting noctalia-greeter in the wizard overrides all of that — it becomes the
-# sole login screen even when an X11 DE was also picked (Cosmic still wins outright,
-# since it was never offered alongside noctalia-greeter in the first place).
+# DM_BASE is this priority chain on its own — kept around so that if noctalia-greeter
+# was accepted but fails to install, we have a real DM to fall back to installing
+# instead of guessing. Accepting noctalia-greeter overrides DM_BASE and becomes the
+# sole login screen, for any combo except Cosmic (which was never offered alongside it).
 if echo "$DE_CHOICES" | grep -qw "Cosmic"; then
-    DM="greetd"
-elif [ "$NOCTALIA_GREETER_SELECTED" = "yes" ]; then
-    DM="greetd"
+    DM_BASE="greetd"
 elif echo "$DE_CHOICES" | grep -qw "Plasma"; then
-    DM="sddm"
+    DM_BASE="sddm"
 elif echo "$DE_CHOICES" | grep -qwE "XFCE|Cinnamon|LXQt|Moksha"; then
-    DM="lightdm"
+    DM_BASE="lightdm"
 elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Niri|Wayfire"; then
+    DM_BASE="greetd"
+else
+    DM_BASE=""
+fi
+if [ "$NOCTALIA_GREETER_SELECTED" = "yes" ] && ! echo "$DE_CHOICES" | grep -qw "Cosmic"; then
     DM="greetd"
 else
-    DM=""
+    DM="$DM_BASE"
 fi
 
 # bare WMs autologin on tty1 and startx
@@ -1643,13 +1630,12 @@ command = "cosmic-comp cosmic-greeter"
 user = "cosmic-greeter"
 EOF
         elif [ "$NOCTALIA_GREETER_SELECTED" = "yes" ] && [ -n "${NOCTALIA_GREETER_REPO:-}" ]; then
-            # Only reached when the user opted in during the wizard (which requires at
-            # least one of Hyprland/MangoWM/Niri/Wayfire selected, no Cosmic, and the
-            # package confirmed present — see check_noctalia_greeter_repo). May also be
-            # mixed with an X11 DE; if so this still becomes the sole login screen, per
-            # the warning shown in the wizard, and if install fails below the fallback
-            # just drops to plain greetd on whichever Wayland WM was picked, leaving any
-            # X11 DE without a DM pointed at it.
+            # Only reached when the user opted in during the wizard (requires at least
+            # one non-Cosmic desktop selected and the package confirmed present — see
+            # check_noctalia_greeter_repo). Handles X11 sessions fine (confirmed with
+            # Plasma), so this is the sole login screen for any DE combo reaching here.
+            # If install fails below, the fallback drops to plain greetd on whichever
+            # Wayland WM was picked (if any), leaving an X11-only pick without a DM.
             _ng_ok=1
             case "$NOCTALIA_GREETER_REPO" in
                 extra)   enable_arch_extra_chroot   || _ng_ok=0 ;;
@@ -1678,27 +1664,47 @@ user = "greeter"
 EOF
             fi
             if [ "$_ng_ok" != "1" ]; then
-                echo "==> Warning: failed to install noctalia-greeter — falling back to plain greetd"
                 NOCTALIA_GREETER_SELECTED=""
+                if [ "$DM_BASE" = "sddm" ] || [ "$DM_BASE" = "lightdm" ]; then
+                    # The only reason we were in the greetd branch at all was the
+                    # noctalia-greeter override — nothing greetd-based was actually
+                    # selected, so fall back to installing the real DM instead of
+                    # pointing greetd at a Wayland command that was never installed.
+                    echo "==> Warning: failed to install noctalia-greeter — falling back to $DM_BASE"
+                    DM="$DM_BASE"
+                    rm -f /mnt/etc/greetd/config.toml
+                    if [ "$DM_BASE" = "sddm" ]; then
+                        artix-chroot /mnt pacman -S --noconfirm sddm "$(svc_pkg sddm)"
+                    else
+                        artix-chroot /mnt pacman -S --noconfirm lightdm lightdm-gtk-greeter "$(svc_pkg lightdm)"
+                    fi
+                else
+                    echo "==> Warning: failed to install noctalia-greeter — falling back to plain greetd"
+                fi
             fi
         fi
-        if [ "$NOCTALIA_GREETER_SELECTED" != "yes" ] && ! echo "$DE_CHOICES" | grep -qw "Cosmic"; then
-            # Hyprland > Niri > Wayfire > MangoWM — whichever comes first lands in
-            # greetd's single default_session; the others are still installed and
-            # reachable by hand (e.g. `niri` from a tty) just not auto-launched
+        if [ "$DM" = "greetd" ] && [ "$NOCTALIA_GREETER_SELECTED" != "yes" ] && ! echo "$DE_CHOICES" | grep -qw "Cosmic"; then
+            # Hyprland > Niri > Wayfire > MangoWM > bare WMs — whichever comes first
+            # lands in greetd's single default_session; the others are still installed
+            # (or, for a bare WM, already have an xsessions entry written below) and
+            # reachable by hand just not auto-launched. The sddm/lightdm fallback above
+            # already handled the case where an X11 DE was selected instead, so by the
+            # time we get here it's always one of these five kinds that put us in the
+            # greetd branch to begin with.
             GREETD_CMD=""
-            for _w in Hyprland Niri Wayfire MangoWM; do
+            for _w in Hyprland Niri Wayfire MangoWM i3 Openbox Fluxbox IceWM; do
                 if echo "$DE_CHOICES" | grep -qw "$_w"; then
                     case "$_w" in
                         MangoWM) GREETD_CMD="mango" ;;
+                        Openbox) GREETD_CMD="openbox-session" ;;
+                        Fluxbox) GREETD_CMD="startfluxbox" ;;
+                        IceWM)   GREETD_CMD="icewm-session" ;;
                         *)       GREETD_CMD="$_w" ;;
                     esac
                     break
                 fi
             done
-            # bare WMs alone (no Wayland DE picked) also land here via DM=greetd — shouldn't
-            # normally happen since DM is only "greetd" when one of the above was selected
-            [ -z "$GREETD_CMD" ] && GREETD_CMD="mango"
+            [ -z "$GREETD_CMD" ] && GREETD_CMD="mango"   # should be unreachable; see comment above
             cat > /mnt/etc/greetd/config.toml << EOF
 [terminal]
 vt = 1
