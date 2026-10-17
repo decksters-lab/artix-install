@@ -1,7 +1,7 @@
 # artix-install
 
 A whiptail-driven installer for Artix Linux. Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
-(Feel free to fork this repo.. I wish I had done that with the original script. Luckily I found the script on my drive and adapted it from there. This is why my install instructions direct you to download the script rather than just piping it into bash.)
+(Feel free to fork this repo.. I wish I had done that with the original script. Luckily I found the script on my drive and adapted it from there. This is why my install instructions direct you to download the script rather than just piping it into bash. When you have a local copy nobody can delete a repo and take it away from you)
 
 ## Requirements
 
