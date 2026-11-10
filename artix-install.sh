@@ -57,7 +57,7 @@ if [ "${1:-}" = "--test" ]; then
     TEST_MODE=1
     DISK=$(lsblk -dpno NAME | grep -v loop | head -1)
     FS="ext4"
-    SWAP="None"
+    SWAP="None"; ZSWAP=0
     ENCRYPT=0; REAL_ROOT=""; LUKS_CMDLINE=""; LUKS_PW=""
     INIT="dinit"
     LOCALE="en_US.UTF-8"
@@ -210,6 +210,7 @@ INIT="dinit"
 DISK=""
 FS="ext4"
 SWAP="None"
+ZSWAP=0
 SWAP_SIZE_GB=4
 SWAP_SIZE_MB=4096
 ENCRYPT=0; REAL_ROOT=""; LUKS_CMDLINE=""; LUKS_PW=""
@@ -281,6 +282,15 @@ case "$STEP" in
         _v=$(whiptail --title "$TITLE" --menu "Swapfile Size  [4/$STEP_MAX]" 13 60 5 \
             "${SWAP_MENU_ARGS[@]}" 3>&1 1>&2 2>&3) || continue
         SWAP_SIZE_GB="$_v"; SWAP_SIZE_MB=$(( SWAP_SIZE_GB * 1024 ))
+    fi
+    # zswap: built into the kernel, compresses pages in RAM before they hit
+    # swap. Needs a real swap device (swapfile/partition), so it is only
+    # offered there. Not combined with zram.
+    ZSWAP=0
+    if [[ "$SWAP" =~ ^(Swapfile|Partition)$ ]]; then
+        whiptail --title "$TITLE" --yesno \
+            "Swap  [4/$STEP_MAX]\n\nEnable zswap?\n\nA compressed RAM cache in front of your swap, built into the kernel (adds zswap.enabled=1 to the boot parameters)." \
+            13 62 && ZSWAP=1
     fi
     STEP=$(( STEP + 1 )) ;;
 
@@ -1806,6 +1816,10 @@ gauge 90 "Installing bootloader..."
 # =========================
 # BOOTLOADER
 # =========================
+# extra kernel parameters (zswap) shared by all bootloaders
+ZSWAP_ARG=""
+[ "$ZSWAP" = "1" ] && ZSWAP_ARG=" zswap.enabled=1"
+
 case "$BOOT" in
     grub)
         artix-chroot /mnt pacman -S --noconfirm grub
@@ -1850,6 +1864,13 @@ case "$BOOT" in
             sed -i "s|^GRUB_CMDLINE_LINUX=.*|GRUB_CMDLINE_LINUX=\"$GRUB_LUKS\"|" /mnt/etc/default/grub
             sed -i 's/^#GRUB_ENABLE_CRYPTODISK=.*/GRUB_ENABLE_CRYPTODISK=y/' /mnt/etc/default/grub
         fi
+        if [ -n "$ZSWAP_ARG" ]; then
+            if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT="' /mnt/etc/default/grub; then
+                sed -i "s|^\(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*\)\"|\1$ZSWAP_ARG\"|" /mnt/etc/default/grub
+            else
+                echo "GRUB_CMDLINE_LINUX_DEFAULT=\"${ZSWAP_ARG# }\"" >> /mnt/etc/default/grub
+            fi
+        fi
         artix-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
         # Unmount bind mounts used by os-prober
         [ "$DUALBOOT" = "1" ] && { umount /mnt/sys /mnt/proc /mnt/dev 2>/dev/null || true; }
@@ -1883,6 +1904,7 @@ case "$BOOT" in
             ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
             LIMINE_CMDLINE="root=UUID=$ROOT_UUID rw quiet"
         fi
+        LIMINE_CMDLINE="$LIMINE_CMDLINE$ZSWAP_ARG"
 
         # Limine config — key names from official CONFIG.md
         # protocol, path, cmdline, module_path (NOT kernel_path/kernel_cmdline)
@@ -1915,6 +1937,8 @@ EOF
             printf '"Boot with standard options"  "root=UUID=%s rw quiet"\n"Boot to terminal"            "root=UUID=%s rw init=/sbin/$INIT"\n"Boot with minimal options"   "root=UUID=%s rw"\n' \
                 "$ROOT_UUID" "$ROOT_UUID" "$ROOT_UUID" > /mnt/boot/refind_linux.conf
         fi
+        # append zswap to every boot entry (each line ends with the closing quote of its options)
+        [ -n "$ZSWAP_ARG" ] && sed -i "s|\"\$|$ZSWAP_ARG\"|" /mnt/boot/refind_linux.conf
         ;;
 esac
 
