@@ -11,9 +11,11 @@ A whiptail-driven installer for Artix Linux. Originally based on a script from `
 ## Usage ( run ./artix-install.sh with sudo or as root user / su )
 
 ```
-can be ran as one command: 
+can be ran as one command with su called first: 
 
-pacman -Syy; pacman -S git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; sudo ./artix-install.sh
+su
+
+pacman -Syy; pacman -S git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh
 ```
 For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `artix`, user `user`):
 ```
