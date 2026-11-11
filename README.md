@@ -15,12 +15,8 @@ su (must be ran FIRST. then hit enter)
 
 then:
 
-pacman -Syy
-pacman -S git
-git clone https://github.com/decksters-lab/artix-install.git
-cd artix-install
-chmod +x artix-install.sh
-./artix-install.sh
+pacman -Syy; pacman -S git
+git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh
 ```
 For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `artix`, user `user`):
 ```
