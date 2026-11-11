@@ -13,7 +13,7 @@ A whiptail-driven installer for Artix Linux. Originally based on a script from `
 ```
 can be ran as one command with su called first: 
 
-su
+su  hit enter and password, then:
 
 pacman -Syy; pacman -S git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh
 ```
