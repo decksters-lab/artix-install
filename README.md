@@ -5,10 +5,10 @@ A whiptail-driven installer for Artix Linux. Originally based on a script from `
 
 ## Requirements
 
-- Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso. Use one with a graphical session if its easier for you. It doesn't matter which kind you choose.)
-- Must be run as root
+- Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso. Use one with a graphical session if its easier for you. It doesn't matter which kind you choose.) note: with a graphical installer it makes it easy to copy the install script, or the folder containing the install script to another location like a second hdd or a usb drive that isn't running the iso then the script is always available to you locally. 
+- Script Must be run as root either with su before all other commands or with sudo right before running ./artix-install.sh
 
-## Usage (if you are using a graphical iso, run it as root user / su )
+## Usage ( run ./artix-install.sh with sudo or as root user / su )
 
 ```
 can be ran as one command: 
