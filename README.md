@@ -35,7 +35,7 @@ For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `a
 1. **Init system** — dinit (recommended), openrc, runit, or s6
 2. **Disk** — target disk selection
 3. **Filesystem** — per-partition: ext4, btrfs, xfs, f2fs, jfs, nilfs2, vfat, exfat, ntfs (cfdisk available for manual partitioning)
-4. **Swap** — None / Partition / Swapfile / Both (zram + swapfile)
+4. **Swap** — None / Zram / Partition / Swapfile / Both (zram + swapfile). With a partition or swapfile you are also asked whether to enable **zswap** (adds `zswap.enabled=1` to the kernel command line for GRUB, Limine and rEFInd). zswap is built into the kernel and needs a real swap device, so it is not offered with zram. See [zswap vs zram](https://chrisdown.name/2026/03/24/zswap-vs-zram-when-to-use-what.html) and the [Arch wiki](https://wiki.archlinux.org/title/Zswap)
 5. **Encryption** — optional full-disk LUKS2
 6. **Locale, timezone, keyboard** — one screen each
 7. **Hostname + username**
