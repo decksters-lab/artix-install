@@ -5,7 +5,7 @@ A whiptail-driven installer for Artix Linux. Originally based on a script from `
 
 ## Requirements
 
-- Booted from the Artix live ISO, with a network connection
+- Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso. Use one with a graphical session if its easier for you. It doesn't matter which kind you choose.)
 - Must be run as root
 
 ## Usage (if you are using a graphical iso, run it as root user / su )
