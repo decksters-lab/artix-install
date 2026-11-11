@@ -43,6 +43,22 @@ For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `a
 ```
 
 **`--test` wipes the first disk it finds with no confirmation prompt — only run it inside a VM.**
+## The wizard (13 steps)
+
+1. **Init system** — dinit (recommended), openrc, runit, or s6
+2. **Disk** — target disk selection
+3. **Filesystem** — per-partition: ext4, btrfs, xfs, f2fs, jfs, nilfs2, vfat, exfat, ntfs (cfdisk available for manual partitioning)
+4. **Swap** — None / Zram / Partition / Swapfile / Both (zram + swapfile). With a partition or swapfile you are also asked whether to enable **zswap** (adds `zswap.enabled=1` to the kernel command line for GRUB, Limine and rEFInd). zswap is built into the kernel and needs a real swap device, so it is not offered with zram. See [zswap vs zram](https://chrisdown.name/2026/03/24/zswap-vs-zram-when-to-use-what.html) and the [Arch wiki](https://wiki.archlinux.org/title/Zswap)
+5. **Encryption** — optional full-disk LUKS2
+6. **Locale, timezone, keyboard** — one screen each
+7. **Hostname + username**
+8. **Privilege escalation** — doas (default) or sudo
+9. **User services** — what starts each user's service manager at login (lets user services like pipewire or Cosmalia run): **userspawn** (`userspawn` + `userspawn-<init>`), **turnstile** (`turnstile` + `turnstile-<init>`), or neither. Asked before the desktop and applies whichever desktop you pick. Only the options that actually exist in the Artix repos for your init are shown (checked live), and the two conflict, so only one is installed. With userspawn on dinit, `wireplumber` and `pipewire-pulse` are also enabled for every user. On runit/s6, userspawn may need per-user setup after install. Then **Desktop** — see below
+10. **Kernel + CPU + GPU** — see below
+11. **Bootloader** — on UEFI, choose GRUB2, Limine, or rEFInd; BIOS systems always get GRUB (the other two are UEFI-only)
+12. **32-bit / multilib** — optional, for Steam/Wine/32-bit apps
+13. **Network stack** — dhcpcd, iwd, or NetworkManager
+
 
 ## Known caveats
 
@@ -75,7 +91,11 @@ Things flagged during review but intentionally left as-is:
 - Removed **Xlibre**, this was added to the original script when xlibre was the artix default x session. I switched it back to **X11** as xlibre is no longer officially supported on artix.
 - Added **Cinnamon**, **Plasma**, **Niri**, and **Wayfire** as desktop options
 - Added **MangoWM**, gated on live availability in Arch `[extra]` or the CachyOS repo
+- Added **Cosmalia** (dinit only), a minimal COSMIC + Noctalia desktop from [grigio/cosmalia-session-dinit](https://github.com/grigio/cosmalia-session-dinit). Its dependencies come from Arch `[extra]`, and the session package is built from its PKGBUILD during install
 - Added **noctalia-greeter** as an optional greetd greeter, gated the same way
+- Added an optional **zswap** prompt to the swap step
+- Added a **User services** step (userspawn or turnstile, matching what Artix packages for your init)
+- Installs the per-init pipewire/wireplumber service packages (e.g. `pipewire-dinit`, `wireplumber-dinit`) when they exist for your init
 - Removed **XMonad** — along with it, a `git clone` of `github.com/feribsd/xmonad-dotfiles`, a repo whose owning account no longer exists and could be re-registered by anyone
 - Fixed a display-manager/autologin ordering bug where bare window managers combined with another desktop could incorrectly get tty1 autologin
 
