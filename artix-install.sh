@@ -38,6 +38,12 @@ MANGO_CHECKED=0
 MANGO_REPO=""          # extra | cachyos | ""
 MANGO_PKG="mangowm"    # package name found (mangowm, or its old name mangowc)
 
+# Umbriel (Noctalia's compositor) is gated the same way as MangoWM: only offered
+# if Arch [extra] or the CachyOS repo has it. check_umbriel_repo fills these in.
+UMBRIEL_CHECKED=0
+UMBRIEL_REPO=""         # extra | cachyos | ""
+UMBRIEL_PKG="umbriel"
+
 # noctalia-greeter is only offered if it exists in Arch [extra] or the CachyOS repo
 NOCTALIA_GREETER_CHECKED=0
 NOCTALIA_GREETER_REPO=""   # extra | cachyos | ""
@@ -157,6 +163,26 @@ check_mango_repo() {
         _cachy=$(_db_pkgs "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos.db")
         for _p in mangowm mangowc; do
             if grep -q "^${_p}-[0-9]" <<< "$_cachy"; then MANGO_REPO="cachyos"; MANGO_PKG="$_p"; return 0; fi
+        done
+    fi
+    return 0
+}
+
+# check_umbriel_repo — sets UMBRIEL_REPO / UMBRIEL_PKG. Same approach as check_mango_repo.
+# (The AUR package named plain "umbriel" is only a placeholder; a binary repo
+# carrying "umbriel" or "umbriel-git" is the real compositor.)
+check_umbriel_repo() {
+    [ "$UMBRIEL_CHECKED" = "1" ] && return 0
+    UMBRIEL_CHECKED=1
+    command -v curl >/dev/null 2>&1 || return 0
+    local _p _cachy
+    for _p in umbriel umbriel-git; do
+        if _arch_extra_has "$_p"; then UMBRIEL_REPO="extra"; UMBRIEL_PKG="$_p"; return 0; fi
+    done
+    if command -v bsdtar >/dev/null 2>&1; then
+        _cachy=$(_db_pkgs "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos.db")
+        for _p in umbriel umbriel-git; do
+            if grep -q "^${_p}-[0-9]" <<< "$_cachy"; then UMBRIEL_REPO="cachyos"; UMBRIEL_PKG="$_p"; return 0; fi
         done
     fi
     return 0
@@ -429,10 +455,11 @@ case "$STEP" in
     INSTALL_TYPE="$_v"
     DE_CHOICES="CLI"
     if [ "$INSTALL_TYPE" = "DE" ]; then
-        if [ "$MANGO_CHECKED" = "0" ]; then
-            whiptail --title "$TITLE" --infobox "Checking Arch extra / CachyOS repos for MangoWM..." 7 60
+        if [ "$MANGO_CHECKED" = "0" ] || [ "$UMBRIEL_CHECKED" = "0" ]; then
+            whiptail --title "$TITLE" --infobox "Checking Arch extra / CachyOS repos for MangoWM and Umbriel..." 7 66
         fi
         check_mango_repo
+        check_umbriel_repo
         _de_args=(
             "Plasma"   "KDE Plasma"              OFF
             "XFCE"     "XFCE4"                   OFF
@@ -445,6 +472,7 @@ case "$STEP" in
             "Hyprland" "Hyprland (Wayland)"      OFF
             "Niri"     "Niri (Wayland)"          OFF
             "Wayfire"  "Wayfire (Wayland)"        OFF
+            "labwc"    "labwc (Wayland)"          OFF
             "Moksha"   "Moksha"                  OFF
             "Cosmic"   "COSMIC [EXPERIMENTAL]"   OFF
         )
@@ -452,6 +480,11 @@ case "$STEP" in
         case "$MANGO_REPO" in
             extra)   _de_args+=("MangoWM" "MangoWM (Wayland) — from Arch extra"  OFF) ;;
             cachyos) _de_args+=("MangoWM" "MangoWM (Wayland) — from CachyOS repo" OFF) ;;
+        esac
+        # Umbriel likewise only shows up if one of those repos actually has it
+        case "$UMBRIEL_REPO" in
+            extra)   _de_args+=("Umbriel" "Umbriel (Wayland) — from Arch extra"  OFF) ;;
+            cachyos) _de_args+=("Umbriel" "Umbriel (Wayland) — from CachyOS repo" OFF) ;;
         esac
         # Cosmalia (cosmic-comp + Noctalia) is made of dinit user services,
         # so it is only offered when dinit is the init system
@@ -905,19 +938,19 @@ fi
 
 # icewm doesnt need mesa/llvm so skip gpu entirely to save ~200mb
 BARE_WM_ONLY=1
-for _de in Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Niri Wayfire i3 Openbox Fluxbox; do
+for _de in Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc i3 Openbox Fluxbox; do
     echo "$DE_CHOICES" | grep -qw "$_de" && BARE_WM_ONLY=0 && break
 done
 [ "$DE_CHOICES" = "CLI" ] && BARE_WM_ONLY=0
 [ "$BARE_WM_ONLY" = "1" ] && GPU=""
 
 # Standard Xorg — XLibre pulled from the Artix repos after the XLibre/Artix dispute
-# Skipped only when every selected session is Wayland-only (Cosmic/Cosmalia/Hyprland/MangoWM/Niri/Wayfire)
+# Skipped only when every selected session is Wayland-only (Cosmic/Cosmalia/Hyprland/MangoWM/Umbriel/Niri/Wayfire/labwc)
 XORG_PKGS=""
 if [ "$DE_CHOICES" != "CLI" ]; then
     for _de in $DE_CHOICES; do
         case "$_de" in
-            Cosmic|Cosmalia|Hyprland|MangoWM|Niri|Wayfire) ;;
+            Cosmic|Cosmalia|Hyprland|MangoWM|Umbriel|Niri|Wayfire|labwc) ;;
             *) XORG_PKGS="xorg-server xorg-server-common xf86-input-libinput xorg-xinit"; break ;;
         esac
     done
@@ -925,7 +958,7 @@ fi
 
 # Only install audio stack for DEs that actually use it
 AUDIO_PKGS=""
-AUDIO_DES="Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Niri Wayfire"
+AUDIO_DES="Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc"
 for _de in $AUDIO_DES; do
     if echo "$DE_CHOICES" | grep -qw "$_de"; then
         AUDIO_PKGS="pipewire pipewire-pulse pipewire-alsa wireplumber"
@@ -984,6 +1017,23 @@ if echo "$KERNEL_CHOICES" | grep -qw "linux-cachyos"; then
         FIRST_KERNEL=$(echo "$KERNEL_CHOICES" | awk '{print $1}')
     fi
 fi
+
+# Per-init service scripts for the audio stack (e.g. pipewire-dinit,
+# pipewire-pulse-dinit, wireplumber-dinit). Only the ones that actually exist
+# for this init are added, since basestrap fails on an unknown package name.
+if [ -n "$AUDIO_PKGS" ]; then
+    for _p in pipewire pipewire-pulse wireplumber; do
+        if pacman -Si "$_p-$INIT" &>/dev/null; then
+            AUDIO_PKGS="$AUDIO_PKGS $_p-$INIT"
+        fi
+    done
+fi
+
+# Give mkinitcpio a console font from the start. basestrap builds the first
+# initramfs before vconsole.conf is written below, and the consolefont hook
+# complains when no FONT is set. default8x16 ships with kbd.
+mkdir -p /mnt/etc
+printf 'FONT=default8x16\n' > /mnt/etc/vconsole.conf
 
 gauge 20 "Installing base system (this takes a while)..."
 # =========================
@@ -1130,7 +1180,7 @@ case "$KB_LAYOUT" in
 esac
 cat > /mnt/etc/vconsole.conf << EOF
 KEYMAP=$VC_KEYMAP
-FONT=default
+FONT=default8x16
 EOF
 mkdir -p /mnt/etc/X11/xorg.conf.d
 cat > /mnt/etc/X11/xorg.conf.d/00-keyboard.conf << KBEOF
@@ -1196,7 +1246,7 @@ chown -R "${USER_UID}:${USER_GID}" /mnt/home/"$USERNAME"
 # =========================
 # PIPEWIRE AUTOSTART (only for DEs that use audio)
 # =========================
-AUDIO_DES_CHECK="Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Niri Wayfire"
+AUDIO_DES_CHECK="Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc"
 NEED_AUDIO=0
 for _de in $AUDIO_DES_CHECK; do
     echo "$DE_CHOICES" | grep -qw "$_de" && NEED_AUDIO=1 && break
@@ -1207,6 +1257,9 @@ if [ "$NEED_AUDIO" = "1" ]; then
 
 cat > /mnt/usr/local/bin/start-pipewire << 'EOF'
 #!/bin/bash
+# The installer drops this marker when pipewire is started by the user's dinit
+# instance instead; don't fight it by killing and restarting the daemons.
+[ -e /etc/pipewire-managed-by-dinit ] && exit 0
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 
 # Kill any stale instances first so we start clean
@@ -1276,7 +1329,7 @@ elif echo "$DE_CHOICES" | grep -qw "Plasma"; then
     DM_BASE="sddm"
 elif echo "$DE_CHOICES" | grep -qwE "XFCE|Cinnamon|LXQt|Moksha"; then
     DM_BASE="lightdm"
-elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Niri|Wayfire|Cosmalia"; then
+elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Umbriel|Niri|Wayfire|Cosmalia|labwc"; then
     DM_BASE="greetd"
 else
     DM_BASE=""
@@ -1520,6 +1573,10 @@ EOF
         Wayfire)
             artix-chroot /mnt pacman -S --noconfirm wayfire wf-shell xdg-desktop-portal-wlr || { _de_ok=0; }
             if [ "$_de_ok" = "1" ]; then
+                # wcm (Wayfire Config Manager). Separate and best-effort so Wayfire itself
+                # still installs if the Artix repos don't carry it.
+                artix-chroot /mnt pacman -S --noconfirm wcm || \
+                    echo "==> Note: couldn't install wcm (Wayfire Config Manager) — install it later if you want it"
                 mkdir -p /mnt/home/"$USERNAME"/.config
                 _wayfire_default=""
                 for _f in /mnt/usr/share/wayfire/wayfire.ini /mnt/usr/share/examples/wayfire/wayfire.ini; do
@@ -1535,6 +1592,37 @@ EOF
                     >> /mnt/home/"$USERNAME"/.config/wayfire.ini
                 chown "${USER_UID}:${USER_GID}" /mnt/home/"$USERNAME"/.config/wayfire.ini
                 # wayfire.desktop is shipped by the package already
+            fi
+            ;;
+        labwc)
+            # labwc is in Artix [galaxy]. foot gives the default root menu a terminal.
+            artix-chroot /mnt pacman -S --noconfirm labwc foot xdg-desktop-portal-wlr || { _de_ok=0; }
+            if [ "$_de_ok" = "1" ]; then
+                # labwc falls back to /etc/xdg/labwc for anything missing from ~/.config/labwc.
+                # A user autostart replaces the system one, so start from the system copy.
+                mkdir -p /mnt/home/"$USERNAME"/.config/labwc
+                [ -f /mnt/etc/xdg/labwc/autostart ] && \
+                    cp /mnt/etc/xdg/labwc/autostart /mnt/home/"$USERNAME"/.config/labwc/autostart
+                printf '\n# Audio (added by installer)\n/usr/local/bin/start-pipewire >/dev/null 2>&1 &\n' \
+                    >> /mnt/home/"$USERNAME"/.config/labwc/autostart
+                chown -R "${USER_UID}:${USER_GID}" /mnt/home/"$USERNAME"/.config/labwc
+                # labwc.desktop is shipped by the package already
+            fi
+            ;;
+        Umbriel)
+            # Only offered when Arch [extra] or the CachyOS repo has it (see check_umbriel_repo)
+            case "${UMBRIEL_REPO:-}" in
+                extra)   enable_arch_extra_chroot   || _de_ok=0 ;;
+                cachyos) enable_cachyos_repo_chroot || _de_ok=0 ;;
+                *)       _de_ok=0 ;;
+            esac
+            [ "$_de_ok" = "1" ] && { artix-chroot /mnt pacman -S --noconfirm "${UMBRIEL_PKG:-umbriel}" || _de_ok=0; }
+            if [ "$_de_ok" = "1" ]; then
+                # Normally pulled in as a dependency; --needed makes this a no-op then
+                artix-chroot /mnt pacman -S --noconfirm --needed xdg-desktop-portal-umbriel || \
+                    echo "==> Note: couldn't install xdg-desktop-portal-umbriel — install it later for file pickers and screen sharing"
+                # Not pre-configured on purpose: config lives in ~/.config/umbriel/config.toml
+                echo "==> Note: Umbriel is installed without a config. Start pipewire from its config (/usr/local/bin/start-pipewire) — see https://docs.noctalia.dev/umbriel/"
             fi
             ;;
         MangoWM)
@@ -1600,16 +1688,18 @@ EOF
                     git base-devel cosmic-comp noctalia cosmic-settings cosmic-settings-daemon \
                     xdg-desktop-portal-cosmic polkit gnome-keyring wireplumber upower || _de_ok=0; }
                 if [ "$_de_ok" = "1" ]; then
-                    # makepkg refuses to run as root, so build as the new user.
+                    # makepkg refuses to run as root, so build as the new user. Build in
+                    # /var/tmp: artix-chroot mounts a fresh tmpfs on /tmp for every call, so a
+                    # package built in /tmp would be gone by the time pacman -U runs.
                     # check() only runs shellcheck, so skip it (--nocheck). A full clone keeps
                     # the tags the PKGBUILD uses for pkgver.
-                    _cosmalia_build='set -e; rm -rf /tmp/cosmalia-build; git clone --quiet https://github.com/grigio/cosmalia-session-dinit.git /tmp/cosmalia-build; cd /tmp/cosmalia-build; makepkg -f --nocheck --noconfirm'
+                    _cosmalia_build='set -e; rm -rf /var/tmp/cosmalia-build; git clone --quiet https://github.com/grigio/cosmalia-session-dinit.git /var/tmp/cosmalia-build; cd /var/tmp/cosmalia-build; makepkg -f --nocheck --noconfirm'
                     if artix-chroot /mnt su "$USERNAME" -c "$_cosmalia_build"; then
-                        artix-chroot /mnt bash -c 'pacman -U --noconfirm /tmp/cosmalia-build/cosmalia-session-dinit-*.pkg.tar.zst' || _de_ok=0
+                        artix-chroot /mnt bash -c 'pacman -U --noconfirm /var/tmp/cosmalia-build/cosmalia-session-dinit-*.pkg.tar.zst' || _de_ok=0
                     else
                         _de_ok=0
                     fi
-                    rm -rf /mnt/tmp/cosmalia-build
+                    rm -rf /mnt/var/tmp/cosmalia-build
                 fi
             fi
             ;;
@@ -1777,7 +1867,7 @@ EOF
             fi
         fi
         if [ "$DM" = "greetd" ] && [ "$NOCTALIA_GREETER_SELECTED" != "yes" ] && ! echo "$DE_CHOICES" | grep -qw "Cosmic"; then
-            # Hyprland > Niri > Wayfire > MangoWM > bare WMs — whichever comes first
+            # Hyprland > Niri > Wayfire > MangoWM > Cosmalia > labwc > bare WMs — whichever comes first
             # lands in greetd's single default_session; the others are still installed
             # (or, for a bare WM, already have an xsessions entry written below) and
             # reachable by hand just not auto-launched. The sddm/lightdm fallback above
@@ -1785,10 +1875,11 @@ EOF
             # time we get here it's always one of these five kinds that put us in the
             # greetd branch to begin with.
             GREETD_CMD=""
-            for _w in Hyprland Niri Wayfire MangoWM Cosmalia i3 Openbox Fluxbox IceWM; do
+            for _w in Hyprland Niri Wayfire MangoWM Umbriel Cosmalia labwc i3 Openbox Fluxbox IceWM; do
                 if echo "$DE_CHOICES" | grep -qw "$_w"; then
                     case "$_w" in
                         MangoWM) GREETD_CMD="mango" ;;
+                        Umbriel) GREETD_CMD="umbriel" ;;
                         Cosmalia) GREETD_CMD="cosmalia-session" ;;
                         Openbox) GREETD_CMD="openbox-session" ;;
                         Fluxbox) GREETD_CMD="startfluxbox" ;;
@@ -1856,6 +1947,19 @@ case "$NET_CHOICE" in
 esac
 
 artix-chroot /mnt pacman -S --noconfirm cpupower "$(svc_pkg cpupower)"
+
+# With userspawn on dinit, start the audio stack from the per-user dinit instance
+# (userspawn-dinit ships an empty /etc/xdg/userspawn/dinit.d/boot.d for this).
+# pipewire itself is pulled in as a dependency of wireplumber/pipewire-pulse.
+# start-pipewire stands down via the marker file so the two don't fight.
+if [ "$INIT" = "dinit" ] && [ "${USERSVC:-none}" = "userspawn" ] && [ -n "$AUDIO_PKGS" ] && \
+   [ -e /mnt/etc/dinit.d/user/wireplumber ] && [ -e /mnt/etc/dinit.d/user/pipewire-pulse ]; then
+    mkdir -p /mnt/etc/xdg/userspawn/dinit.d/boot.d
+    for _s in wireplumber pipewire-pulse; do
+        ln -sf "/etc/dinit.d/user/$_s" "/mnt/etc/xdg/userspawn/dinit.d/boot.d/$_s"
+    done
+    : > /mnt/etc/pipewire-managed-by-dinit
+fi
 
 # userspawn's service name differs between package generations; use whichever exists
 _userspawn_svc() {
