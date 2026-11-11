@@ -57,7 +57,7 @@ if [ "${1:-}" = "--test" ]; then
     TEST_MODE=1
     DISK=$(lsblk -dpno NAME | grep -v loop | head -1)
     FS="ext4"
-    SWAP="None"; ZSWAP=0
+    SWAP="None"; ZSWAP=0; USERSVC="none"
     ENCRYPT=0; REAL_ROOT=""; LUKS_CMDLINE=""; LUKS_PW=""
     INIT="dinit"
     LOCALE="en_US.UTF-8"
@@ -211,6 +211,7 @@ DISK=""
 FS="ext4"
 SWAP="None"
 ZSWAP=0
+USERSVC=""   # user-service manager: userspawn | turnstile | none
 SWAP_SIZE_GB=4
 SWAP_SIZE_MB=4096
 ENCRYPT=0; REAL_ROOT=""; LUKS_CMDLINE=""; LUKS_PW=""
@@ -382,7 +383,45 @@ case "$STEP" in
         3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
     PRIV_ESC="$_v"; STEP=$(( STEP + 1 )) ;;
 
-9) # Desktop
+9) # User services (dinit only) + Desktop
+    # Asked before the desktop: user services (Cosmalia, per-user pipewire, ...)
+    # need something that starts a user service manager at login. Artix has two
+    # options, userspawn[-<init>] and turnstile[-<init>]; they conflict, so exactly
+    # one (or neither) is installed. Only the ones that actually exist for the
+    # chosen init are offered (checked against the live ISO's sync databases).
+    _us_have=0; _ts_have=0
+    _usersvc_probe() {
+        pacman -Si "userspawn-$INIT" &>/dev/null && _us_have=1 || _us_have=0
+        pacman -Si "turnstile-$INIT" &>/dev/null && _ts_have=1 || _ts_have=0
+    }
+    _usersvc_probe
+    if [ "$_us_have" = "0" ] && [ "$_ts_have" = "0" ] && [ "${_USERSVC_SYNCED:-0}" = "0" ]; then
+        _USERSVC_SYNCED=1
+        whiptail --title "$TITLE" --infobox "Checking Artix repos for user-service packages..." 7 60
+        pacman -Sy --noconfirm &>/dev/null || true
+        _usersvc_probe
+    fi
+    _us_args=()
+    if [ "$_us_have" = "1" ]; then
+        if [ "$INIT" = "dinit" ]; then
+            _us_args+=("userspawn" "userspawn + userspawn-$INIT — Artix wiki default (recommended)")
+        else
+            _us_args+=("userspawn" "userspawn + userspawn-$INIT")
+        fi
+    fi
+    [ "$_ts_have" = "1" ] && _us_args+=("turnstile" "turnstile + turnstile-$INIT")
+    if [ "${#_us_args[@]}" -gt 0 ]; then
+        _us_args+=("none" "Neither — I'll set it up myself after install")
+        _us_def="${USERSVC:-}"
+        case "$_us_def" in userspawn|turnstile|none) ;; *) _us_def="${_us_args[0]}" ;; esac
+        USERSVC=$(whiptail --title "$TITLE" --default-item "$_us_def" --menu \
+            "User Services  [9/$STEP_MAX]\n\nHow should each user's service manager be started at login? The two options conflict, pick one." \
+            17 74 $(( ${#_us_args[@]} / 2 )) \
+            "${_us_args[@]}" \
+            3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
+    else
+        USERSVC="none"
+    fi
     _v=$(whiptail --title "$TITLE" --menu "Installation Type  [9/$STEP_MAX]" 10 60 2 \
         "DE"  "Desktop Environment / Window Manager" \
         "CLI" "CLI only" \
@@ -414,6 +453,9 @@ case "$STEP" in
             extra)   _de_args+=("MangoWM" "MangoWM (Wayland) — from Arch extra"  OFF) ;;
             cachyos) _de_args+=("MangoWM" "MangoWM (Wayland) — from CachyOS repo" OFF) ;;
         esac
+        # Cosmalia (cosmic-comp + Noctalia) is made of dinit user services,
+        # so it is only offered when dinit is the init system
+        [ "$INIT" = "dinit" ] && _de_args+=("Cosmalia" "Cosmalia (Wayland, recommended) — COSMIC comp + Noctalia" OFF)
         _de_n=$(( ${#_de_args[@]} / 3 ))
         DE_CHOICES=$(whiptail --title "$TITLE" --checklist \
             "Select DE/WM  [9/$STEP_MAX]  (space=toggle)" $(( _de_n + 9 )) 70 "$_de_n" \
@@ -863,19 +905,19 @@ fi
 
 # icewm doesnt need mesa/llvm so skip gpu entirely to save ~200mb
 BARE_WM_ONLY=1
-for _de in Plasma XFCE Cinnamon LXQt Moksha Cosmic Hyprland MangoWM Niri Wayfire i3 Openbox Fluxbox; do
+for _de in Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Niri Wayfire i3 Openbox Fluxbox; do
     echo "$DE_CHOICES" | grep -qw "$_de" && BARE_WM_ONLY=0 && break
 done
 [ "$DE_CHOICES" = "CLI" ] && BARE_WM_ONLY=0
 [ "$BARE_WM_ONLY" = "1" ] && GPU=""
 
 # Standard Xorg — XLibre pulled from the Artix repos after the XLibre/Artix dispute
-# Skipped only when every selected session is Wayland-only (Cosmic/Hyprland/MangoWM/Niri/Wayfire)
+# Skipped only when every selected session is Wayland-only (Cosmic/Cosmalia/Hyprland/MangoWM/Niri/Wayfire)
 XORG_PKGS=""
 if [ "$DE_CHOICES" != "CLI" ]; then
     for _de in $DE_CHOICES; do
         case "$_de" in
-            Cosmic|Hyprland|MangoWM|Niri|Wayfire) ;;
+            Cosmic|Cosmalia|Hyprland|MangoWM|Niri|Wayfire) ;;
             *) XORG_PKGS="xorg-server xorg-server-common xf86-input-libinput xorg-xinit"; break ;;
         esac
     done
@@ -883,7 +925,7 @@ fi
 
 # Only install audio stack for DEs that actually use it
 AUDIO_PKGS=""
-AUDIO_DES="Plasma XFCE Cinnamon LXQt Moksha Cosmic Hyprland MangoWM Niri Wayfire"
+AUDIO_DES="Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Niri Wayfire"
 for _de in $AUDIO_DES; do
     if echo "$DE_CHOICES" | grep -qw "$_de"; then
         AUDIO_PKGS="pipewire pipewire-pulse pipewire-alsa wireplumber"
@@ -1154,7 +1196,7 @@ chown -R "${USER_UID}:${USER_GID}" /mnt/home/"$USERNAME"
 # =========================
 # PIPEWIRE AUTOSTART (only for DEs that use audio)
 # =========================
-AUDIO_DES_CHECK="Plasma XFCE Cinnamon LXQt Moksha Cosmic Hyprland MangoWM Niri Wayfire"
+AUDIO_DES_CHECK="Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Niri Wayfire"
 NEED_AUDIO=0
 for _de in $AUDIO_DES_CHECK; do
     echo "$DE_CHOICES" | grep -qw "$_de" && NEED_AUDIO=1 && break
@@ -1234,7 +1276,7 @@ elif echo "$DE_CHOICES" | grep -qw "Plasma"; then
     DM_BASE="sddm"
 elif echo "$DE_CHOICES" | grep -qwE "XFCE|Cinnamon|LXQt|Moksha"; then
     DM_BASE="lightdm"
-elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Niri|Wayfire"; then
+elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Niri|Wayfire|Cosmalia"; then
     DM_BASE="greetd"
 else
     DM_BASE=""
@@ -1382,6 +1424,20 @@ EOF
 fi
 
 gauge 65 "Installing desktop environment..."
+# user-service manager chosen in the wizard (any init, any desktop; the two conflict)
+if [ "$DE_CHOICES" != "CLI" ]; then
+    case "${USERSVC:-none}" in
+        turnstile)
+            artix-chroot /mnt pacman -S --noconfirm --needed turnstile "$(svc_pkg turnstile)" || \
+                echo "==> Warning: couldn't install turnstile — user services won't start until it is installed" ;;
+        userspawn)
+            artix-chroot /mnt pacman -S --noconfirm --needed userspawn "$(svc_pkg userspawn)" || \
+                echo "==> Warning: couldn't install userspawn — user services won't start until it is installed"
+            case "$INIT" in runit|s6) echo "==> Note: userspawn on $INIT may need per-user configuration after install (see the Artix release notes)" ;; esac ;;
+        *)
+            echo "==> Note: no user-service manager installed — set up userspawn or turnstile before using user services" ;;
+    esac
+fi
 _failed_des=""
 for DE in $DE_CHOICES; do
     _de_ok=1
@@ -1529,6 +1585,33 @@ EOF
             ;;
         Moksha)
             artix-chroot /mnt pacman -S --noconfirm moksha-artix || _de_ok=0
+            ;;
+        Cosmalia)
+            # Minimal COSMIC desktop: cosmic-comp + Noctalia, started by dinit user
+            # services (https://github.com/grigio/cosmalia-session-dinit).
+            # The package is not in any repo, so it is built from its PKGBUILD.
+            # All of its dependencies are in Arch [extra].
+            if [ "$INIT" != "dinit" ]; then
+                echo "==> Cosmalia needs dinit — skipping"
+                _de_ok=0
+            else
+                enable_arch_extra_chroot || _de_ok=0
+                [ "$_de_ok" = "1" ] && { artix-chroot /mnt pacman -S --noconfirm --needed \
+                    git base-devel cosmic-comp noctalia cosmic-settings cosmic-settings-daemon \
+                    xdg-desktop-portal-cosmic polkit gnome-keyring wireplumber upower || _de_ok=0; }
+                if [ "$_de_ok" = "1" ]; then
+                    # makepkg refuses to run as root, so build as the new user.
+                    # check() only runs shellcheck, so skip it (--nocheck). A full clone keeps
+                    # the tags the PKGBUILD uses for pkgver.
+                    _cosmalia_build='set -e; rm -rf /tmp/cosmalia-build; git clone --quiet https://github.com/grigio/cosmalia-session-dinit.git /tmp/cosmalia-build; cd /tmp/cosmalia-build; makepkg -f --nocheck --noconfirm'
+                    if artix-chroot /mnt su "$USERNAME" -c "$_cosmalia_build"; then
+                        artix-chroot /mnt bash -c 'pacman -U --noconfirm /tmp/cosmalia-build/cosmalia-session-dinit-*.pkg.tar.zst' || _de_ok=0
+                    else
+                        _de_ok=0
+                    fi
+                    rm -rf /mnt/tmp/cosmalia-build
+                fi
+            fi
             ;;
         Cosmic)
             artix-chroot /mnt bash -c "
@@ -1702,10 +1785,11 @@ EOF
             # time we get here it's always one of these five kinds that put us in the
             # greetd branch to begin with.
             GREETD_CMD=""
-            for _w in Hyprland Niri Wayfire MangoWM i3 Openbox Fluxbox IceWM; do
+            for _w in Hyprland Niri Wayfire MangoWM Cosmalia i3 Openbox Fluxbox IceWM; do
                 if echo "$DE_CHOICES" | grep -qw "$_w"; then
                     case "$_w" in
                         MangoWM) GREETD_CMD="mango" ;;
+                        Cosmalia) GREETD_CMD="cosmalia-session" ;;
                         Openbox) GREETD_CMD="openbox-session" ;;
                         Fluxbox) GREETD_CMD="startfluxbox" ;;
                         IceWM)   GREETD_CMD="icewm-session" ;;
@@ -1773,15 +1857,34 @@ esac
 
 artix-chroot /mnt pacman -S --noconfirm cpupower "$(svc_pkg cpupower)"
 
+# userspawn's service name differs between package generations; use whichever exists
+_userspawn_svc() {
+    local _n
+    for _n in userspawn dinit-user-spawn; do
+        case "$INIT" in
+            dinit)  [ -f "/mnt/etc/dinit.d/$_n" ] && { echo "$_n"; return 0; } ;;
+            openrc) [ -f "/mnt/etc/init.d/$_n" ] && { echo "$_n"; return 0; } ;;
+            runit)  [ -d "/mnt/etc/runit/sv/$_n" ] && { echo "$_n"; return 0; } ;;
+            s6)     { [ -d "/mnt/etc/s6/sv/${_n}-srv" ] || [ -d "/mnt/etc/s6/adminsv/$_n" ]; } && { echo "$_n"; return 0; } ;;
+        esac
+    done
+    echo userspawn
+}
+
 SVCS="dbus $NET_SVC elogind cpupower"
-echo "$DE_CHOICES" | grep -qw "Cosmic" && SVCS="$SVCS upower"
+if [ "$DE_CHOICES" != "CLI" ]; then
+    case "${USERSVC:-none}" in
+        turnstile) SVCS="$SVCS turnstiled" ;;
+        userspawn) SVCS="$SVCS $(_userspawn_svc)" ;;
+    esac
+fi
+echo "$DE_CHOICES" | grep -qwE "Cosmic|Cosmalia" && SVCS="$SVCS upower"
 [ -n "$DM" ] && SVCS="$SVCS $DM"
 
 case "$INIT" in
     dinit)
         mkdir -p /mnt/etc/dinit.d/boot.d
         [ -f /mnt/etc/dinit.d/rtkit-daemon ] && SVCS="$SVCS rtkit-daemon"             || { [ -f /mnt/etc/dinit.d/rtkit ] && SVCS="$SVCS rtkit"; }
-        echo "$DE_CHOICES" | grep -qw "Cosmic" && SVCS="$SVCS turnstiled"
         for svc in $SVCS; do svc_enable "$svc"; done
         [[ "$SWAP" =~ Zram|Both ]] && svc_enable zram || true
         for tty in 2 3 4 5 6; do
