@@ -3,6 +3,12 @@
 A whiptail-driven installer for Artix Linux. Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
 (Feel free to fork this repo.. I wish I had done that with the original script. Luckily I found the script on my drive and adapted it from there. This is why my install instructions direct you to download the script rather than just piping it into bash. When you have a local copy nobody can delete a repo and take it away from you)
 
+## Goal
+
+This installer is meant for experienced and new Artix users alike. It is deliberately minimal: you get what you choose in the wizard, plus what those choices need to work, and no extra apps, themes or utilities on top. You start with a clean, uncluttered system and build it up the way you want. Choose your own web browser! I wont do that for you. If you already know exactly what you want, the wizard gets you there quickly; if you're newer to Artix, the defaults are sensible and every step explains what it's asking, and sets up a lot of the things you may not be familiar with like user services and audio services. 
+
+## IF YOU USE TILING WINDOW MANAGERS LIKE HYPRLAND OR DESKTOPS THAT RELY ON CONFIG LIKE WAYFIRE PLEASE NOTE THAT THIS SCRIPT DOESN'T INCLUDE ANY KIND OF DOTFILES IT MERELY INSTALLS THE PACKAGES SO YOU WILL NEED TO CONFIGURE THEM FOR YOURSELF. 
+
 ## Requirements
 
 - Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso. Use one with a graphical session if its easier for you. It doesn't matter which kind you choose.) note: with a graphical installer it makes it easy to copy the install script, or the folder containing the install script to another location like a second hdd or a usb drive that isn't running the iso then the script is always available to you locally.
@@ -59,6 +65,32 @@ For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `a
 12. **32-bit / multilib** — optional, for Steam/Wine/32-bit apps
 13. **Network stack** — dhcpcd, iwd, or NetworkManager
 
+## Desktop environments
+
+Multi-select checklist. Supported:
+
+- **Plasma, XFCE, Cinnamon, LXQt, Moksha** — X11 sessions; get LightDM (SDDM for Plasma)
+- **Cosmic** *(experimental)* — Wayland, ships its own dedicated `cosmic-greeter`
+- **Hyprland, Niri, Wayfire** — Wayland-only
+- **labwc** — Wayland-only stacking compositor in the Openbox style, from the Artix repos. Installed with `foot` (so its root menu has a terminal) and `xdg-desktop-portal-wlr`, and nothing else — no panel or launcher. Its config lives in `~/.config/labwc`
+- **Cosmalia** *(dinit only, recommended)* — minimal Wayland desktop: `cosmic-comp` + Noctalia shell, from [grigio/cosmalia-session-dinit](https://github.com/grigio/cosmalia-session-dinit). Only shown in the list when dinit is the init system. Its dependencies come from Arch `[extra]`; the session package itself is built from its PKGBUILD during install (git clone + `makepkg`). It runs on dinit user services, so pick userspawn or turnstile in the User services step (picking neither means you set it up yourself before logging in)
+- **MangoWM** — Wayland-only, **only offered if found** in Arch `[extra]` or the CachyOS repo — checked live against the package API / sync databases at install time, so it simply won't appear if neither has it
+- **i3, Openbox, Fluxbox, IceWM** — bare X11 window managers, get autologin + a generated `.xinitrc`
+
+Display manager is chosen automatically, by priority: Cosmic > noctalia-greeter (if accepted) > Plasma (sddm) > XFCE/Cinnamon/LXQt/Moksha (lightdm) > Hyprland/MangoWM/Niri/Wayfire/Cosmalia/labwc (greetd). No DM at all for a CLI-only install or a bare WM picked alone.
+
+### noctalia-greeter
+
+noctalia-greeter is now offered for any desktop/WM selection — including pure X11 picks like Plasma alone — with only Cosmic excluded (it brings its own dedicated cosmic-greeter, which always wins anyway). The uncertain-X11-support warning is gone since x11 sessions have been confirmed working(see note).
+A fallback bug this surfaced: with the old restriction, a failed noctalia-greeter install always had a real Wayland WM to fall back to. With it gone, I found two cases where the old fallback would’ve pointed greetd at a binary that was never installed — Plasma-only (would’ve tried mango) and a bare-WM-only pick like i3-only (same problem). Both now correctly fall back to actually installing the right thing instead: sddm/lightdm get installed live if that’s what would’ve been used, and the bare-WM case now falls back to the WM’s real command (e.g. i3) rather than mango.
+NOTE: ON TEST RUNS IVE HAD ISSUES WITH CINNAMON SHOWING UP IN THE SESSION LIST ON THE GREETER.  IF YOU INSTALL CINNAMON WITH NOCTALIA GREETER ITS A GOOD IDEA TO ALSO SELECT A SECOND DESKTOP AS WELL IN CASE CINNAMON DOESNT SHOW UP FROM THE GREETER. FROM THERE YOU CAN REPLACE NOCTALIA-GREETER WITH THE GIT VERSION FROM THE AUR (THIS VERSION WILL SEE ALL SESSIONS)
+
+## Kernels
+
+Multi-select checklist — install one or more:
+
+- `linux` — always available as a fallback if your other picks fail to install
+- `linux-lts`, `linux-zen`, `linux-lqx` (Liquorix), `linux-cachyos` (adds the CachyOS repo, BORE scheduler)
 
 ## Known caveats
 
@@ -89,7 +121,7 @@ Things flagged during review but intentionally left as-is:
 ## Changes from the original upstream fork
 
 - Removed **Xlibre**, this was added to the original script when xlibre was the artix default x session. I switched it back to **X11** as xlibre is no longer officially supported on artix.
-- Added **Cinnamon**, **Plasma**, **Niri**, and **Wayfire** as desktop options
+- Added **Cinnamon**, **Plasma**, **Niri**, **Wayfire**, and **labwc** as desktop options
 - Added **MangoWM**, gated on live availability in Arch `[extra]` or the CachyOS repo
 - Added **Cosmalia** (dinit only), a minimal COSMIC + Noctalia desktop from [grigio/cosmalia-session-dinit](https://github.com/grigio/cosmalia-session-dinit). Its dependencies come from Arch `[extra]`, and the session package is built from its PKGBUILD during install
 - Added **noctalia-greeter** as an optional greetd greeter, gated the same way
