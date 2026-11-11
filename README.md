@@ -40,7 +40,7 @@ For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `a
 6. **Locale, timezone, keyboard** — one screen each
 7. **Hostname + username**
 8. **Privilege escalation** — doas (default) or sudo
-9. **Desktop** — see below
+9. **User services** *(dinit only)* — how each user's dinit instance is started at login: **userspawn-dinit** (default), **turnstile** (`turnstile` + `turnstile-dinit`), or neither. Asked before the desktop and applies whichever desktop you pick; the two conflict, so only one is installed. Then **Desktop** — see below
 10. **Kernel + CPU + GPU** — see below
 11. **Bootloader** — on UEFI, choose GRUB2, Limine, or rEFInd; BIOS systems always get GRUB (the other two are UEFI-only)
 12. **32-bit / multilib** — optional, for Steam/Wine/32-bit apps
@@ -53,10 +53,11 @@ Multi-select checklist. Supported:
 - **Plasma, XFCE, Cinnamon, LXQt, Moksha** — X11 sessions; get LightDM (SDDM for Plasma)
 - **Cosmic** *(experimental)* — Wayland, ships its own dedicated `cosmic-greeter`
 - **Hyprland, Niri, Wayfire** — Wayland-only
+- **Cosmalia** *(dinit only, recommended)* — minimal Wayland desktop: `cosmic-comp` + Noctalia shell, from [grigio/cosmalia-session-dinit](https://github.com/grigio/cosmalia-session-dinit). Only shown in the list when dinit is the init system. Its dependencies come from Arch `[extra]`; the session package itself is built from its PKGBUILD during install (git clone + `makepkg`). It runs on dinit user services, so pick userspawn or turnstile in the User services step (picking neither means you set it up yourself before logging in)
 - **MangoWM** — Wayland-only, **only offered if found** in Arch `[extra]` or the CachyOS repo — checked live against the package API / sync databases at install time, so it simply won't appear if neither has it
 - **i3, Openbox, Fluxbox, IceWM** — bare X11 window managers, get autologin + a generated `.xinitrc`
 
-Display manager is chosen automatically, by priority: Cosmic > noctalia-greeter (if accepted) > Plasma (sddm) > XFCE/Cinnamon/LXQt/Moksha (lightdm) > Hyprland/MangoWM/Niri/Wayfire (greetd). No DM at all for a CLI-only install or a bare WM picked alone.
+Display manager is chosen automatically, by priority: Cosmic > noctalia-greeter (if accepted) > Plasma (sddm) > XFCE/Cinnamon/LXQt/Moksha (lightdm) > Hyprland/MangoWM/Niri/Wayfire/Cosmalia (greetd). No DM at all for a CLI-only install or a bare WM picked alone.
 
 ### noctalia-greeter
 
@@ -75,7 +76,7 @@ Multi-select checklist — install one or more:
 
 Things flagged during review but intentionally left as-is:
 
-- **doas config** ships `permit nopass :wheel cmd pacman` — effectively passwordless root for anyone in `wheel`, since pacman can run arbitrary code as root (install scriptlets, `--hookdir`, `--config`). Left in deliberately; edit `/etc/doas.conf` and remove the second line (it should just read as permit persist :wheel)  after install if you want it removed or pinned to specific args (e.g. `args -Syu`)WARNING: IF YOU DON"T REMOVE THIS AFTER INSTALL PACMAN WILL NO LONGER PROMPT FOR PASSWORD!!!!
+- **doas config** ships `permit nopass :wheel cmd pacman` — effectively passwordless root for anyone in `wheel`, since pacman can run arbitrary code as root (install scriptlets, `--hookdir`, `--config`). Left in deliberately; edit `/etc/doas.conf` and remove the second line (it should just read as permit persist :wheel)  after install if you want it removed or pinned to specific args (e.g. `args -Syu`)WARNING: IF YOU DON"T REMOVE THIS AFTER INSTALL PACMAN WILL NO LONGER PROMPT FOR PASSWORD!!!! Only applicable to doas though.
 - **Dual-boot EFI formatting** — the "do NOT format" warning shown in dual-boot mode isn't currently enforced. The Format EFI step has no dual-boot guard and will format an existing EFI partition — e.g. wiping a Windows bootloader — if you choose "Format" there. Avoid formatting your ESP in dual-boot mode.
 
 
