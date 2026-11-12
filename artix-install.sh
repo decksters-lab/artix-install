@@ -238,6 +238,7 @@ FS="ext4"
 SWAP="None"
 ZSWAP=0
 USERSVC=""   # user-service manager: userspawn | turnstile | none
+USERSVC_OFFERED=0   # 1 only if the wizard actually showed the choice for this init
 SWAP_SIZE_GB=4
 SWAP_SIZE_MB=4096
 ENCRYPT=0; REAL_ROOT=""; LUKS_CMDLINE=""; LUKS_PW=""
@@ -440,6 +441,7 @@ case "$STEP" in
         _us_args+=("none" "Neither — I'll set it up myself after install")
         _us_def="${USERSVC:-}"
         case "$_us_def" in userspawn|turnstile|none) ;; *) _us_def="${_us_args[0]}" ;; esac
+        USERSVC_OFFERED=1
         USERSVC=$(whiptail --title "$TITLE" --default-item "$_us_def" --menu \
             "User Services  [9/$STEP_MAX]\n\nHow should each user's service manager be started at login? The two options conflict, pick one." \
             17 74 $(( ${#_us_args[@]} / 2 )) \
@@ -447,6 +449,7 @@ case "$STEP" in
             3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
     else
         USERSVC="none"
+        USERSVC_OFFERED=0
     fi
     _v=$(whiptail --title "$TITLE" --menu "Installation Type  [9/$STEP_MAX]" 10 60 2 \
         "DE"  "Desktop Environment / Window Manager" \
@@ -846,6 +849,22 @@ svc_pkg() {
         runit)  echo "${1}-runit" ;;
         s6)     echo "${1}-s6" ;;
     esac
+}
+
+# svc_install <name> [extra pkgs...] — install a package (plus extras) and, best-effort,
+# its service package for the chosen init. Not every init has a service package for
+# everything (e.g. greetd on s6), so a missing one is a warning, not a fatal error;
+# svc_enable then reports if the service itself isn't there.
+svc_install() {
+    local _base="$1" _svc
+    artix-chroot /mnt pacman -S --noconfirm "$@" || return 1
+    _svc="$(svc_pkg "$_base")"
+    if artix-chroot /mnt pacman -Si "$_svc" >/dev/null 2>&1; then
+        artix-chroot /mnt pacman -S --noconfirm --needed "$_svc" || \
+            echo "==> Warning: couldn't install $_svc"
+    else
+        echo "==> Note: the Artix repos have no $INIT service package ($_svc) for $_base"
+    fi
 }
 
 # svc_enable <svc> — enable service in installed system
@@ -1494,7 +1513,9 @@ if [ "$DE_CHOICES" != "CLI" ]; then
                 echo "==> Warning: couldn't install userspawn — user services won't start until it is installed"
             case "$INIT" in runit|s6) echo "==> Note: userspawn on $INIT may need per-user configuration after install (see the Artix release notes)" ;; esac ;;
         *)
-            echo "==> Note: no user-service manager installed — set up userspawn or turnstile before using user services" ;;
+            if [ "${USERSVC_OFFERED:-0}" = "1" ]; then
+                echo "==> Note: no user-service manager installed — set up userspawn or turnstile before using user services"
+            fi ;;
     esac
 fi
 _failed_des=""
@@ -1805,7 +1826,14 @@ fi
 
 if [ -n "$DM" ]; then
     if [[ "$DM" == "greetd" ]]; then
-        artix-chroot /mnt pacman -S --noconfirm greetd "$(svc_pkg greetd)"
+        svc_install greetd
+        if [ "$INIT" = "s6" ] && [ ! -e /mnt/etc/s6/sv/greetd-srv ] && [ ! -e /mnt/etc/s6/sv/greetd ]; then
+            # no greetd-s6 package: add a minimal s6-rc longrun so the login screen starts
+            mkdir -p /mnt/etc/s6/adminsv/greetd
+            printf 'longrun\n' > /mnt/etc/s6/adminsv/greetd/type
+            printf '#!/bin/execlineb -P\ngreetd\n' > /mnt/etc/s6/adminsv/greetd/run
+            chmod +x /mnt/etc/s6/adminsv/greetd/run
+        fi
         mkdir -p /mnt/etc/greetd
         if echo "$DE_CHOICES" | grep -qw "Cosmic"; then
             # Cosmic owns greetd — its own greeter handles session selection
@@ -1862,9 +1890,9 @@ EOF
                     DM="$DM_BASE"
                     rm -f /mnt/etc/greetd/config.toml
                     if [ "$DM_BASE" = "sddm" ]; then
-                        artix-chroot /mnt pacman -S --noconfirm sddm "$(svc_pkg sddm)"
+                        svc_install sddm
                     else
-                        artix-chroot /mnt pacman -S --noconfirm lightdm lightdm-gtk-greeter "$(svc_pkg lightdm)"
+                        svc_install lightdm lightdm-gtk-greeter
                     fi
                 else
                     echo "==> Warning: failed to install noctalia-greeter — falling back to plain greetd"
@@ -1904,10 +1932,10 @@ user = "$USERNAME"
 EOF
         fi
     elif [[ "$DM" == "sddm" ]]; then
-        artix-chroot /mnt pacman -S --noconfirm sddm "$(svc_pkg sddm)"
+        svc_install sddm
         # sddm picks up all installed .desktop session files automatically
     elif [[ "$DM" == "lightdm" ]]; then
-        artix-chroot /mnt pacman -S --noconfirm lightdm lightdm-gtk-greeter "$(svc_pkg lightdm)"
+        svc_install lightdm lightdm-gtk-greeter
         # lightdm picks up all installed .desktop session files automatically
     fi
 fi
@@ -1924,11 +1952,11 @@ EOF
 # Install chosen network stack + migrate NM wifi profiles if needed
 case "$NET_CHOICE" in
     dhcpcd)
-        artix-chroot /mnt pacman -S --noconfirm dhcpcd "$(svc_pkg dhcpcd)"
+        svc_install dhcpcd
         NET_SVC="dhcpcd"
         ;;
     iwd)
-        artix-chroot /mnt pacman -S --noconfirm iwd "$(svc_pkg iwd)"
+        svc_install iwd
         NET_SVC="iwd"
         if [ -d /etc/NetworkManager/system-connections ]; then
             mkdir -p /mnt/var/lib/iwd
@@ -1950,7 +1978,7 @@ case "$NET_CHOICE" in
         ;;
 esac
 
-artix-chroot /mnt pacman -S --noconfirm cpupower "$(svc_pkg cpupower)"
+svc_install cpupower
 
 # With userspawn on dinit, start the audio stack from the per-user dinit instance
 # (userspawn-dinit ships an empty /etc/xdg/userspawn/dinit.d/boot.d for this).
