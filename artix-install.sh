@@ -488,10 +488,10 @@ case "$STEP" in
         esac
         # Cosmalia (cosmic-comp + Noctalia) is made of dinit user services,
         # so it is only offered when dinit is the init system
-        [ "$INIT" = "dinit" ] && _de_args+=("Cosmalia" "Cosmalia (Wayland, recommended) — COSMIC comp + Noctalia" OFF)
+        [ "$INIT" = "dinit" ] && _de_args+=("Cosmalia" "Cosmalia (Wayland, recommended)" OFF)
         _de_n=$(( ${#_de_args[@]} / 3 ))
         DE_CHOICES=$(whiptail --title "$TITLE" --checklist \
-            "Select DE/WM  [9/$STEP_MAX]  (space=toggle)" $(( _de_n + 9 )) 70 "$_de_n" \
+            "Select DE/WM  [9/$STEP_MAX]  (space=toggle)" $(( _de_n + 8 )) 76 "$_de_n" \
             "${_de_args[@]}" \
             3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
         DE_CHOICES=$(echo "$DE_CHOICES" | tr -d '"')
