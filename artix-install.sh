@@ -464,11 +464,11 @@ case "$STEP" in
             "Plasma"   "KDE Plasma"              OFF
             "XFCE"     "XFCE4"                   OFF
             "Cinnamon" "Cinnamon (X11)"          OFF
+            "MATE"     "MATE (X11)"              OFF
             "LXQt"     "LXQt"                    OFF
             "i3"       "i3wm"                    OFF
             "Openbox"  "Openbox"                 OFF
             "Fluxbox"  "Fluxbox"                 OFF
-            "IceWM"    "IceWM"                   OFF
             "Hyprland" "Hyprland (Wayland)"      OFF
             "Niri"     "Niri (Wayland)"          OFF
             "Wayfire"  "Wayfire (Wayland)"        OFF
@@ -936,14 +936,6 @@ if [[ "$SWAP" =~ Swapfile|Both ]]; then
     swapon /mnt/swapfile  # activate so fstabgen picks it up
 fi
 
-# icewm doesnt need mesa/llvm so skip gpu entirely to save ~200mb
-BARE_WM_ONLY=1
-for _de in Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc i3 Openbox Fluxbox; do
-    echo "$DE_CHOICES" | grep -qw "$_de" && BARE_WM_ONLY=0 && break
-done
-[ "$DE_CHOICES" = "CLI" ] && BARE_WM_ONLY=0
-[ "$BARE_WM_ONLY" = "1" ] && GPU=""
-
 # Standard Xorg — XLibre pulled from the Artix repos after the XLibre/Artix dispute
 # Skipped only when every selected session is Wayland-only (Cosmic/Cosmalia/Hyprland/MangoWM/Umbriel/Niri/Wayfire/labwc)
 XORG_PKGS=""
@@ -958,7 +950,7 @@ fi
 
 # Only install audio stack for DEs that actually use it
 AUDIO_PKGS=""
-AUDIO_DES="Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc"
+AUDIO_DES="Plasma XFCE Cinnamon MATE LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc"
 for _de in $AUDIO_DES; do
     if echo "$DE_CHOICES" | grep -qw "$_de"; then
         AUDIO_PKGS="pipewire pipewire-pulse pipewire-alsa wireplumber"
@@ -1246,7 +1238,7 @@ chown -R "${USER_UID}:${USER_GID}" /mnt/home/"$USERNAME"
 # =========================
 # PIPEWIRE AUTOSTART (only for DEs that use audio)
 # =========================
-AUDIO_DES_CHECK="Plasma XFCE Cinnamon LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc"
+AUDIO_DES_CHECK="Plasma XFCE Cinnamon MATE LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc"
 NEED_AUDIO=0
 for _de in $AUDIO_DES_CHECK; do
     echo "$DE_CHOICES" | grep -qw "$_de" && NEED_AUDIO=1 && break
@@ -1285,7 +1277,7 @@ done
 EOF
 chmod +x /mnt/usr/local/bin/start-pipewire
 
-# XDG autostart — works for Plasma X11, XFCE, LXQt
+# XDG autostart — works for Plasma X11, XFCE, MATE, LXQt
 mkdir -p /mnt/home/"$USERNAME"/.config/autostart
 cat > /mnt/home/"$USERNAME"/.config/autostart/pipewire.desktop << 'EOF'
 [Desktop Entry]
@@ -1327,7 +1319,7 @@ if echo "$DE_CHOICES" | grep -qw "Cosmic"; then
     DM_BASE="greetd"
 elif echo "$DE_CHOICES" | grep -qw "Plasma"; then
     DM_BASE="sddm"
-elif echo "$DE_CHOICES" | grep -qwE "XFCE|Cinnamon|LXQt|Moksha"; then
+elif echo "$DE_CHOICES" | grep -qwE "XFCE|Cinnamon|MATE|LXQt|Moksha"; then
     DM_BASE="lightdm"
 elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Umbriel|Niri|Wayfire|Cosmalia|labwc"; then
     DM_BASE="greetd"
@@ -1341,7 +1333,7 @@ else
 fi
 
 # bare WMs autologin on tty1 and startx
-BARE_WMS="i3 Openbox Fluxbox IceWM"
+BARE_WMS="i3 Openbox Fluxbox"
 
 # Write .desktop session files for bare WMs so DMs (lightdm, sddm) can launch them
 for _wm in $BARE_WMS; do
@@ -1351,7 +1343,6 @@ for _wm in $BARE_WMS; do
             i3)      _wm_exec="i3" ;;
             Openbox) _wm_exec="openbox-session" ;;
             Fluxbox) _wm_exec="startfluxbox" ;;
-            IceWM)   _wm_exec="icewm-session" ;;
         esac
         cat > "/mnt/usr/share/xsessions/${_wm}.desktop" << EOF
 [Desktop Entry]
@@ -1405,7 +1396,20 @@ EOF
             artix-chroot /mnt ln -sf /etc/runit/sv/agetty-tty1 /etc/runit/runsvdir/default/ 2>/dev/null || true
             ;;
         s6)
-            # s6: create a custom longrun service for autologin getty
+            # s6: Artix already ships its own tty1 getty (the name has changed between
+            # releases: agetty-tty1 / tty1). A second service with the same name makes
+            # s6-rc-compile fail (Artix then boots its fallback set), and a differently
+            # named one would fight over tty1, so only add ours if no tty1 service exists.
+            _s6_tty1=""
+            for _d in /mnt/etc/s6/sv /mnt/etc/s6/adminsv; do
+                for _n in agetty-tty1 tty1 agetty-tty1-srv tty1-srv; do
+                    [ -e "$_d/$_n" ] && _s6_tty1="$_d/$_n"
+                done
+            done
+            if [ -n "$_s6_tty1" ]; then
+                echo "==> Note: Artix already provides a tty1 getty ($_s6_tty1), so no s6 autologin service was added."
+                echo "==> Note: autologin on s6 needs the getty options changed in /etc/s6/config — see the Artix s6 wiki."
+            else
             mkdir -p /mnt/etc/s6/adminsv/agetty-tty1
             printf 'longrun\n' > /mnt/etc/s6/adminsv/agetty-tty1/type
             printf '#!/bin/execlineb -P\nagetty --autologin %s --noclear tty1 linux\n' "$USERNAME" \
@@ -1413,6 +1417,7 @@ EOF
             chmod +x /mnt/etc/s6/adminsv/agetty-tty1/run
             mkdir -p /mnt/etc/s6/adminsv/default/contents.d
             touch /mnt/etc/s6/adminsv/default/contents.d/agetty-tty1
+            fi
             ;;
     esac
 elif [ "$_has_bare_wm" = "1" ] && [ -n "$DM" ]; then
@@ -1463,15 +1468,16 @@ EOF
             ;;
         runit)
             mkdir -p /mnt/etc/runit/sv/zram
-            printf '#!/bin/sh\nexec /usr/local/bin/zram-setup\n' > /mnt/etc/runit/sv/zram/run
+            printf '#!/bin/sh\n/usr/local/bin/zram-setup\nexec sleep infinity\n' > /mnt/etc/runit/sv/zram/run
             printf '#!/bin/sh\nexec /usr/local/bin/zram-teardown\n' > /mnt/etc/runit/sv/zram/finish
             chmod +x /mnt/etc/runit/sv/zram/run /mnt/etc/runit/sv/zram/finish
             ;;
         s6)
+            # s6-rc oneshot: "up" runs once at boot, "down" at shutdown
             mkdir -p /mnt/etc/s6/adminsv/zram
-            printf 'longrun\n' > /mnt/etc/s6/adminsv/zram/type
-            printf '#!/bin/execlineb -P\n/usr/local/bin/zram-setup\n' > /mnt/etc/s6/adminsv/zram/run
-            chmod +x /mnt/etc/s6/adminsv/zram/run
+            printf 'oneshot\n' > /mnt/etc/s6/adminsv/zram/type
+            printf '/usr/local/bin/zram-setup\n' > /mnt/etc/s6/adminsv/zram/up
+            printf '/usr/local/bin/zram-teardown\n' > /mnt/etc/s6/adminsv/zram/down
             ;;
     esac
 fi
@@ -1514,6 +1520,10 @@ for DE in $DE_CHOICES; do
                 cinnamon nemo-fileroller gnome-terminal \
                 xdg-desktop-portal-gtk || _de_ok=0
             ;;
+        MATE)
+            # core MATE group (marco, mate-panel, caja, mate-terminal, ...), no mate-extra
+            artix-chroot /mnt pacman -S --noconfirm mate xdg-desktop-portal-gtk || _de_ok=0
+            ;;
         LXQt)
             artix-chroot /mnt pacman -S --noconfirm lxqt || _de_ok=0
             ;;
@@ -1525,10 +1535,6 @@ for DE in $DE_CHOICES; do
             ;;
         Fluxbox)
             artix-chroot /mnt pacman -S --noconfirm fluxbox xterm dmenu || _de_ok=0
-            ;;
-        IceWM)
-            artix-chroot /mnt pacman -S --noconfirm icewm xterm || _de_ok=0
-            mkdir -p /mnt/home/"$USERNAME"/.config/icewm
             ;;
         Hyprland)
             artix-chroot /mnt pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland || { _de_ok=0; }
@@ -1753,7 +1759,7 @@ done
 
 # write .xinitrc for bare WMs — done after loop so all WMs are installed
 BARE_WMS_SELECTED=""
-for _wm in i3 Openbox Fluxbox IceWM; do
+for _wm in i3 Openbox Fluxbox; do
     echo "$DE_CHOICES" | grep -qw "$_wm" && BARE_WMS_SELECTED="$BARE_WMS_SELECTED $_wm"
 done
 BARE_WMS_SELECTED="${BARE_WMS_SELECTED# }"
@@ -1764,7 +1770,6 @@ if [ -n "$BARE_WMS_SELECTED" ]; then
             i3)      echo "exec i3" ;;
             Openbox) echo "exec openbox-session" ;;
             Fluxbox) echo "exec startfluxbox" ;;
-            IceWM)   echo "exec icewm-session" ;;
         esac
     }
     WM_COUNT=$(echo "$BARE_WMS_SELECTED" | wc -w)
@@ -1875,7 +1880,7 @@ EOF
             # time we get here it's always one of these five kinds that put us in the
             # greetd branch to begin with.
             GREETD_CMD=""
-            for _w in Hyprland Niri Wayfire MangoWM Umbriel Cosmalia labwc i3 Openbox Fluxbox IceWM; do
+            for _w in Hyprland Niri Wayfire MangoWM Umbriel Cosmalia labwc i3 Openbox Fluxbox; do
                 if echo "$DE_CHOICES" | grep -qw "$_w"; then
                     case "$_w" in
                         MangoWM) GREETD_CMD="mango" ;;
@@ -1883,7 +1888,6 @@ EOF
                         Cosmalia) GREETD_CMD="cosmalia-session" ;;
                         Openbox) GREETD_CMD="openbox-session" ;;
                         Fluxbox) GREETD_CMD="startfluxbox" ;;
-                        IceWM)   GREETD_CMD="icewm-session" ;;
                         *)       GREETD_CMD="$_w" ;;
                     esac
                     break
@@ -2014,8 +2018,14 @@ case "$INIT" in
         [ -d /mnt/etc/s6/sv/rtkit-srv ] && SVCS="$SVCS rtkit"
         for svc in $SVCS; do svc_enable "$svc"; done
         [[ "$SWAP" =~ Zram|Both ]] && svc_enable zram || true
-        # Compile the s6-rc database so services are active on next boot
-        artix-chroot /mnt s6-db-reload 2>/dev/null ||             artix-chroot /mnt s6-rc-db-update 2>/dev/null || true
+        # Compile the s6-rc database so services are active on next boot. Output is
+        # kept (it used to be thrown away): if this fails the system boots Artix's
+        # fallback service set and none of the services enabled above will run.
+        if ! artix-chroot /mnt s6-db-reload; then
+            echo "==> WARNING: s6-db-reload failed — enabled services will not start on first boot."
+            echo "==> After booting (tty12 is the s6 rescue shell) run: s6-db-reload"
+            sleep 5
+        fi
         ;;
 esac
 
