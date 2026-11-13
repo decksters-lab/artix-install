@@ -201,21 +201,27 @@ check_noctalia_greeter_repo() {
     return 0
 }
 
-# per-partition filesystem picker
+# per-partition filesystem picker. pick_fs <title> <default> [root]
+# With "root" the Windows/portable filesystems are left out: Linux can't boot
+# from vfat/exfat/ntfs (no permissions, symlinks or ownership).
 pick_fs() {
-    local _title="$1" _default="${2:-ext4}"
-    whiptail --title "$TITLE" --menu "$_title" 18 65 10 \
-        "ext4"   "Ext4 — solid, widely supported" \
-        "btrfs"  "Btrfs — snapshots, compression" \
-        "xfs"    "XFS — high performance" \
-        "f2fs"   "F2FS — flash-friendly" \
-        "zfs"    "ZFS — advanced (needs zfs-dkms)" \
-        "jfs"    "JFS — low CPU journaled FS" \
-        "nilfs2" "NILFS2 — continuous snapshots" \
-        "vfat"   "FAT32 — for EFI/compatibility" \
-        "exfat"  "exFAT — large files, cross-platform" \
-        "ntfs"   "NTFS — Windows compatibility" \
-        3>&1 1>&2 2>&3
+    local _title="$1" _default="${2:-ext4}" _root="${3:-}"
+    local _args=(
+        "ext4"   "Ext4 — solid, widely supported"
+        "btrfs"  "Btrfs — snapshot-capable (single volume)"
+        "xfs"    "XFS — high performance"
+        "f2fs"   "F2FS — flash-friendly"
+        "jfs"    "JFS — low CPU journaled FS"
+        "nilfs2" "NILFS2 — continuous snapshots"
+    )
+    if [ "$_root" != "root" ]; then
+        _args+=(
+            "vfat"   "FAT32 — for EFI/compatibility"
+            "exfat"  "exFAT — large files, cross-platform"
+            "ntfs"   "NTFS — Windows compatibility"
+        )
+    fi
+    whiptail --title "$TITLE" --menu "$_title" 18 65 10 "${_args[@]}" 3>&1 1>&2 2>&3
 }
 
 # =========================
@@ -282,10 +288,9 @@ case "$STEP" in
 3) # Filesystem
     _v=$(whiptail --title "$TITLE" --menu "Root Filesystem  [3/$STEP_MAX]" 16 65 8 \
         "ext4"  "Ext4 — solid, widely supported (recommended)" \
-        "btrfs" "Btrfs — snapshots, compression, subvolumes" \
+        "btrfs" "Btrfs — snapshot-capable (single volume)" \
         "xfs"   "XFS — high performance, large files" \
         "f2fs"  "F2FS — flash-friendly (SSDs/NVMe)" \
-        "zfs"   "ZFS — advanced, needs zfs-dkms (experimental)" \
         "jfs"   "JFS — IBM journaled FS, low CPU usage" \
         "nilfs2" "NILFS2 — continuous snapshotting" \
         3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
@@ -655,12 +660,13 @@ case "$PART_MODE" in
         if [ "$UEFI" = "1" ]; then
             EFI=$(whiptail --title "$TITLE" --menu "Select EFI partition" \
                 16 62 8 "${_parts[@]}" 3>&1 1>&2 2>&3) || exit 1
-            _efi_fs=$(pick_fs "Filesystem for EFI partition" "vfat") || _efi_fs="vfat"
+            # the EFI System Partition has to be FAT32 for the firmware to read it
+            _efi_fs="vfat"
             PART_FS["$(fs_key "$EFI")"]="$_efi_fs"
         fi
         ROOT=$(whiptail --title "$TITLE" --menu "Select root partition" \
             16 62 8 "${_parts[@]}" 3>&1 1>&2 2>&3) || exit 1
-        _root_fs=$(pick_fs "Filesystem for root partition" "$FS") || _root_fs="$FS"
+        _root_fs=$(pick_fs "Filesystem for root partition" "$FS" root) || _root_fs="$FS"
         FS="$_root_fs"
         PART_FS["$(fs_key "$ROOT")"]="$_root_fs"
         # offer extra partitions (home, data, etc.)
@@ -703,6 +709,48 @@ case "$PART_MODE" in
         ;;
 esac
 fi  # end TEST_MODE=0 partition manager
+
+# fs_tool_info <fs> — sets _FS_CMD (mkfs tool) and _FS_PKG (package that has it)
+fs_tool_info() {
+    _FS_CMD=""; _FS_PKG=""
+    case "$1" in
+        ext4)   _FS_CMD=mkfs.ext4;   _FS_PKG=e2fsprogs ;;
+        btrfs)  _FS_CMD=mkfs.btrfs;  _FS_PKG=btrfs-progs ;;
+        xfs)    _FS_CMD=mkfs.xfs;    _FS_PKG=xfsprogs ;;
+        f2fs)   _FS_CMD=mkfs.f2fs;   _FS_PKG=f2fs-tools ;;
+        jfs)    _FS_CMD=mkfs.jfs;    _FS_PKG=jfsutils ;;
+        nilfs2) _FS_CMD=mkfs.nilfs2; _FS_PKG=nilfs-utils ;;
+        vfat)   _FS_CMD=mkfs.fat;    _FS_PKG=dosfstools ;;
+        exfat)  _FS_CMD=mkfs.exfat;  _FS_PKG=exfatprogs ;;
+        ntfs)   _FS_CMD=mkfs.ntfs;   _FS_PKG=ntfs-3g ;;
+    esac
+}
+
+# Check up front, before the disk is touched: a missing mkfs tool used to surface
+# only after the partition table had already been rewritten.
+_synced_for_fs=0
+for _f in "$FS" "${PART_FS[@]+"${PART_FS[@]}"}" $([ "$UEFI" = "1" ] && echo vfat); do
+    fs_tool_info "$_f"
+    [ -z "$_FS_CMD" ] && continue
+    command -v "$_FS_CMD" >/dev/null 2>&1 && continue
+    echo "==> $_FS_CMD not found on the live ISO, installing $_FS_PKG..."
+    if [ "$_synced_for_fs" = "0" ]; then pacman -Sy --noconfirm || true; _synced_for_fs=1; fi
+    pacman -S --noconfirm --needed "$_FS_PKG" || true
+    if ! command -v "$_FS_CMD" >/dev/null 2>&1; then
+        echo "ERROR: $_FS_CMD is not available and $_FS_PKG could not be installed."
+        echo "       Nothing has been changed on the disk. Pick another filesystem or check your network."
+        exit 1
+    fi
+done
+
+# GRUB on a BIOS machine reads /boot straight from the root filesystem, and its f2fs
+# support is limited (it can't read f2fs made with the extra_attr feature, which is
+# what mkfs.f2fs enables by default). On UEFI /boot is the FAT ESP, so it's not an issue.
+if [ "$UEFI" != "1" ] && [ "$FS" = "f2fs" ] && [ "$TEST_MODE" = "0" ]; then
+    whiptail --title "$TITLE" --yesno \
+        "Warning: BIOS boot with an F2FS root.\n\nGRUB may be unable to read /boot from F2FS and the system may not boot. ext4, xfs or btrfs are safer here.\n\nContinue with F2FS anyway?" \
+        13 66 --defaultno || exit 1
+fi
 
 if [ "$DUALBOOT" = "0" ] && [ "${PART_MODE:-auto}" != "manual" ]; then
     # Fresh install — wipe and write new partition table via sfdisk
@@ -805,6 +853,25 @@ format_part() {
     format_part "$EFI" "$_efi_fs"
 }
 
+# mount_retry <dev> <mountpoint> [fstype] — mount right after formatting. mount can
+# fail with "wrong fs type" if it runs before udev/blkid have caught up with the new
+# filesystem, so wait for udev, name the fs type when we know it, and retry.
+mount_retry() {
+    local _dev="$1" _mp="$2" _fs="${3:-}" _i
+    sync
+    for _i in 1 2 3 4 5 6; do
+        udevadm settle 2>/dev/null || true
+        if [ -n "$_fs" ]; then
+            mount -t "$_fs" "$_dev" "$_mp" && return 0
+        else
+            mount "$_dev" "$_mp" && return 0
+        fi
+        sleep 1
+    done
+    echo "mount_retry: couldn't mount $_dev on $_mp"
+    return 1
+}
+
 # Format root
 _root_fs="${PART_FS[$(fs_key "$ROOT")]:-$FS}"
 if [ "$_root_fs" = "zfs" ]; then
@@ -814,11 +881,15 @@ if [ "$_root_fs" = "zfs" ]; then
 else
     ZFS_ROOT=0
     format_part "$ROOT" "$_root_fs"
-    mount "$ROOT" /mnt
+    case "$_root_fs" in
+        ext4|btrfs|xfs|f2fs|jfs) _root_mt="$_root_fs" ;;
+        *)                       _root_mt="" ;;
+    esac
+    mount_retry "$ROOT" /mnt "$_root_mt"
 fi
 
 mkdir -p /mnt/boot
-[ "$UEFI" = "1" ] && mount "$EFI" /mnt/boot
+[ "$UEFI" = "1" ] && mount_retry "$EFI" /mnt/boot
 
 # Mount extra partitions (from manual mode)
 for _em in "${EXTRA_MOUNTS[@]+"${EXTRA_MOUNTS[@]}"}"; do
@@ -828,7 +899,7 @@ for _em in "${EXTRA_MOUNTS[@]+"${EXTRA_MOUNTS[@]}"}"; do
     _em_fs="${PART_FS[$(fs_key "$_em_dev")]:-ext4}"
     [ "$_em_fs" != "zfs" ] && format_part "$_em_dev" "$_em_fs"
     mkdir -p "/mnt${_em_mp}"
-    [ "$_em_fs" != "zfs" ] && mount "$_em_dev" "/mnt${_em_mp}"
+    [ "$_em_fs" != "zfs" ] && mount_retry "$_em_dev" "/mnt${_em_mp}"
 done
 
 # Activate swap partition now so fstabgen picks it up
@@ -952,7 +1023,13 @@ if [[ "$SWAP" =~ Swapfile|Both ]]; then
     fi
     chmod 600 /mnt/swapfile
     mkswap /mnt/swapfile
-    swapon /mnt/swapfile  # activate so fstabgen picks it up
+    # activate so fstabgen picks it up. Some filesystems (f2fs, nilfs2, ...) can't
+    # hold a swapfile; skip it rather than abort a whole install over it.
+    if ! swapon /mnt/swapfile; then
+        echo "==> Warning: $FS can't host a swapfile — continuing without swap"
+        rm -f /mnt/swapfile
+        sleep 3
+    fi
 fi
 
 # Standard Xorg — XLibre pulled from the Artix repos after the XLibre/Artix dispute
@@ -1050,6 +1127,16 @@ gauge 20 "Installing base system (this takes a while)..."
 # =========================
 # BASESTRAP
 # =========================
+# Userland tools for every filesystem in use (root + extra partitions + the ESP), so
+# the installed system has mkfs/fsck/mount helpers (e2fsprogs comes with base).
+FS_PKGS=""
+for _f in "$FS" "${PART_FS[@]+"${PART_FS[@]}"}" $([ "$UEFI" = "1" ] && echo vfat); do
+    fs_tool_info "$_f"
+    [ -z "$_FS_PKG" ] && continue
+    [ "$_FS_PKG" = "e2fsprogs" ] && continue
+    case " $FS_PKGS " in *" $_FS_PKG "*) ;; *) FS_PKGS="$FS_PKGS $_FS_PKG" ;; esac
+done
+
 _do_basestrap() {
     local _k="$1"
     basestrap /mnt \
@@ -1060,6 +1147,7 @@ _do_basestrap() {
         ttf-dejavu ttf-liberation noto-fonts \
         $XORG_PKGS \
         $AUDIO_PKGS \
+        $FS_PKGS \
         $GPU
 }
 if ! _do_basestrap "$FIRST_KERNEL"; then
@@ -1092,9 +1180,11 @@ if [ "$ENCRYPT" = "1" ]; then
     # correct initramfs. consolefont is omitted — no font is configured at this
     # stage (vconsole.conf is written later) and mkinitcpio 41+ errors on it.
     sed -i 's/^HOOKS=.*/HOOKS=(base udev autodetect microcode modconf kms keyboard keymap block encrypt filesystems fsck)/' /mnt/etc/mkinitcpio.conf
-    # Pin btrfs module so autodetect can't filter it out in a chroot environment
-    [ "$FS" = "btrfs" ] && \
-        sed -i 's/^MODULES=.*/MODULES=(btrfs)/' /mnt/etc/mkinitcpio.conf
+    # Pin the root filesystem module so autodetect can't filter it out in a chroot environment
+    case "$FS" in
+        btrfs|xfs|f2fs|jfs|nilfs2)
+            sed -i "s/^MODULES=.*/MODULES=($FS)/" /mnt/etc/mkinitcpio.conf ;;
+    esac
     # Ensure cryptsetup is in the installed system
     artix-chroot /mnt pacman -S --noconfirm cryptsetup
     # crypttab — maps cryptroot on boot
