@@ -97,7 +97,6 @@ if [ "${1:-}" = "--test" ]; then
     fi
     DUALBOOT=0; SWAP_PART=""
     EXTRA_MOUNTS=()
-    ZFS_ROOT=0
     echo "==> TEST MODE: disk=$DISK boot=$BOOT uefi=$UEFI"
 fi
 
@@ -244,6 +243,7 @@ FS="ext4"
 SWAP="None"
 ZSWAP=0
 USERSVC=""   # user-service manager: userspawn | turnstile | none
+S6_SERVICES=""      # services to enable on s6, collected by svc_enable and applied once at the end
 USERSVC_OFFERED=0   # 1 only if the wizard actually showed the choice for this init
 SWAP_SIZE_GB=4
 SWAP_SIZE_MB=4096
@@ -822,27 +822,6 @@ format_part() {
         vfat)   mkfs.fat -F32  "$_dev" ;;
         exfat)  mkfs.exfat      "$_dev" ;;
         ntfs)   mkfs.ntfs  -f  "$_dev" ;;
-        zfs)
-            # ZFS needs zfs-dkms on the live ISO
-            if ! command -v zpool &>/dev/null; then
-                pacman -Sy --noconfirm zfs-dkms zfs-utils 2>/dev/null || \
-                pacman -Sy --noconfirm zfs-linux 2>/dev/null || true
-                modprobe zfs 2>/dev/null || true
-            fi
-            # pool name: root pool = zroot, others use last path component
-            local _pool="zroot"
-            zpool create -f -o ashift=12 \
-                -O acltype=posixacl -O xattr=sa \
-                -O dnodesize=auto -O compression=lz4 \
-                -O normalization=formD -O relatime=on \
-                -O mountpoint=none \
-                "$_pool" "$_dev"
-            zfs create -o mountpoint=/ "${_pool}/root"
-            # export/import so it mounts under /mnt
-            zpool export "$_pool"
-            zpool import -d /dev -R /mnt "$_pool"
-            return
-            ;;
         *) echo "==> Unknown FS '$_fs', defaulting to ext4"; mkfs.ext4 -F "$_dev" ;;
     esac
 }
@@ -874,19 +853,12 @@ mount_retry() {
 
 # Format root
 _root_fs="${PART_FS[$(fs_key "$ROOT")]:-$FS}"
-if [ "$_root_fs" = "zfs" ]; then
-    format_part "$ROOT" "zfs"
-    # ZFS import already mounted /mnt — skip normal mount below
-    ZFS_ROOT=1
-else
-    ZFS_ROOT=0
-    format_part "$ROOT" "$_root_fs"
-    case "$_root_fs" in
-        ext4|btrfs|xfs|f2fs|jfs) _root_mt="$_root_fs" ;;
-        *)                       _root_mt="" ;;
-    esac
-    mount_retry "$ROOT" /mnt "$_root_mt"
-fi
+format_part "$ROOT" "$_root_fs"
+case "$_root_fs" in
+    ext4|btrfs|xfs|f2fs|jfs) _root_mt="$_root_fs" ;;
+    *)                       _root_mt="" ;;
+esac
+mount_retry "$ROOT" /mnt "$_root_mt"
 
 mkdir -p /mnt/boot
 [ "$UEFI" = "1" ] && mount_retry "$EFI" /mnt/boot
@@ -897,9 +869,9 @@ for _em in "${EXTRA_MOUNTS[@]+"${EXTRA_MOUNTS[@]}"}"; do
     _em_dev="${_em%%:*}"
     _em_mp="${_em##*:}"
     _em_fs="${PART_FS[$(fs_key "$_em_dev")]:-ext4}"
-    [ "$_em_fs" != "zfs" ] && format_part "$_em_dev" "$_em_fs"
+    format_part "$_em_dev" "$_em_fs"
     mkdir -p "/mnt${_em_mp}"
-    [ "$_em_fs" != "zfs" ] && mount_retry "$_em_dev" "/mnt${_em_mp}"
+    mount_retry "$_em_dev" "/mnt${_em_mp}"
 done
 
 # Activate swap partition now so fstabgen picks it up
@@ -965,12 +937,15 @@ svc_enable() {
             fi
             ;;
         s6)
-            # Add to default bundle contents.d; s6-db-reload compiles at end
-            if [ -d "/mnt/etc/s6/sv/${_s}-srv" ] || [ -d "/mnt/etc/s6/adminsv/$_s" ]; then
+            # Collected and applied once at the end (see the s6 block after the service
+            # loop): newer Artix uses the "s6 set enable" frontend, older used contents.d.
+            S6_SERVICES="$S6_SERVICES $_s"
+            # Old layout only (no "s6" frontend): also drop it into the default bundle.
+            # On the new layout this would create an adminsv/default without a "type"
+            # file, which makes "s6 repository sync" abort.
+            if [ ! -x /mnt/usr/bin/s6 ] && { [ -d "/mnt/etc/s6/sv/${_s}-srv" ] || [ -d "/mnt/etc/s6/adminsv/$_s" ]; }; then
                 mkdir -p /mnt/etc/s6/adminsv/default/contents.d
                 touch "/mnt/etc/s6/adminsv/default/contents.d/$_s"
-            else
-                echo "Note: s6 service $_s not found in sv/adminsv (may be in base bundle)"
             fi
             ;;
     esac
@@ -1158,18 +1133,7 @@ if ! _do_basestrap "$FIRST_KERNEL"; then
 fi
 
 gauge 35 "Writing fstab..."
-if [ "${ZFS_ROOT:-0}" = "1" ]; then
-    # ZFS root: generate fstab for non-ZFS mounts only, ZFS handles itself
-    fstabgen -U /mnt | grep -v ' / ' >> /mnt/etc/fstab
-    # install ZFS support in the target
-    artix-chroot /mnt pacman -S --noconfirm zfs-dkms zfs-utils 2>/dev/null || \
-        artix-chroot /mnt pacman -S --noconfirm zfs-linux 2>/dev/null || true
-    # enable zfs service
-    svc_enable zfs-import 2>/dev/null || true
-    svc_enable zfs-mount  2>/dev/null || true
-else
-    fstabgen -U /mnt >> /mnt/etc/fstab
-fi
+fstabgen -U /mnt >> /mnt/etc/fstab
 
 # Encryption setup inside installed system
 if [ "$ENCRYPT" = "1" ]; then
@@ -1524,8 +1488,11 @@ EOF
             printf '#!/bin/execlineb -P\nagetty --autologin %s --noclear tty1 linux\n' "$USERNAME" \
                 > /mnt/etc/s6/adminsv/agetty-tty1/run
             chmod +x /mnt/etc/s6/adminsv/agetty-tty1/run
-            mkdir -p /mnt/etc/s6/adminsv/default/contents.d
-            touch /mnt/etc/s6/adminsv/default/contents.d/agetty-tty1
+            if [ ! -x /mnt/usr/bin/s6 ]; then
+                mkdir -p /mnt/etc/s6/adminsv/default/contents.d
+                touch /mnt/etc/s6/adminsv/default/contents.d/agetty-tty1
+            fi
+            S6_SERVICES="$S6_SERVICES agetty-tty1"
             fi
             ;;
     esac
@@ -1628,7 +1595,7 @@ for DE in $DE_CHOICES; do
             ;;
         Cinnamon)
             artix-chroot /mnt pacman -S --noconfirm \
-                cinnamon nemo-fileroller gnome-terminal \
+                cinnamon gnome-terminal \
                 xdg-desktop-portal-gtk || _de_ok=0
             ;;
         MATE)
@@ -1803,7 +1770,7 @@ EOF
                 enable_arch_extra_chroot || _de_ok=0
                 [ "$_de_ok" = "1" ] && { artix-chroot /mnt pacman -S --noconfirm --needed \
                     git base-devel cosmic-comp noctalia cosmic-settings cosmic-settings-daemon \
-                    xdg-desktop-portal-cosmic polkit gnome-keyring wireplumber upower || _de_ok=0; }
+                    xdg-desktop-portal-cosmic cosmic-terminal polkit gnome-keyring wireplumber upower || _de_ok=0; }
                 if [ "$_de_ok" = "1" ]; then
                     # makepkg refuses to run as root, so build as the new user. Build in
                     # /var/tmp: artix-chroot mounts a fresh tmpfs on /tmp for every call, so a
@@ -2136,13 +2103,34 @@ case "$INIT" in
         [ -d /mnt/etc/s6/sv/rtkit-srv ] && SVCS="$SVCS rtkit"
         for svc in $SVCS; do svc_enable "$svc"; done
         [[ "$SWAP" =~ Zram|Both ]] && svc_enable zram || true
-        # Compile the s6-rc database so services are active on next boot. Output is
-        # kept (it used to be thrown away): if this fails the system boots Artix's
-        # fallback service set and none of the services enabled above will run.
-        if ! artix-chroot /mnt s6-db-reload; then
-            echo "==> WARNING: s6-db-reload failed — enabled services will not start on first boot."
-            echo "==> After booting (tty12 is the s6 rescue shell) run: s6-db-reload"
-            sleep 5
+        # Build the s6-rc database so the services are active on next boot.
+        if artix-chroot /mnt sh -c 'command -v s6 >/dev/null 2>&1'; then
+            # Current Artix: the pacman hook says s6-db-reload is deprecated and to use
+            # "s6 repository sync && s6 set commit && s6 live install" instead, with
+            # "s6 set enable <service>" to add a service.
+            _s6_ok=1
+            artix-chroot /mnt s6 repository sync || _s6_ok=0
+            for _s in $S6_SERVICES; do
+                artix-chroot /mnt s6 set enable "$_s" || echo "==> Note: couldn't enable s6 service $_s"
+            done
+            artix-chroot /mnt s6 set commit || _s6_ok=0
+            # "s6 live install" installs the database into the RUNNING s6, which doesn't
+            # exist inside this chroot (it fails with "unable to readlink /run/s6-rc/compiled"),
+            # so it is deliberately not run here.
+            if [ "$_s6_ok" = "0" ]; then
+                echo "==> WARNING: the s6 database step reported errors — enabled services may not start on first boot."
+                echo "==> After booting (tty12 is the s6 rescue shell) run: s6 repository sync && s6 set commit && s6 live install"
+                sleep 5
+            fi
+        else
+            # Older Artix: compile + update with the s6-db-reload helper. Output is kept
+            # (it used to be thrown away): if this fails the system boots Artix's fallback
+            # service set and none of the services enabled above will run.
+            if ! artix-chroot /mnt s6-db-reload; then
+                echo "==> WARNING: s6-db-reload failed — enabled services will not start on first boot."
+                echo "==> After booting (tty12 is the s6 rescue shell) run: s6-db-reload"
+                sleep 5
+            fi
         fi
         ;;
 esac
