@@ -1,28 +1,29 @@
 # artix-install
 
 A whiptail-driven installer for Artix Linux. Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
-(Feel free to fork this repo.. I wish I had done that with the original script. Luckily I found the script on my drive and adapted it from there. This is why my install instructions direct you to download the script rather than just piping it into bash. When you have a local copy nobody can delete a repo and take it away from you)
 
 ## Goal
 
-This installer is meant for experienced and new Artix users alike. It is deliberately minimal: you get what you choose in the wizard, plus what those choices need to work, and no extra apps, themes or utilities on top. You start with a clean, uncluttered system and build it up the way you want. If you already know exactly what you want, the wizard gets you there quickly; if you're newer to Artix, the defaults are sensible and every step explains what it's asking.
+This installer is meant for experienced and new Artix users alike. That being said, you should at least be familiar enough with linux to use a terminal to install packages like a web browser, for example. This artix installation is deliberately minimal: you get what you choose in the wizard, plus what those choices need to work, and no extra apps, themes or utilities on top. You start with a clean, uncluttered system and build it up the way you want. If you already know exactly what you want, the wizard gets you there quickly; if you're newer to Artix, the defaults are sensible and every step explains what it's asking. 
 
 Window managers and Wayland compositors (Hyprland, MangoWM, Niri, Wayfire, labwc, and so on) are **installed, not configured**. You get the compositor and what it needs to start, and nothing more: no bar, launcher, wallpaper, theme or keybind setup. At most the installer drops in the package's own stock config plus one line that starts audio, so the rest of the setup is yours to build the way you like it.
 
+All init systems have been tested in vm several times. dinit is what I use in real life so that will natually be the most supported init. If you encounter any issues especially with other init your help is appreciated.
+
 ## Requirements
 
-- Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso. Use one with a graphical session if its easier for you. It doesn't matter which kind you choose.) note: with a graphical installer it makes it easy to copy the install script, or the folder containing the install script to another location like a second hdd or a usb drive that isn't running the iso then the script is always available to you locally.
-- Script Must be run as root either with su before all other commands or with sudo right before running ./artix-install.sh
+- Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso it doesn't matter which init or de is on that iso. Use one with a graphical session if its easier for you. Personally, I run this script with a cinnamon iso) note: with a graphical installer it makes it easy to copy the install script, or the folder containing the install script to another location like a second hdd or a usb drive that isn't running the iso then the script is always available to you locally.
+- Script Must be run as root either with su before all other commands or with sudo right before running ./artix-install.sh (with a graphical iso this becomes trivial since you will be logged in as root user on it)
 
 ## Usage ( run ./artix-install.sh with sudo or as root user / su )
 
-Copy this one line, paste it, hit enter. It calls `su -c` for you, so there is no longer a separate "enter su first" step:
+Copy this one line, paste it, hit enter. It calls `su -c` for you:
 
 ```bash
 su -c 'pacman -Syy; pacman -S --needed --noconfirm git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh'
 ```
 
-on the official Artix live ISOs that password is `artix`; check your ISO's release notes if it isn't. I haven't needed it from the graphical cinnamon .iso files I test with. Everything runs as root, in the same terminal, so the wizard still works normally. The `git clone` means you still end up with a local copy of the script — nothing is piped straight into bash.
+on the official Artix live ISOs the password is `artix`; check your ISO's release notes if it isn't. I haven't needed it from the graphical cinnamon iso files I test with. Everything runs as root, in the same terminal, so the wizard still works normally. The `git clone` means you still end up with a local copy of the script — nothing is piped straight into bash.
 
 Already root, or prefer to call it from a sudo shell? Then just paste the inner part:
 
@@ -40,7 +41,7 @@ If the command above stops with `unknown trust`, `invalid or corrupted package (
 su -c 'pacman -Syy; pacman -S --needed --noconfirm artix-keyring archlinux-keyring; pacman-key --init; pacman-key --populate artix archlinux; pacman -S --needed --noconfirm git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh'
 ```
 
-You don't need this otherwise — on a recent ISO the plain command works fine, and running the keyring steps when nothing is wrong just adds a minute of waiting.
+This should only be needed when you are using an older iso but I have needed it lately on the latest weekly too. Try running the top command first because running the keyring steps when nothing is wrong just adds a minute of waiting.
 
 For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `artix`, user `user`):
 
@@ -82,9 +83,7 @@ Display manager is chosen automatically, by priority: Cosmic > noctalia-greeter 
 
 ### noctalia-greeter
 
-noctalia-greeter is now offered for any desktop/WM selection — including pure X11 picks like Plasma alone — with only Cosmic excluded (it brings its own dedicated cosmic-greeter, which always wins anyway). The uncertain-X11-support warning is gone since x11 sessions have been confirmed working(see note).
-A fallback bug this surfaced: with the old restriction, a failed noctalia-greeter install always had a real Wayland WM to fall back to. With it gone, I found two cases where the old fallback would’ve pointed greetd at a binary that was never installed — Plasma-only (would’ve tried mango) and a bare-WM-only pick like i3-only (same problem). Both now correctly fall back to actually installing the right thing instead: sddm/lightdm get installed live if that’s what would’ve been used, and the bare-WM case now falls back to the WM’s real command (e.g. i3) rather than mango.
-
+noctalia-greeter is now offered for any desktop/WM selection — including pure X11 picks like Plasma alone — with only Cosmic excluded (it brings its own dedicated cosmic-greeter, which always wins anyway). 
 
 ## Kernels
 
