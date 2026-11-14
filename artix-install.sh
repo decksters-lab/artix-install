@@ -900,7 +900,7 @@ svc_pkg() {
 # svc_enable then reports if the service itself isn't there.
 svc_install() {
     local _base="$1" _svc
-    artix-chroot /mnt pacman -S --noconfirm "$@" || return 1
+    artix-chroot /mnt pacman -S --noconfirm --needed "$@" || return 1
     _svc="$(svc_pkg "$_base")"
     if artix-chroot /mnt pacman -Si "$_svc" >/dev/null 2>&1; then
         artix-chroot /mnt pacman -S --noconfirm --needed "$_svc" || \
@@ -1771,6 +1771,7 @@ EOF
                 [ "$_de_ok" = "1" ] && { artix-chroot /mnt pacman -S --noconfirm --needed \
                     git base-devel cosmic-comp noctalia cosmic-settings cosmic-settings-daemon \
                     xdg-desktop-portal-cosmic cosmic-terminal polkit gnome-keyring wireplumber upower || _de_ok=0; }
+                [ "$_de_ok" = "1" ] && svc_install upower
                 if [ "$_de_ok" = "1" ]; then
                     # makepkg refuses to run as root, so build as the new user. Build in
                     # /var/tmp: artix-chroot mounts a fresh tmpfs on /tmp for every call, so a
@@ -1794,10 +1795,12 @@ EOF
             "
             artix-chroot /mnt pacman -S --noconfirm \
                 cosmic-session cosmic-comp cosmic-greeter \
-                greetd "$(svc_pkg greetd)" \
+                greetd \
                 xdg-desktop-portal-cosmic cosmic-terminal \
                 cosmic-files cosmic-text-editor cosmic-settings \
                 cosmic-screenshot cosmic-store upower pavucontrol || _de_ok=0
+            # upower's service package, if this init has one (best effort)
+            [ "$_de_ok" = "1" ] && svc_install upower
             # Create cosmic-greeter system user if missing
             artix-chroot /mnt id cosmic-greeter >/dev/null 2>&1 || \
                 artix-chroot /mnt useradd -r -M -G video,audio,input cosmic-greeter
@@ -1834,6 +1837,33 @@ EOF
 done
 
 [ -n "$_failed_des" ] && echo "==> Warning: failed to install:$_failed_des — install manually after boot"
+
+# The display manager was picked before any desktop was installed. If a desktop failed
+# (e.g. Cosmic, which wins the priority chain), drop it and pick again from what is
+# really there, otherwise the system boots to a text console with nothing to log in with.
+if [ -n "$_failed_des" ]; then
+    for _f in $_failed_des; do
+        DE_CHOICES=$(echo " $DE_CHOICES " | sed "s/ $_f / /g; s/^ //; s/ $//")
+    done
+    [ -z "$DE_CHOICES" ] && DE_CHOICES="CLI"
+    if echo "$DE_CHOICES" | grep -qw "Cosmic"; then
+        DM_BASE="greetd"
+    elif echo "$DE_CHOICES" | grep -qw "Plasma"; then
+        DM_BASE="sddm"
+    elif echo "$DE_CHOICES" | grep -qwE "XFCE|Cinnamon|MATE|LXQt|Moksha"; then
+        DM_BASE="lightdm"
+    elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Umbriel|Niri|Wayfire|Cosmalia|labwc"; then
+        DM_BASE="greetd"
+    else
+        DM_BASE=""
+    fi
+    if [ "$NOCTALIA_GREETER_SELECTED" = "yes" ] && ! echo "$DE_CHOICES" | grep -qw "Cosmic"; then
+        DM="greetd"
+    else
+        DM="$DM_BASE"
+    fi
+    echo "==> Display manager is now: ${DM:-none}"
+fi
 
 # write .xinitrc for bare WMs — done after loop so all WMs are installed
 BARE_WMS_SELECTED=""
