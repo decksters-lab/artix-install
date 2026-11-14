@@ -2144,9 +2144,12 @@ case "$INIT" in
                 artix-chroot /mnt s6 set enable "$_s" || echo "==> Note: couldn't enable s6 service $_s"
             done
             artix-chroot /mnt s6 set commit || _s6_ok=0
-            # "s6 live install" installs the database into the RUNNING s6, which doesn't
-            # exist inside this chroot (it fails with "unable to readlink /run/s6-rc/compiled"),
-            # so it is deliberately not run here.
+            # "s6 live install" without --init swaps the database of a RUNNING s6-rc, which
+            # doesn't exist in this chroot ("unable to readlink /run/s6-rc/compiled"). The
+            # s6-frontend docs give --init for exactly this case: it copies the committed
+            # database to the place it is booted from, without calling s6-rc-update. Without
+            # it the services enabled above never run: the system boots on the stock database.
+            artix-chroot /mnt s6 live install --init || _s6_ok=0
             if [ "$_s6_ok" = "0" ]; then
                 echo "==> WARNING: the s6 database step reported errors — enabled services may not start on first boot."
                 echo "==> After booting (tty12 is the s6 rescue shell) run: s6 repository sync && s6 set commit && s6 live install"
