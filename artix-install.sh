@@ -546,6 +546,14 @@ case "$STEP" in
             3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
         DE_CHOICES=$(echo "$DE_CHOICES" | tr -d '"')
 
+        # SwayFX needs scenefx0.5 and Umbriel needs the current scenefx; the two packages
+        # conflict, so these can't be installed together (pacman: "scenefx0.5 and scenefx
+        # are in conflict"). Keep Umbriel and drop SwayFX.
+        if echo "$DE_CHOICES" | grep -qw "SwayFX" && echo "$DE_CHOICES" | grep -qw "Umbriel"; then
+            DE_CHOICES=$(echo " $DE_CHOICES " | sed 's/ SwayFX / /; s/^ //; s/ $//')
+            whiptail --title "$TITLE" --msgbox "SwayFX and Umbriel need different, conflicting versions of the scenefx library, so they can't be installed together. Umbriel will be installed and SwayFX skipped." 10 66
+        fi
+
         # SwayFX provides "sway" and conflicts with it, so the two can't be installed together
         if echo "$DE_CHOICES" | grep -qw "SwayFX" && echo "$DE_CHOICES" | grep -qw "Sway"; then
             DE_CHOICES=$(echo " $DE_CHOICES " | sed 's/ Sway / /; s/^ //; s/ $//')
@@ -1644,7 +1652,17 @@ if [ "$DE_CHOICES" != "CLI" ]; then
     esac
 fi
 _failed_des=""
-for DE in $DE_CHOICES; do
+# Artix-repo desktops first; MangoWM/Umbriel/SwayFX/Cosmalia enable Arch extra or the CachyOS
+# repo (and run "pacman -Sy"), so they go last.
+_de_native=""; _de_gated=""
+for _d in $DE_CHOICES; do
+    case "$_d" in
+        MangoWM|Umbriel|SwayFX|Cosmalia) _de_gated="$_de_gated $_d" ;;
+        *)                               _de_native="$_de_native $_d" ;;
+    esac
+done
+DE_ORDER="${_de_native# }${_de_gated}"
+for DE in $DE_ORDER; do
     _de_ok=1
     case "$DE" in
         Plasma)
