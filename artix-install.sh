@@ -44,6 +44,11 @@ UMBRIEL_CHECKED=0
 UMBRIEL_REPO=""         # extra | cachyos | ""
 UMBRIEL_PKG="umbriel"
 
+# SwayFX (Sway with eye candy) isn't in Arch/Artix; it is in the CachyOS repo. Gated like
+# MangoWM and Umbriel: only offered if a repo we can use actually has it.
+SWAYFX_CHECKED=0
+SWAYFX_REPO=""          # extra | cachyos | ""
+
 # noctalia-greeter is only offered if it exists in Arch [extra] or the CachyOS repo
 NOCTALIA_GREETER_CHECKED=0
 NOCTALIA_GREETER_REPO=""   # extra | cachyos | ""
@@ -183,6 +188,20 @@ check_umbriel_repo() {
         for _p in umbriel umbriel-git; do
             if grep -q "^${_p}-[0-9]" <<< "$_cachy"; then UMBRIEL_REPO="cachyos"; UMBRIEL_PKG="$_p"; return 0; fi
         done
+    fi
+    return 0
+}
+
+# check_swayfx_repo — sets SWAYFX_REPO. Same approach as check_umbriel_repo.
+check_swayfx_repo() {
+    [ "$SWAYFX_CHECKED" = "1" ] && return 0
+    SWAYFX_CHECKED=1
+    command -v curl >/dev/null 2>&1 || return 0
+    local _cachy
+    if _arch_extra_has "swayfx"; then SWAYFX_REPO="extra"; return 0; fi
+    if command -v bsdtar >/dev/null 2>&1; then
+        _cachy=$(_db_pkgs "https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos.db")
+        if grep -q "^swayfx-[0-9]" <<< "$_cachy"; then SWAYFX_REPO="cachyos"; return 0; fi
     fi
     return 0
 }
@@ -356,22 +375,38 @@ case "$STEP" in
         "zh_CN.UTF-8" "Chinese (Simplified)" \
         3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
     LOCALE="$_v"
+    # US zones first, then everything else alphabetically by name
     _v=$(whiptail --title "$TITLE" --menu "Timezone  [6/$STEP_MAX]" 20 62 12 \
-        "Europe/London"      "UK"                 "Europe/Dublin"     "Ireland" \
-        "Europe/Paris"       "France/CET"         "Europe/Berlin"     "Germany" \
-        "Europe/Amsterdam"   "Netherlands"        "Europe/Madrid"     "Spain" \
-        "Europe/Rome"        "Italy"              "Europe/Warsaw"     "Poland" \
-        "Europe/Stockholm"   "Sweden"             "Europe/Oslo"       "Norway" \
-        "Europe/Copenhagen"  "Denmark"            "Europe/Helsinki"   "Finland" \
-        "Europe/Budapest"    "Hungary"            "Europe/Prague"     "Czech Republic" \
-        "Europe/Bratislava"  "Slovakia"           "Europe/Zagreb"     "Croatia" \
-        "Europe/Bucharest"   "Romania"            "Europe/Kiev"       "Ukraine" \
-        "Europe/Istanbul"    "Turkey"             "Europe/Moscow"     "Russia" \
-        "America/New_York"   "US Eastern"         "America/Chicago"   "US Central" \
-        "America/Denver"     "US Mountain"        "America/Los_Angeles" "US Pacific" \
-        "America/Toronto"    "Canada Eastern"     "America/Sao_Paulo" "Brazil" \
-        "Asia/Tokyo"         "Japan"              "Asia/Seoul"        "Korea" \
-        "Asia/Shanghai"      "China"              "Australia/Sydney"  "Australia" \
+        "America/New_York" "US Eastern" \
+        "America/Chicago" "US Central" \
+        "America/Denver" "US Mountain" \
+        "America/Los_Angeles" "US Pacific" \
+        "Australia/Sydney" "Australia" \
+        "America/Sao_Paulo" "Brazil" \
+        "America/Toronto" "Canada Eastern" \
+        "Asia/Shanghai" "China" \
+        "Europe/Zagreb" "Croatia" \
+        "Europe/Prague" "Czech Republic" \
+        "Europe/Copenhagen" "Denmark" \
+        "Europe/Helsinki" "Finland" \
+        "Europe/Paris" "France/CET" \
+        "Europe/Berlin" "Germany" \
+        "Europe/Budapest" "Hungary" \
+        "Europe/Dublin" "Ireland" \
+        "Europe/Rome" "Italy" \
+        "Asia/Tokyo" "Japan" \
+        "Asia/Seoul" "Korea" \
+        "Europe/Amsterdam" "Netherlands" \
+        "Europe/Oslo" "Norway" \
+        "Europe/Warsaw" "Poland" \
+        "Europe/Bucharest" "Romania" \
+        "Europe/Moscow" "Russia" \
+        "Europe/Bratislava" "Slovakia" \
+        "Europe/Madrid" "Spain" \
+        "Europe/Stockholm" "Sweden" \
+        "Europe/Istanbul" "Turkey" \
+        "Europe/London" "UK" \
+        "Europe/Kiev" "Ukraine" \
         3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
     TIMEZONE="$_v"
     _v=$(whiptail --title "$TITLE" --menu "Keyboard Layout  [6/$STEP_MAX]" 20 60 12 \
@@ -463,11 +498,12 @@ case "$STEP" in
     INSTALL_TYPE="$_v"
     DE_CHOICES="CLI"
     if [ "$INSTALL_TYPE" = "DE" ]; then
-        if [ "$MANGO_CHECKED" = "0" ] || [ "$UMBRIEL_CHECKED" = "0" ]; then
-            whiptail --title "$TITLE" --infobox "Checking Arch extra / CachyOS repos for MangoWM and Umbriel..." 7 66
+        if [ "$MANGO_CHECKED" = "0" ] || [ "$UMBRIEL_CHECKED" = "0" ] || [ "$SWAYFX_CHECKED" = "0" ]; then
+            whiptail --title "$TITLE" --infobox "Checking Arch extra / CachyOS repos for MangoWM, Umbriel and SwayFX..." 7 72
         fi
         check_mango_repo
         check_umbriel_repo
+        check_swayfx_repo
         _de_args=(
             "Plasma"   "KDE Plasma"              OFF
             "XFCE"     "XFCE4"                   OFF
@@ -475,12 +511,14 @@ case "$STEP" in
             "MATE"     "MATE (X11)"              OFF
             "LXQt"     "LXQt"                    OFF
             "i3"       "i3wm"                    OFF
+            "Qtile"    "Qtile (X11, Python)"     OFF
             "Openbox"  "Openbox"                 OFF
             "Fluxbox"  "Fluxbox"                 OFF
             "Hyprland" "Hyprland (Wayland)"      OFF
             "Niri"     "Niri (Wayland)"          OFF
             "Wayfire"  "Wayfire (Wayland)"        OFF
             "labwc"    "labwc (Wayland)"          OFF
+            "Sway"     "Sway (Wayland)"           OFF
             "Moksha"   "Moksha"                  OFF
             "Cosmic"   "COSMIC [EXPERIMENTAL]"   OFF
         )
@@ -494,6 +532,10 @@ case "$STEP" in
             extra)   _de_args+=("Umbriel" "Umbriel (Wayland) — from Arch extra"  OFF) ;;
             cachyos) _de_args+=("Umbriel" "Umbriel (Wayland) — from CachyOS repo" OFF) ;;
         esac
+        case "$SWAYFX_REPO" in
+            extra)   _de_args+=("SwayFX" "SwayFX (Wayland) — from Arch extra"  OFF) ;;
+            cachyos) _de_args+=("SwayFX" "SwayFX (Wayland) — from CachyOS repo" OFF) ;;
+        esac
         # Cosmalia (cosmic-comp + Noctalia) is made of dinit user services,
         # so it is only offered when dinit is the init system
         [ "$INIT" = "dinit" ] && _de_args+=("Cosmalia" "Cosmalia (Wayland, recommended)" OFF)
@@ -503,6 +545,12 @@ case "$STEP" in
             "${_de_args[@]}" \
             3>&1 1>&2 2>&3) || { STEP=$(( STEP - 1 )); continue; }
         DE_CHOICES=$(echo "$DE_CHOICES" | tr -d '"')
+
+        # SwayFX provides "sway" and conflicts with it, so the two can't be installed together
+        if echo "$DE_CHOICES" | grep -qw "SwayFX" && echo "$DE_CHOICES" | grep -qw "Sway"; then
+            DE_CHOICES=$(echo " $DE_CHOICES " | sed 's/ Sway / /; s/^ //; s/ $//')
+            whiptail --title "$TITLE" --msgbox "Sway and SwayFX can't both be installed (SwayFX replaces Sway), so only SwayFX will be installed." 9 62
+        fi
 
         # noctalia-greeter: a greetd greeter, offered for any desktop selection —
         # confirmed to handle X11 sessions (e.g. Plasma) fine, not just Wayland ones —
@@ -1013,7 +1061,7 @@ XORG_PKGS=""
 if [ "$DE_CHOICES" != "CLI" ]; then
     for _de in $DE_CHOICES; do
         case "$_de" in
-            Cosmic|Cosmalia|Hyprland|MangoWM|Umbriel|Niri|Wayfire|labwc) ;;
+            Cosmic|Cosmalia|Hyprland|MangoWM|Umbriel|Niri|Wayfire|labwc|Sway|SwayFX) ;;
             *) XORG_PKGS="xorg-server xorg-server-common xf86-input-libinput xorg-xinit"; break ;;
         esac
     done
@@ -1021,7 +1069,7 @@ fi
 
 # Only install audio stack for DEs that actually use it
 AUDIO_PKGS=""
-AUDIO_DES="Plasma XFCE Cinnamon MATE LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc"
+AUDIO_DES="Plasma XFCE Cinnamon MATE LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc Sway SwayFX"
 for _de in $AUDIO_DES; do
     if echo "$DE_CHOICES" | grep -qw "$_de"; then
         AUDIO_PKGS="pipewire pipewire-pulse pipewire-alsa wireplumber"
@@ -1134,6 +1182,25 @@ fi
 
 gauge 35 "Writing fstab..."
 fstabgen -U /mnt >> /mnt/etc/fstab
+
+# fstabgen copies every active mount option into the root entry (f2fs and xfs get a long
+# list). The init system's early "mount -o remount,rw /" re-applies that list and the
+# kernel refuses to change some of them on a remount ("mount point not mounted or bad
+# option"), which leaves the root filesystem read-only for the whole boot. Give those
+# root entries plain options. btrfs only gets its top-level subvol=/ options stripped.
+awk '
+    /^[[:space:]]*#/ || NF < 4 { print; next }
+    $2 == "/" {
+        if ($3 == "f2fs" || $3 == "xfs" || $3 == "jfs" || $3 == "nilfs2") {
+            $4 = "rw,relatime"
+        } else if ($3 == "btrfs") {
+            n = split($4, o, ","); out = ""
+            for (i = 1; i <= n; i++) if (o[i] !~ /^subvol(id)?=/) out = out (out == "" ? "" : ",") o[i]
+            $4 = out
+        }
+    }
+    { print }
+' /mnt/etc/fstab > /mnt/etc/fstab.new && mv /mnt/etc/fstab.new /mnt/etc/fstab
 
 # Encryption setup inside installed system
 if [ "$ENCRYPT" = "1" ]; then
@@ -1311,7 +1378,7 @@ chown -R "${USER_UID}:${USER_GID}" /mnt/home/"$USERNAME"
 # =========================
 # PIPEWIRE AUTOSTART (only for DEs that use audio)
 # =========================
-AUDIO_DES_CHECK="Plasma XFCE Cinnamon MATE LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc"
+AUDIO_DES_CHECK="Plasma XFCE Cinnamon MATE LXQt Moksha Cosmic Cosmalia Hyprland MangoWM Umbriel Niri Wayfire labwc Sway SwayFX"
 NEED_AUDIO=0
 for _de in $AUDIO_DES_CHECK; do
     echo "$DE_CHOICES" | grep -qw "$_de" && NEED_AUDIO=1 && break
@@ -1394,7 +1461,7 @@ elif echo "$DE_CHOICES" | grep -qw "Plasma"; then
     DM_BASE="sddm"
 elif echo "$DE_CHOICES" | grep -qwE "XFCE|Cinnamon|MATE|LXQt|Moksha"; then
     DM_BASE="lightdm"
-elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Umbriel|Niri|Wayfire|Cosmalia|labwc"; then
+elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Umbriel|Niri|Wayfire|Cosmalia|labwc|Sway|SwayFX"; then
     DM_BASE="greetd"
 else
     DM_BASE=""
@@ -1406,7 +1473,7 @@ else
 fi
 
 # bare WMs autologin on tty1 and startx
-BARE_WMS="i3 Openbox Fluxbox"
+BARE_WMS="i3 Openbox Fluxbox Qtile"
 
 # Write .desktop session files for bare WMs so DMs (lightdm, sddm) can launch them
 for _wm in $BARE_WMS; do
@@ -1416,6 +1483,7 @@ for _wm in $BARE_WMS; do
             i3)      _wm_exec="i3" ;;
             Openbox) _wm_exec="openbox-session" ;;
             Fluxbox) _wm_exec="startfluxbox" ;;
+            Qtile)   continue ;;   # the qtile package ships its own xsession file
         esac
         cat > "/mnt/usr/share/xsessions/${_wm}.desktop" << EOF
 [Desktop Entry]
@@ -1614,6 +1682,10 @@ for DE in $DE_CHOICES; do
         Fluxbox)
             artix-chroot /mnt pacman -S --noconfirm fluxbox xterm dmenu || _de_ok=0
             ;;
+        Qtile)
+            # xterm so the default Mod+Return terminal binding has something to start
+            artix-chroot /mnt pacman -S --noconfirm qtile xterm || _de_ok=0
+            ;;
         Hyprland)
             artix-chroot /mnt pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland || { _de_ok=0; }
             if [ "$_de_ok" = "1" ]; then
@@ -1676,6 +1748,29 @@ EOF
                     >> /mnt/home/"$USERNAME"/.config/wayfire.ini
                 chown "${USER_UID}:${USER_GID}" /mnt/home/"$USERNAME"/.config/wayfire.ini
                 # wayfire.desktop is shipped by the package already
+            fi
+            ;;
+        Sway)
+            artix-chroot /mnt pacman -S --noconfirm sway foot wmenu xdg-desktop-portal-wlr || { _de_ok=0; }
+            if [ "$_de_ok" = "1" ]; then
+                # sway's stock config ends with "include /etc/sway/config.d/*"; one drop-in
+                # starts audio for every user without touching a user config
+                mkdir -p /mnt/etc/sway/config.d
+                printf 'exec /usr/local/bin/start-pipewire\n' > /mnt/etc/sway/config.d/50-pipewire.conf
+            fi
+            ;;
+        SwayFX)
+            # Only offered when a usable repo has it (see check_swayfx_repo). It provides
+            # and replaces "sway", same binary and config location.
+            case "${SWAYFX_REPO:-}" in
+                extra)   enable_arch_extra_chroot   || _de_ok=0 ;;
+                cachyos) enable_cachyos_repo_chroot || _de_ok=0 ;;
+                *)       _de_ok=0 ;;
+            esac
+            [ "$_de_ok" = "1" ] && { artix-chroot /mnt pacman -S --noconfirm swayfx foot wmenu xdg-desktop-portal-wlr || _de_ok=0; }
+            if [ "$_de_ok" = "1" ]; then
+                mkdir -p /mnt/etc/sway/config.d
+                printf 'exec /usr/local/bin/start-pipewire\n' > /mnt/etc/sway/config.d/50-pipewire.conf
             fi
             ;;
         labwc)
@@ -1836,7 +1931,11 @@ EOF
     [ "$_de_ok" = "0" ] && _failed_des="$_failed_des $DE"
 done
 
-[ -n "$_failed_des" ] && echo "==> Warning: failed to install:$_failed_des — install manually after boot"
+if [ -n "$_failed_des" ]; then
+    # names are collected space-separated; show them as a list so two desktops don't read as one
+    _fd_list=$(echo $_failed_des | sed 's/ /, /g')
+    echo "==> Warning: failed to install: $_fd_list — see the pacman error above, install manually after boot"
+fi
 
 # The display manager was picked before any desktop was installed. If a desktop failed
 # (e.g. Cosmic, which wins the priority chain), drop it and pick again from what is
@@ -1852,7 +1951,7 @@ if [ -n "$_failed_des" ]; then
         DM_BASE="sddm"
     elif echo "$DE_CHOICES" | grep -qwE "XFCE|Cinnamon|MATE|LXQt|Moksha"; then
         DM_BASE="lightdm"
-    elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Umbriel|Niri|Wayfire|Cosmalia|labwc"; then
+    elif echo "$DE_CHOICES" | grep -qwE "Hyprland|MangoWM|Umbriel|Niri|Wayfire|Cosmalia|labwc|Sway|SwayFX"; then
         DM_BASE="greetd"
     else
         DM_BASE=""
@@ -1867,7 +1966,7 @@ fi
 
 # write .xinitrc for bare WMs — done after loop so all WMs are installed
 BARE_WMS_SELECTED=""
-for _wm in i3 Openbox Fluxbox; do
+for _wm in i3 Openbox Fluxbox Qtile; do
     echo "$DE_CHOICES" | grep -qw "$_wm" && BARE_WMS_SELECTED="$BARE_WMS_SELECTED $_wm"
 done
 BARE_WMS_SELECTED="${BARE_WMS_SELECTED# }"
@@ -1878,6 +1977,7 @@ if [ -n "$BARE_WMS_SELECTED" ]; then
             i3)      echo "exec i3" ;;
             Openbox) echo "exec openbox-session" ;;
             Fluxbox) echo "exec startfluxbox" ;;
+            Qtile)   echo "exec qtile start" ;;
         esac
     }
     WM_COUNT=$(echo "$BARE_WMS_SELECTED" | wc -w)
@@ -1995,7 +2095,7 @@ EOF
             # time we get here it's always one of these five kinds that put us in the
             # greetd branch to begin with.
             GREETD_CMD=""
-            for _w in Hyprland Niri Wayfire MangoWM Umbriel Cosmalia labwc i3 Openbox Fluxbox; do
+            for _w in Hyprland Niri Wayfire MangoWM Umbriel Cosmalia labwc Sway SwayFX i3 Openbox Fluxbox Qtile; do
                 if echo "$DE_CHOICES" | grep -qw "$_w"; then
                     case "$_w" in
                         MangoWM) GREETD_CMD="mango" ;;
@@ -2003,6 +2103,8 @@ EOF
                         Cosmalia) GREETD_CMD="cosmalia-session" ;;
                         Openbox) GREETD_CMD="openbox-session" ;;
                         Fluxbox) GREETD_CMD="startfluxbox" ;;
+                        Qtile)   GREETD_CMD="qtile start" ;;
+                        Sway|SwayFX) GREETD_CMD="sway" ;;
                         *)       GREETD_CMD="$_w" ;;
                     esac
                     break
@@ -2232,7 +2334,22 @@ case "$BOOT" in
         [ "$DUALBOOT" = "1" ] && { umount /mnt/sys /mnt/proc /mnt/dev 2>/dev/null || true; }
         ;;
     limine)
-        artix-chroot /mnt pacman -S --noconfirm limine efibootmgr limine-mkinitcpio-hook limine-snapper-sync
+        # Work out the kernel command line first and put it in /etc/kernel/cmdline BEFORE the
+        # limine hook is installed. limine-mkinitcpio-hook regenerates /boot/limine.conf on
+        # every kernel update from that file; without it the entries it writes have no
+        # root= and the machine stops booting after the first kernel upgrade.
+        if [ "$ENCRYPT" = "1" ]; then
+            PART_UUID=$(blkid -s UUID -o value "$REAL_ROOT")
+            LIMINE_CMDLINE="cryptdevice=UUID=$PART_UUID:cryptroot root=/dev/mapper/cryptroot rw quiet"
+        else
+            ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
+            LIMINE_CMDLINE="root=UUID=$ROOT_UUID rw quiet"
+        fi
+        LIMINE_CMDLINE="$LIMINE_CMDLINE$ZSWAP_ARG"
+        mkdir -p /mnt/etc/kernel
+        printf '%s\n' "$LIMINE_CMDLINE" > /mnt/etc/kernel/cmdline
+
+        artix-chroot /mnt pacman -S --noconfirm limine efibootmgr limine-mkinitcpio-hook
 
         # Get the EFI partition number from its device path
         EFI_PART_NUM=$(echo "$EFI" | grep -o '[0-9]*$')
@@ -2252,15 +2369,6 @@ case "$BOOT" in
         # Fallback path — boards that ignore NVRAM entries boot from here
         mkdir -p /mnt/boot/EFI/BOOT
         cp /mnt/boot/EFI/limine/BOOTX64.EFI /mnt/boot/EFI/BOOT/BOOTX64.EFI 2>/dev/null || true
-
-        if [ "$ENCRYPT" = "1" ]; then
-            PART_UUID=$(blkid -s UUID -o value "$REAL_ROOT")
-            LIMINE_CMDLINE="cryptdevice=UUID=$PART_UUID:cryptroot root=/dev/mapper/cryptroot rw quiet"
-        else
-            ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
-            LIMINE_CMDLINE="root=UUID=$ROOT_UUID rw quiet"
-        fi
-        LIMINE_CMDLINE="$LIMINE_CMDLINE$ZSWAP_ARG"
 
         # Limine config — key names from official CONFIG.md
         # protocol, path, cmdline, module_path (NOT kernel_path/kernel_cmdline)
