@@ -1,34 +1,33 @@
 # artix-install
 
 A whiptail-driven installer for Artix Linux. Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
+(Feel free to fork this repo.. I wish I had done that with the original script. Luckily I found the script on my drive and adapted it from there. This is why my install instructions direct you to download the script rather than just piping it into bash. When you have a local copy nobody can delete a repo and take it away from you)
 
 ## Goal
 
-This installer is meant for experienced and new Artix users alike. That being said, you should at least be familiar enough with linux to use a terminal to install packages like a web browser, for example. This artix installation is deliberately minimal: you get what you choose in the wizard, plus what those choices need to work, and no extra apps, themes or utilities on top. You start with a clean, uncluttered system and build it up the way you want. If you already know exactly what you want, the wizard gets you there quickly; if you're newer to Artix, the defaults are sensible and every step explains what it's asking. 
+This installer is meant for experienced and new Artix users alike but you should be somewhat familiar with linux and comfortable with a terminal to install apps. It is deliberately minimal: you get what you choose in the wizard, plus what those choices need to work, and no extra apps, themes or utilities on top. You start with a clean, uncluttered system and build it up the way you want. If you already know exactly what you want, the wizard gets you there quickly; if you're newer to Artix, the defaults are sensible and every step explains what it's asking.
 
-Window managers and Wayland compositors (Hyprland, MangoWM, Niri, Wayfire, labwc, and so on) are **installed, not configured**. You get the compositor and what it needs to start, and nothing more: no bar, launcher, wallpaper, theme or keybind setup. At most the installer drops in the package's own stock config plus one line that starts audio, so the rest of the setup is yours to build the way you like it.
-
-All init systems have been tested in vm several times. dinit is what I use in real life so that will natually be the most supported init. If you encounter any issues especially with other init your help is appreciated.
+Window managers and Wayland compositors (Hyprland, MangoWM, Niri, Wayfire, labwc, Sway, and so on) are **installed, not configured**. You get the compositor and what it needs to start, and nothing more: no bar, launcher, wallpaper, theme or keybind setup. At most the installer drops in the package's own stock config plus one line that starts audio, so the rest of the setup is yours to build the way you like it.
 
 ## Requirements
 
-- Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso it doesn't matter which init or de is on that iso. Use one with a graphical session if its easier for you. Personally, I run this script with a cinnamon iso) note: with a graphical installer it makes it easy to copy the install script, or the folder containing the install script to another location like a second hdd or a usb drive that isn't running the iso then the script is always available to you locally.
-- Script Must be run as root either with su before all other commands or with sudo right before running ./artix-install.sh (with a graphical iso this becomes trivial since you will be logged in as root user on it)
+- Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso. Use one with a graphical session if its easier for you. It doesn't matter which kind you choose.) note: with a graphical installer it makes it easy to copy the install script, or the folder containing the install script to another location like a second hdd or a usb drive that isn't running the iso then the script is always available to you locally.
+- Script Must be run as root either with su before all other commands or with sudo right before running ./artix-install.sh
 
 ## Usage ( run ./artix-install.sh with sudo or as root user / su )
 
-Copy this one line, paste it, hit enter. It calls `su -c` for you:
+Copy this one line, paste it, hit enter. It calls `su -c` for you, so there is no longer a separate "enter su first" step:
 
 ```bash
-su -c 'pacman -Syy; pacman -S --needed --noconfirm git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh'
+su -c 'pacman -Sy; pacman -S --needed --noconfirm git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh'
 ```
 
-on the official Artix live ISOs the password is `artix`; check your ISO's release notes if it isn't. I haven't needed it from the graphical cinnamon iso files I test with. Everything runs as root, in the same terminal, so the wizard still works normally. The `git clone` means you still end up with a local copy of the script — nothing is piped straight into bash.
+`su` will ask for the root password before anything else runs (on the official Artix live ISOs that password is `artix`; check your ISO's release notes if it isn't). Everything after that runs as root, in the same terminal, so the wizard still works normally. The `git clone` means you still end up with a local copy of the script — nothing is piped straight into bash.
 
 Already root, or prefer to call it from a sudo shell? Then just paste the inner part:
 
 ```bash
-pacman -Syy; pacman -S --needed --noconfirm git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh
+pacman -Sy; pacman -S --needed --noconfirm git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh
 ```
 
 Because the whole thing runs in one shell, `cd artix-install` sticks and `./artix-install.sh` launches from the right directory. If you close the terminal halfway through, the clone is still on disk — just `cd artix-install` and run `./artix-install.sh` again.
@@ -41,7 +40,7 @@ If the command above stops with `unknown trust`, `invalid or corrupted package (
 su -c 'pacman -Syy; pacman -S --needed --noconfirm artix-keyring archlinux-keyring; pacman-key --init; pacman-key --populate artix archlinux; pacman -S --needed --noconfirm git; git clone https://github.com/decksters-lab/artix-install.git; cd artix-install; chmod +x artix-install.sh; ./artix-install.sh'
 ```
 
-This should only be needed when you are using an older iso but I have needed it lately on the latest weekly too. Try running the top command first because running the keyring steps when nothing is wrong just adds a minute of waiting.
+You don't need this otherwise — on a recent ISO the plain command works fine, and running the keyring steps when nothing is wrong just adds a minute of waiting.
 
 For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `artix`, user `user`):
 
@@ -73,17 +72,19 @@ Multi-select checklist. Supported:
 - **Plasma, XFCE, Cinnamon, MATE, LXQt, Moksha** — X11 sessions; get LightDM (SDDM for Plasma)
 - **Cosmic** *(experimental)* — Wayland, ships its own dedicated `cosmic-greeter`
 - **Hyprland, Niri, Wayfire** — Wayland-only. Wayfire is installed with `wf-shell` and `wcm` (the Wayfire Config Manager)
+- **Sway** — Wayland-only i3-style tiling compositor, from the Artix repos. Installed with `foot` and `wmenu` (the terminal and launcher its stock config uses) and `xdg-desktop-portal-wlr`; its stock config is untouched apart from a drop-in that starts audio
+- **SwayFX** — Sway with visual effects (blur, rounded corners, shadows). Not in Arch or Artix; it lives in the CachyOS repo, so like MangoWM it is **only offered if found** there (checked live at install time). It replaces Sway, so picking both installs only SwayFX
 - **labwc** — Wayland-only stacking compositor in the Openbox style, from the Artix repos. Installed with `foot` (so its root menu has a terminal) and `xdg-desktop-portal-wlr`, and nothing else — no panel or launcher. Its config lives in `~/.config/labwc`
 - **Cosmalia** *(dinit only, recommended)* — minimal Wayland desktop: `cosmic-comp` + Noctalia shell, from [grigio/cosmalia-session-dinit](https://github.com/grigio/cosmalia-session-dinit). Only shown in the list when dinit is the init system. Its dependencies come from Arch `[extra]`, plus `cosmic-terminal` so you have a terminal; the session package itself is built from its PKGBUILD during install (git clone + `makepkg`). It runs on dinit user services, so pick userspawn or turnstile in the User services step (picking neither means you set it up yourself before logging in)
 - **Umbriel** — Wayland-only compositor from the Noctalia project. Like MangoWM it is **only offered if found** in Arch `[extra]` or the CachyOS repo (checked live at install time), so it appears on its own once it is packaged there. Installed with no config
 - **MangoWM** — Wayland-only, **only offered if found** in Arch `[extra]` or the CachyOS repo — checked live against the package API / sync databases at install time, so it simply won't appear if neither has it
-- **i3, Openbox, Fluxbox** — bare X11 window managers, get autologin + a generated `.xinitrc`
+- **i3, Openbox, Fluxbox, Qtile** — bare X11 window managers (Qtile is configured in Python), get autologin + a generated `.xinitrc`. Qtile is installed with `xterm` so its terminal binding works
 
-Display manager is chosen automatically, by priority: Cosmic > noctalia-greeter (if accepted) > Plasma (sddm) > XFCE/Cinnamon/MATE/LXQt/Moksha (lightdm) > Hyprland/MangoWM/Umbriel/Niri/Wayfire/Cosmalia/labwc (greetd). No DM at all for a CLI-only install or a bare WM picked alone.
+Display manager is chosen automatically, by priority: Cosmic > noctalia-greeter (if accepted) > Plasma (sddm) > XFCE/Cinnamon/MATE/LXQt/Moksha (lightdm) > Hyprland/MangoWM/Umbriel/Niri/Wayfire/Cosmalia/labwc/Sway/SwayFX (greetd). No DM at all for a CLI-only install or a bare WM picked alone.
 
 ### noctalia-greeter
 
-noctalia-greeter is now offered for any desktop/WM selection — including pure X11 picks like Plasma alone — with only Cosmic excluded (it brings its own dedicated cosmic-greeter, which always wins anyway). 
+noctalia-greeter is now offered for any desktop/WM selection — including pure X11 picks like Cinnamon alone — with only Cosmic excluded (it brings its own dedicated cosmic-greeter, which always wins anyway). 
 
 ## Kernels
 
@@ -121,8 +122,8 @@ Things flagged during review but intentionally left as-is:
 ## Changes from the original upstream fork
 
 - Removed **Xlibre**, this was added to the original script when xlibre was the artix default x session. I switched it back to **X11** as xlibre is no longer officially supported on artix.
-- Added **Cinnamon**, **MATE**, **Plasma**, **Niri**, **Wayfire**, and **labwc** as desktop options
-- Added **MangoWM** and **Umbriel**, each gated on live availability in Arch `[extra]` or the CachyOS repo
+- Added **Cinnamon**, **MATE**, **Plasma**, **Niri**, **Wayfire**, **labwc**, **Sway**, and **Qtile** as desktop options
+- Added **MangoWM**, **Umbriel** and **SwayFX**, each gated on live availability in Arch `[extra]` or the CachyOS repo
 - Added **Cosmalia** (dinit only), a minimal COSMIC + Noctalia desktop from [grigio/cosmalia-session-dinit](https://github.com/grigio/cosmalia-session-dinit). Its dependencies come from Arch `[extra]`, and the session package is built from its PKGBUILD during install
 - Added **noctalia-greeter** as an optional greetd greeter, gated the same way
 - Added an optional **zswap** prompt to the swap step
@@ -131,4 +132,3 @@ Things flagged during review but intentionally left as-is:
 - Removed **ZFS**. ZFS isn't part of the Linux kernel, so its modules have to be built against each kernel version (DKMS) and can lag behind the newest kernels. It also isn't in Artix's main repos (it lives in `[universe]` or the third-party archzfs repo), and a ZFS root needs an initramfs hook, boot parameters and import services that this installer never set up. Choosing it would format the disk and then leave a system that couldn't boot, so I took the option out rather than ship a broken one. If you want ZFS, follow the [Artix ZFS installation guide](https://wiki.artixlinux.org/Main/InstallationOnZFS)
 - Removed **XMonad** — along with it, a `git clone` of `github.com/feribsd/xmonad-dotfiles`, a repo whose owning account no longer exists and could be re-registered by anyone
 - Fixed a display-manager/autologin ordering bug where bare window managers combined with another desktop could incorrectly get tty1 autologin
-
