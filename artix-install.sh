@@ -1769,8 +1769,13 @@ EOF
             fi
             ;;
         Sway)
-            artix-chroot /mnt pacman -S --noconfirm sway foot wmenu xdg-desktop-portal-wlr || { _de_ok=0; }
+            artix-chroot /mnt pacman -S --noconfirm sway foot xdg-desktop-portal-wlr || { _de_ok=0; }
             if [ "$_de_ok" = "1" ]; then
+                # wmenu (the launcher sway's stock config uses) is in Arch [extra], not the Artix
+                # repos. Asking for it in the main transaction made the whole Sway install fail
+                # with "target not found", so it's separate and best-effort.
+                artix-chroot /mnt pacman -S --noconfirm --needed wmenu || \
+                    echo "==> Note: wmenu isn't in your repos — Sway's Mod+d launcher needs a launcher installed (e.g. from Arch extra)"
                 # sway's stock config ends with "include /etc/sway/config.d/*"; one drop-in
                 # starts audio for every user without touching a user config
                 mkdir -p /mnt/etc/sway/config.d
@@ -1785,8 +1790,10 @@ EOF
                 cachyos) enable_cachyos_repo_chroot || _de_ok=0 ;;
                 *)       _de_ok=0 ;;
             esac
-            [ "$_de_ok" = "1" ] && { artix-chroot /mnt pacman -S --noconfirm swayfx foot wmenu xdg-desktop-portal-wlr || _de_ok=0; }
+            [ "$_de_ok" = "1" ] && { artix-chroot /mnt pacman -S --noconfirm swayfx foot xdg-desktop-portal-wlr || _de_ok=0; }
             if [ "$_de_ok" = "1" ]; then
+                artix-chroot /mnt pacman -S --noconfirm --needed wmenu || \
+                    echo "==> Note: wmenu isn't in your repos — Sway's Mod+d launcher needs a launcher installed (e.g. from Arch extra)"
                 mkdir -p /mnt/etc/sway/config.d
                 printf 'exec /usr/local/bin/start-pipewire\n' > /mnt/etc/sway/config.d/50-pipewire.conf
             fi
