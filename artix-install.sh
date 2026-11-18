@@ -1652,12 +1652,12 @@ if [ "$DE_CHOICES" != "CLI" ]; then
     esac
 fi
 _failed_des=""
-# Artix-repo desktops first; MangoWM/Umbriel/SwayFX/Cosmalia enable Arch extra or the CachyOS
+# Artix-repo desktops first; MangoWM/Umbriel/SwayFX/Cosmalia/Qtile enable Arch extra or the CachyOS
 # repo (and run "pacman -Sy"), so they go last.
 _de_native=""; _de_gated=""
 for _d in $DE_CHOICES; do
     case "$_d" in
-        MangoWM|Umbriel|SwayFX|Cosmalia) _de_gated="$_de_gated $_d" ;;
+        MangoWM|Umbriel|SwayFX|Cosmalia|Qtile) _de_gated="$_de_gated $_d" ;;
         *)                               _de_native="$_de_native $_d" ;;
     esac
 done
@@ -1701,8 +1701,11 @@ for DE in $DE_ORDER; do
             artix-chroot /mnt pacman -S --noconfirm fluxbox xterm dmenu || _de_ok=0
             ;;
         Qtile)
-            # xterm so the default Mod+Return terminal binding has something to start
-            artix-chroot /mnt pacman -S --noconfirm qtile xterm || _de_ok=0
+            # qtile is in Arch [extra], not the Artix repos ("target not found" otherwise), so
+            # enable that first. xterm so the default Mod+Return terminal binding has
+            # something to start.
+            enable_arch_extra_chroot || _de_ok=0
+            [ "$_de_ok" = "1" ] && { artix-chroot /mnt pacman -S --noconfirm qtile xterm || _de_ok=0; }
             ;;
         Hyprland)
             artix-chroot /mnt pacman -S --noconfirm hyprland xdg-desktop-portal-hyprland || { _de_ok=0; }
