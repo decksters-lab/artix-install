@@ -1,4 +1,5 @@
 # artix-install
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b205cfde-ecda-4768-b45a-7ac6ae2faec3" />
 
 A whiptail-driven installer for Artix Linux. Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
 (Feel free to fork this repo.. I wish I had done that with the original script. Luckily I found the script on my drive and adapted it from there. This is why my install instructions direct you to download the script rather than just piping it into bash. When you have a local copy nobody can delete a repo and take it away from you)
@@ -52,20 +53,26 @@ For a fast, fully-automated test run (AMD CPU/GPU, GRUB, no desktop, hostname `a
 ## The wizard (13 steps)
 
 1. **Init system** — dinit (recommended), openrc, runit, or s6
-2. **Disk** — target disk selection
+2. **Disk** — target disk selection 
+<img width="1920" height="1080" alt="2026-11-18_23-22-53" src="https://github.com/user-attachments/assets/6fedcb94-9405-4b6d-b272-e082c8bc1b28" />
+
 3. **Filesystem** — root: ext4, btrfs, xfs, f2fs, jfs, or nilfs2. Other partitions (manual mode) can also be vfat, exfat or ntfs. The EFI partition is always FAT32 (cfdisk available for manual partitioning). The userland tools for each filesystem you use are installed into the new system
 4. **Swap** — None / Zram / Partition / Swapfile / Both (zram + swapfile). With a partition or swapfile you are also asked whether to enable **zswap** (adds `zswap.enabled=1` to the kernel command line for GRUB, Limine and rEFInd). zswap is built into the kernel and needs a real swap device, so it is not offered with zram. See [zswap vs zram](https://chrisdown.name/2026/03/24/zswap-vs-zram-when-to-use-what.html) and the [Arch wiki](https://wiki.archlinux.org/title/Zswap)
 5. **Encryption** — optional full-disk LUKS2
 6. **Locale, timezone, keyboard** — one screen each
 7. **Hostname + username**
 8. **Privilege escalation** — doas (default) or sudo
-9. **User services** — what starts each user's service manager at login (lets user services like pipewire or Cosmalia run): **userspawn** (`userspawn` + `userspawn-<init>`), **turnstile** (`turnstile` + `turnstile-<init>`), or neither. Asked before the desktop and applies whichever desktop you pick. Only the options that actually exist in the Artix repos for your init are shown (checked live), and the two conflict, so only one is installed. With userspawn on dinit, `wireplumber` and `pipewire-pulse` are also enabled for every user. On runit/s6, userspawn may need per-user setup after install. Then **Desktop** — see below
+9. **User services** 
+<img width="1920" height="1080" alt="2026-11-18_23-23-26" src="https://github.com/user-attachments/assets/f796d668-a79c-41f0-b9d5-9a44a8df412c" />
+— what starts each user's service manager at login (lets user services like pipewire or Cosmalia run): **userspawn** (`userspawn` + `userspawn-<init>`), **turnstile** (`turnstile` + `turnstile-<init>`), or neither. Asked before the desktop and applies whichever desktop you pick. Only the options that actually exist in the Artix repos for your init are shown (checked live), and the two conflict, so only one is installed. With userspawn on dinit, `wireplumber` and `pipewire-pulse` are also enabled for every user. On runit/s6, userspawn may need per-user setup after install. Then **Desktop** — see below
 10. **Kernel + CPU + GPU** — see below
 11. **Bootloader** — on UEFI, choose GRUB2, Limine, or rEFInd; BIOS systems always get GRUB (the other two are UEFI-only)
 12. **32-bit / multilib** — optional, for Steam/Wine/32-bit apps
 13. **Network stack** — dhcpcd, iwd, or NetworkManager
 
 ## Desktop environments
+<img width="1920" height="1080" alt="2026-11-18_23-23-38" src="https://github.com/user-attachments/assets/83f185ff-f7d0-4a88-8372-55ccb9f2c6f8" />
+
 
 Multi-select checklist. Supported:
 
