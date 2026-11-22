@@ -35,6 +35,7 @@ Inside the TUI:
 - `?`: help
 - `d`: open the read-only hardware/disk inventory
 - `m`: open the partition manager / layout preview
+- On the partition screen: `R` assigns root, `E` assigns EFI, `W` assigns swap (when swap mode is `partition`)
 - `q` / `Esc`: quit
 
 ## Current configuration coverage
@@ -62,9 +63,9 @@ Disk selection is deliberately conservative: a device is not selectable when it 
 
 ## Partition manager (planning only)
 
-Press `m` to open the partition manager. Automatic mode previews the GPT/MBR layout, EFI/root/swap partition order, LUKS2 mapping, Btrfs subvolumes and swap setup. Manual mode assigns already-existing partitions to root, EFI and (optionally) swap roles with `R`, `E` and `W`. Dual-boot mode assigns an existing root and EFI partition and hard-locks EFI policy to preserve.
+Press `m` to open the partition manager. Automatic mode previews the GPT/MBR layout, EFI/root/swap partition order, LUKS2 mapping, Btrfs subvolumes and swap setup. Manual mode assigns already-existing partitions to root, EFI and (optionally) swap roles with `R`, `E` and `W`. To reach it, select a target in the `d` disk inventory, change the partitioning setting to Manual or Dual-boot, then press `m`. Changing the target disk clears previous manual partition assignments. Dual-boot mode assigns an existing root and EFI partition and hard-locks EFI policy to preserve. Preserved EFI assignments are accepted in the TUI only when discovery verifies the filesystem is FAT32/vfat.
 
-Manual mode does **not** launch cfdisk or create/resize partitions yet; prepare the partition table separately before assigning the existing partitions in this prototype. The planner is a pure description generator. It has no partitioning, formatting, cryptsetup, mount, mkswap or swapon executor. For custom TOML profiles, manual and dual-boot partition paths must still be independently checked against the selected physical disk; the live topology revalidation module is not implemented.
+Manual mode does **not** launch cfdisk or create/resize partitions yet; prepare the partition table separately before assigning the existing partitions in this prototype. The planner is a pure description generator. It has no partitioning, formatting, cryptsetup, mount, mkswap or swapon executor. For custom TOML profiles, manual and dual-boot partition paths must still be independently checked against the selected physical disk; the live topology revalidation module is not implemented. `--plan` prints configuration issues alongside a blocked preview, while `--validate` returns an error for invalid profiles.
 
 Btrfs layouts are configurable as flat, standard (`@`, `@home`, `@log`, `@cache`) or snapshots (`@`, `@home`, `@log`, `@cache`, `@snapshots`). Btrfs swapfile plans use a dedicated `@swap` subvolume (or a flat-root swap file) and call out the NOCOW requirement. Compression can be none, zstd or lzo. These are previews only, not executed filesystem operations.
 
