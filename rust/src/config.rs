@@ -285,20 +285,20 @@ impl InstallConfig {
             && swap == efi {
             issues.push("swap and EFI partitions must be different devices".into());
         }
-        if let Some(root) = &self.disk.root_partition {
-            if self.disk.additional_mounts.iter().any(|mount| &mount.device == root) {
-                issues.push("root partition cannot also be used as an additional mount".into());
-            }
+        if let Some(root) = &self.disk.root_partition
+            && self.disk.additional_mounts.iter().any(|mount| &mount.device == root)
+        {
+            issues.push("root partition cannot also be used as an additional mount".into());
         }
-        if let Some(efi) = &self.disk.efi_partition {
-            if self.disk.additional_mounts.iter().any(|mount| &mount.device == efi) {
-                issues.push("EFI partition cannot also be used as an additional mount".into());
-            }
+        if let Some(efi) = &self.disk.efi_partition
+            && self.disk.additional_mounts.iter().any(|mount| &mount.device == efi)
+        {
+            issues.push("EFI partition cannot also be used as an additional mount".into());
         }
-        if let Some(swap) = &self.disk.swap_partition {
-            if self.disk.additional_mounts.iter().any(|mount| &mount.device == swap) {
-                issues.push("swap partition cannot also be used as an additional mount".into());
-            }
+        if let Some(swap) = &self.disk.swap_partition
+            && self.disk.additional_mounts.iter().any(|mount| &mount.device == swap)
+        {
+            issues.push("swap partition cannot also be used as an additional mount".into());
         }
         let mut devices = Vec::<PathBuf>::new();
         let mut mountpoints = Vec::<String>::new();
