@@ -18,6 +18,7 @@ This milestone is intentionally unable to alter the host system.
 - Hardware discovery reads sysfs, procfs and udev metadata only; it does not spawn commands or open block devices for writing.
 - The disk inventory lists whole physical block devices and their partition children. It treats a disk as busy if the disk or any discovered partition is mounted.
 - The TUI refuses to select disks that are mounted, have active swap on the disk or any child partition, are read-only, or have active holders. Removable status is shown but is not an automatic exclusion.
+- Disk selection fails closed when the current mount table, active swap list, device read-only flag, holder directory or device number cannot be inspected; missing safety data is never treated as proof that a disk is free.
 - A selected device path is still only configuration data; no disk operations exist in this milestone.
 
 ## Before a real executor is added
