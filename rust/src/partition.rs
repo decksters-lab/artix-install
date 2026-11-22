@@ -183,7 +183,7 @@ fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
     if config.disk.swap.mode == SwapMode::Partition {
         let swap = config.disk.swap_partition.as_ref().expect("swap presence checked above");
         plan.operations.push(format!(
-            "Initialize selected swap partition {} with mkswap and enable it.",
+            "Initialize selected swap partition {} with mkswap; it will be enabled after the root and mountpoints are ready.",
             swap.display()
         ));
         plan.warnings.push(format!(
@@ -351,11 +351,6 @@ fn plan_btrfs_layout(config: &InstallConfig, plan: &mut PartitionPlan, root_devi
     }
     let root_options = btrfs_mount_options(config, Some("@"));
     plan.operations.push(format!("Root mount options: {root_options}."));
-    if matches!(config.disk.swap.mode, SwapMode::Swapfile | SwapMode::Both) {
-        plan.operations.push(
-            "Set NOCOW on /swap/swapfile before allocating it; the dedicated @swap subvolume must not be snapshotted.".into()
-        );
-    }
 }
 
 fn btrfs_mount_options(config: &InstallConfig, subvolume: Option<&str>) -> String {
