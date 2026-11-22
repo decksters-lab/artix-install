@@ -402,7 +402,7 @@ impl App {
             9 => "Intel, AMD, NVIDIA, hybrid Intel+NVIDIA or VM/basic Mesa graphics choice.",
             10 => "UEFI supports GRUB2, Limine or rEFInd. BIOS is locked to GRUB2.",
             11 => "Choose doas or sudo.",
-            12 => "Init-specific user services: dinit supports userspawn/turnstile, OpenRC native services, runit userspawn, and s6 manual user setup.",
+            12 => "Init-specific user services: Dinit and OpenRC have their own Turnstile integrations; OpenRC also has native services, runit has userspawn, and s6 is manual.",
             13 => "Choose dhcpcd, iwd or NetworkManager.",
             14 => "Enable multilib for Steam, Wine and 32-bit applications.",
             15 => "UEFI or BIOS. Future discovery will detect this from the live environment.",
@@ -437,7 +437,7 @@ fn list_values<T: std::fmt::Display>(values: &[T]) -> String {
 fn user_service_choices(init: InitSystem) -> &'static [UserServices] {
     match init {
         InitSystem::Dinit => &[UserServices::None, UserServices::Userspawn, UserServices::Turnstile],
-        InitSystem::OpenRc => &[UserServices::None, UserServices::Native],
+        InitSystem::OpenRc => &[UserServices::None, UserServices::Native, UserServices::Turnstile],
         InitSystem::Runit => &[UserServices::None, UserServices::Userspawn],
         InitSystem::S6 => &[UserServices::None, UserServices::Manual],
     }
