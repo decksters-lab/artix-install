@@ -14,11 +14,15 @@ This milestone is intentionally unable to alter the host system.
 - Desktop conflicts (SwayFX/Sway and SwayFX/Umbriel) and the dinit-only Cosmalia constraint are validated.
 - `linux` is retained as the required fallback kernel.
 - Profiles do not contain passwords or LUKS passphrases.
-- `--plan` and `--validate` are read-only operations.
+- `--plan`, `--validate` and `--hardware` are read-only operations.
+- Hardware discovery reads sysfs, procfs and udev metadata only; it does not spawn commands or open block devices for writing.
+- The disk inventory lists whole physical block devices and their partition children. It treats a disk as busy if the disk or any discovered partition is mounted.
+- The TUI refuses to select disks that are mounted, read-only or have active holders. Removable status is shown but is not an automatic exclusion.
+- A selected device path is still only configuration data; no disk operations exist in this milestone.
 
 ## Before a real executor is added
 
-1. Enumerate block devices and collect model, capacity, serial/WWN, partition table, filesystems, labels, UUIDs, mountpoints, holders and ancestry.
+1. Extend read-only block-device discovery to verify partition-table type, filesystem UUIDs/labels, holders, ancestry and live-media identity on target Artix ISOs.
 2. Reject the live medium, mounted devices, devices containing mounted descendants, and ambiguous/removable targets by default.
 3. For automatic mode, show the exact partition table and format operations; require a typed confirmation of the full device identity and target path.
 4. For manual mode, represent every selected partition, mountpoint and format policy in the plan before executing any action.
