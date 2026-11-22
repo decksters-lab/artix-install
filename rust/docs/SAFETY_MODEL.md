@@ -21,7 +21,8 @@ This milestone is intentionally unable to alter the host system.
 - eMMC boot0/boot1 and RPMB special regions are not shown as normal installation disks.
 - Disk selection fails closed when the current mount table, active swap list, device read-only flag, holder directory or device number cannot be inspected; missing safety data is never treated as proof that a disk is free.
 - The partition manager's Manual mode only assigns existing partitions to root/EFI/swap roles; it does not launch cfdisk or create/resize partitions.
-- Dual-boot plans preserve the existing partition table and make EFI formatting impossible in the planner.
+- Dual-boot plans preserve the existing partition table and make EFI formatting impossible in the planner. In the TUI, an EFI partition is assignable for preservation only when its detected filesystem is FAT32/vfat.
+- Changing the selected target disk clears previous manual root/EFI/swap assignments and additional mountpoints.
 - Automatic plans describe a GPT/UEFI or DOS/MBR layout, root filesystem, optional LUKS2, swap and Btrfs subvolume operations; those are not executed.
 - Btrfs swapfile plans explicitly place the file in a dedicated NOCOW subvolume (or at /swapfile for flat layouts).
 - A selected device path is still only configuration data; no disk operations exist in this milestone.
