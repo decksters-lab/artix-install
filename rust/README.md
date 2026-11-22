@@ -57,7 +57,7 @@ Some choices are conditional in the existing installer. Cosmalia is dinit-only. 
 
 The `--hardware` mode and the TUI's `d` screen read Linux `/sys`, `/proc` and udev metadata without spawning commands or opening block devices for writing. The inventory includes detected firmware mode, memory, CPU identity, PCI display controllers, network interfaces, whole block devices, their partitions, filesystem metadata where udev has it, and mountpoints.
 
-Disk selection is deliberately conservative: a device is not selectable when it or any child partition is mounted or active swap, when it is read-only, or when it has active holders. Removable drives are shown but visibly marked. Selecting a device only stores its path in the TOML plan; it does not partition, format, mount or otherwise modify it. Device inventory is a snapshot and must be rechecked before any future destructive workflow.
+Disk selection is deliberately conservative: a device is not selectable when it or any child partition is mounted or active swap, when it is read-only, or when it has active holders. If mount, swap or device-state data cannot be inspected, selection fails closed. Removable drives are shown but visibly marked. Selecting a device only stores its path in the TOML plan; it does not partition, format, mount or otherwise modify it. Device inventory is a snapshot and must be rechecked before any future destructive workflow.
 
 ## Safety model
 
