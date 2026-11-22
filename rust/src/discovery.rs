@@ -61,6 +61,7 @@ pub struct BlockPartition {
     pub mounted_at: Vec<String>,
     pub active_swap: bool,
     pub read_only: bool,
+    pub has_holders: bool,
     pub safety_checks_complete: bool,
 }
 
@@ -75,7 +76,9 @@ impl BlockDevice {
 
     pub fn can_be_selected(&self) -> bool {
         self.safety_checks_complete
-            && self.partitions.iter().all(|partition| partition.safety_checks_complete && !partition.read_only)
+            && self.partitions.iter().all(|partition| {
+                partition.safety_checks_complete && !partition.read_only && !partition.has_holders
+            })
             && !self.is_busy()
             && !self.read_only
             && !self.has_holders
@@ -94,8 +97,8 @@ impl BlockDevice {
             Some("device or one of its partitions is active swap")
         } else if self.read_only || self.partitions.iter().any(|partition| partition.read_only) {
             Some("device or one of its partitions is read-only")
-        } else if self.has_holders {
-            Some("device has active holders (for example device-mapper or RAID)")
+        } else if self.has_holders || self.partitions.iter().any(|partition| partition.has_holders) {
+            Some("device or one of its partitions has active holders (for example device-mapper or RAID)")
         } else {
             None
         }
@@ -334,11 +337,12 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
 
     let mut disks = Vec::new();
     let mut partitions_by_parent: HashMap<String, Vec<BlockPartition>> = HashMap::new();
-    for (name, parent, partition, _holders, _holders_verified, _path) in &raw {
+    for (_name, parent, partition, holders, holders_verified, _path) in &raw {
         if let Some(parent) = parent {
-            partitions_by_parent.entry(parent.clone()).or_default().push(partition.clone());
-        } else {
-            let _ = name;
+            let mut child = partition.clone();
+            child.has_holders = *holders;
+            child.safety_checks_complete &= *holders_verified;
+            partitions_by_parent.entry(parent.clone()).or_default().push(child);
         }
     }
     for (name, parent, partition, holders, holders_verified, class_path) in raw {
@@ -375,6 +379,10 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
 
 fn is_physical_disk_candidate(name: &str, class_path: &Path) -> bool {
     if ["loop", "ram", "zram", "dm-", "md", "fd", "sr"].iter().any(|prefix| name.starts_with(prefix)) {
+        return false;
+    }
+    // eMMC boot0/boot1 and RPMB are special hardware regions, not general-purpose disks.
+    if name.starts_with("mmcblk") && (name.contains("boot") || name.ends_with("rpmb")) {
         return false;
     }
     class_path.join("device").exists()
@@ -455,6 +463,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn emmc_boot_and_rpmb_regions_are_not_offered_as_disks() {
+        assert!(!is_physical_disk_candidate("mmcblk0boot0", Path::new("/sys/class/block/mmcblk0boot0")));
+        assert!(!is_physical_disk_candidate("mmcblk0rpmb", Path::new("/sys/class/block/mmcblk0rpmb")));
+        assert!(is_physical_disk_candidate("mmcblk0", Path::new("/sys/class/block/mmcblk0")));
+    }
+
+    #[test]
     fn mountinfo_parser_maps_major_minor_and_unescapes_mountpoint() {
         let input = "42 25 8:1 / /mnt/My\\040Drive rw,relatime - ext4 /dev/sda1 rw\n";
         let mounts = parse_mountinfo(input);
@@ -469,7 +484,7 @@ mod tests {
             read_only: false, mounted_at: vec![], active_swap: false, safety_checks_complete: true, has_holders: false,
             partitions: vec![BlockPartition {
                 name: "sda1".into(), path: "/dev/sda1".into(), size_bytes: 1,
-                filesystem: Some("vfat".into()), label: None, mounted_at: vec!["/boot".into()], active_swap: false, read_only: false, safety_checks_complete: true,
+                filesystem: Some("vfat".into()), label: None, mounted_at: vec!["/boot".into()], active_swap: false, read_only: false, has_holders: false, safety_checks_complete: true,
             }],
         };
         assert!(disk.is_busy());
@@ -491,7 +506,7 @@ mod tests {
             read_only: false, mounted_at: vec![], active_swap: false, safety_checks_complete: true, has_holders: false,
             partitions: vec![BlockPartition {
                 name: "sda2".into(), path: "/dev/sda2".into(), size_bytes: 1,
-                filesystem: None, label: None, mounted_at: vec![], active_swap: true, read_only: false, safety_checks_complete: true,
+                filesystem: None, label: None, mounted_at: vec![], active_swap: true, read_only: false, has_holders: false, safety_checks_complete: true,
             }],
         };
         assert!(disk.is_busy());
