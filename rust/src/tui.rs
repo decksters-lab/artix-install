@@ -58,10 +58,7 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                 KeyCode::Up | KeyCode::Char('k') => app.move_selection(-1),
                 KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
                 KeyCode::Left | KeyCode::Char('h') => app.adjust(-1),
-                KeyCode::Right | KeyCode::Char('l') => {
-                    if matches!(app.selected, 6 | 7) { app.adjust(1); }
-                    else { app.adjust(1); }
-                }
+                KeyCode::Right | KeyCode::Char('l') => app.adjust(1),
                 KeyCode::Enter | KeyCode::Char(' ') => {
                     if matches!(app.selected, 6 | 7) { app.toggle_multi_selection(); }
                     else if key.code == KeyCode::Enter { app.adjust(1); }
