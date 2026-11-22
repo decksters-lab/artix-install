@@ -20,7 +20,6 @@ use crate::{
     config::InstallConfig,
     discovery::{format_bytes, HardwareSnapshot},
     plan,
-    partition,
 };
 
 type AppTerminal = Terminal<CrosstermBackend<Stdout>>;
