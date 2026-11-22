@@ -76,7 +76,17 @@ pub fn build_partition_plan(config: &InstallConfig) -> PartitionPlan {
     }
 
     if plan.blocked.is_empty() {
-        plan_root_and_boot(config, &mut plan, config.disk.root_partition.as_ref().map(|p| p.display().to_string()));
+        let root_device = if config.disk.encryption {
+            "/dev/mapper/cryptroot".to_owned()
+        } else {
+            match config.disk.partitioning {
+                Partitioning::Automatic => "<planned root partition>".to_owned(),
+                Partitioning::Manual | Partitioning::DualBoot => config.disk.root_partition
+                    .as_ref().map(|path| path.display().to_string())
+                    .unwrap_or_else(|| "<selected root partition>".into()),
+            }
+        };
+        plan_root_and_boot(config, &mut plan, &root_device);
     }
 
     plan
@@ -229,17 +239,7 @@ fn plan_dual_boot(config: &InstallConfig, plan: &mut PartitionPlan) {
     );
 }
 
-fn plan_root_and_boot(
-    config: &InstallConfig,
-    plan: &mut PartitionPlan,
-    _root_partition: Option<String>,
-) {
-    let root_device = if config.disk.encryption {
-        "/dev/mapper/cryptroot"
-    } else {
-        config.disk.root_partition.as_ref().map_or("<planned root partition>", |_| "<selected root partition>")
-    };
-
+fn plan_root_and_boot(config: &InstallConfig, plan: &mut PartitionPlan, root_device: &str) {
     if config.disk.root_filesystem == Filesystem::Btrfs {
         plan_btrfs_layout(config, plan, root_device);
     }
@@ -264,9 +264,13 @@ fn plan_root_and_boot(
 
     if matches!(config.disk.swap.mode, SwapMode::Swapfile | SwapMode::Both) {
         if config.disk.root_filesystem == Filesystem::Btrfs {
-            // The Btrfs planner places the swap file in a dedicated no-CoW subvolume.
+            let swap_path = if config.disk.btrfs.layout == BtrfsLayout::Flat {
+                "/swapfile"
+            } else {
+                "/swap/swapfile"
+            };
             plan.operations.push(format!(
-                "Create a {} GiB swap file at /swap/swapfile in the dedicated NOCOW @swap subvolume; set mode 0600 before allocation, then mkswap and enable it.",
+                "Create a {} GiB Btrfs swap file at {swap_path}; set NOCOW (+C) before allocation, set mode 0600, then mkswap and enable it.",
                 config.disk.swap.size_gib
             ));
         } else if matches!(config.disk.root_filesystem, Filesystem::F2fs | Filesystem::Nilfs2) {
