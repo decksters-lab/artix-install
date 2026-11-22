@@ -87,6 +87,9 @@ pub fn build_partition_plan(config: &InstallConfig) -> PartitionPlan {
             }
         };
         plan_root_and_boot(config, &mut plan, &root_device);
+        if config.disk.partitioning == Partitioning::Manual {
+            plan_additional_mounts(config, &mut plan);
+        }
     }
 
     plan
@@ -102,7 +105,7 @@ fn plan_automatic(config: &InstallConfig, plan: &mut PartitionPlan, target: &str
     let mut next_number = 1_u8;
     if uefi {
         plan.operations.push(format!(
-            "Create partition {next_number}: 1 GiB EFI System Partition (FAT32), then format it as FAT32 and mount it at /boot."
+            "Create partition {next_number}: 1 GiB EFI System Partition (FAT32), then format it as FAT32."
         ));
         next_number += 1;
     }
@@ -133,10 +136,6 @@ fn plan_automatic(config: &InstallConfig, plan: &mut PartitionPlan, target: &str
             config.disk.root_filesystem
         ));
     }
-    plan.operations.push(format!(
-        "Mount the root filesystem at /; {}",
-        if uefi { "mount the new EFI partition at /boot." } else { "no EFI mount is needed for BIOS mode." }
-    ));
 }
 
 fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
@@ -162,11 +161,11 @@ fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
         let efi = efi.expect("EFI presence checked above");
         if config.disk.efi_policy == EfiPolicy::Preserve {
             plan.operations.push(format!(
-                "Preserve existing EFI partition {efi} without formatting; verify it is a valid FAT32 EFI System Partition and mount it at /boot."
+                "Preserve existing EFI partition {efi} without formatting; verify it is a valid FAT32 EFI System Partition."
             ));
         } else {
             plan.operations.push(format!(
-                "Format selected EFI partition {efi} as FAT32 and mount it at /boot. This erases existing boot files on that partition."
+                "Format selected EFI partition {efi} as FAT32. This erases existing boot files on that partition."
             ));
         }
     }
@@ -193,19 +192,6 @@ fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
         ));
     }
 
-    for mount in &config.disk.additional_mounts {
-        if mount.format {
-            plan.operations.push(format!(
-                "Format additional partition {} as {} and mount it at {}.",
-                mount.device.display(), mount.filesystem, mount.mountpoint
-            ));
-        } else {
-            plan.operations.push(format!(
-                "Preserve the existing filesystem on additional partition {} and mount it at {} (verify filesystem and contents first).",
-                mount.device.display(), mount.mountpoint
-            ));
-        }
-    }
 }
 
 fn plan_dual_boot(config: &InstallConfig, plan: &mut PartitionPlan) {
@@ -224,7 +210,7 @@ fn plan_dual_boot(config: &InstallConfig, plan: &mut PartitionPlan) {
 
     plan.operations.push("Preserve the existing partition table. Do not run wipefs, repartitioning or mklabel.".into());
     plan.operations.push(format!(
-        "Preserve EFI partition {} byte-for-byte: do not format it. Verify it is FAT32 and mount it at /boot.",
+        "Preserve EFI partition {} byte-for-byte: do not format it. Verify it is FAT32.",
         efi.display()
     ));
     if config.disk.encryption {
@@ -243,9 +229,37 @@ fn plan_dual_boot(config: &InstallConfig, plan: &mut PartitionPlan) {
     );
 }
 
+fn plan_additional_mounts(config: &InstallConfig, plan: &mut PartitionPlan) {
+    for mount in &config.disk.additional_mounts {
+        if mount.format {
+            plan.operations.push(format!(
+                "Format additional partition {} as {} and mount it at {}.",
+                mount.device.display(), mount.filesystem, mount.mountpoint
+            ));
+        } else {
+            plan.operations.push(format!(
+                "Preserve the existing filesystem on additional partition {} and mount it at {} (verify filesystem and contents first).",
+                mount.device.display(), mount.mountpoint
+            ));
+        }
+    }
+}
+
 fn plan_root_and_boot(config: &InstallConfig, plan: &mut PartitionPlan, root_device: &str) {
     if config.disk.root_filesystem == Filesystem::Btrfs {
         plan_btrfs_layout(config, plan, root_device);
+    } else {
+        plan.operations.push(format!("Mount {root_device} at / as the root filesystem."));
+    }
+
+    if config.system.firmware == FirmwareMode::Uefi {
+        let efi_device = match config.disk.partitioning {
+            Partitioning::Automatic => "<planned EFI partition 1>".to_owned(),
+            Partitioning::Manual | Partitioning::DualBoot => config.disk.efi_partition
+                .as_ref().map(|path| path.display().to_string())
+                .unwrap_or_else(|| "<selected EFI partition>".into()),
+        };
+        plan.operations.push(format!("Mount EFI partition {efi_device} at /boot after the root filesystem is mounted."));
     }
 
     match config.disk.swap.mode {
