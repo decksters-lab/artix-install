@@ -556,6 +556,35 @@ mod tests {
     }
 
     #[test]
+    fn changing_target_disk_clears_old_manual_partition_assignments() {
+        let mut hardware = sample_hardware();
+        let mut second = hardware.disks[0].clone();
+        second.name = "sdb".into();
+        second.path = "/dev/sdb".into();
+        second.serial = Some("SERIAL456".into());
+        for partition in &mut second.partitions {
+            partition.name = partition.name.replace("nvme0n1", "sdb");
+            partition.path = std::path::PathBuf::from(
+                partition.path.to_string_lossy().replace("nvme0n1", "sdb")
+            );
+        }
+        hardware.disks.push(second);
+
+        let mut app = manual_app();
+        app.hardware = hardware;
+        app.config.disk.root_partition = Some("/dev/nvme0n1p2".into());
+        app.config.disk.efi_partition = Some("/dev/nvme0n1p1".into());
+        app.selected_disk = 1;
+        app.select_disk();
+
+        assert_eq!(app.config.disk.target.as_deref(), Some(std::path::Path::new("/dev/sdb")));
+        assert!(app.config.disk.root_partition.is_none());
+        assert!(app.config.disk.efi_partition.is_none());
+        assert!(app.config.disk.swap_partition.is_none());
+        assert!(app.status.contains("Cleared previous partition assignments"));
+    }
+
+    #[test]
     fn dual_boot_assignment_forces_efi_preservation() {
         let mut app = manual_app();
         app.config.disk.partitioning = Partitioning::DualBoot;
