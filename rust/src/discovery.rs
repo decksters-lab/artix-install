@@ -527,6 +527,23 @@ mod tests {
     }
 
     #[test]
+    fn partition_device_mapper_holders_block_parent_disk() {
+        let disk = BlockDevice {
+            name: "nvme0n1".into(), path: "/dev/nvme0n1".into(), size_bytes: 1,
+            model: None, vendor: None, serial: None, wwid: None, removable: false,
+            read_only: false, mounted_at: vec![], active_swap: false, safety_checks_complete: true,
+            has_holders: false,
+            partitions: vec![BlockPartition {
+                name: "nvme0n1p2".into(), path: "/dev/nvme0n1p2".into(), size_bytes: 1,
+                filesystem: None, label: None, mounted_at: vec![], active_swap: false,
+                read_only: false, has_holders: true, safety_checks_complete: true,
+            }],
+        };
+        assert!(!disk.can_be_selected());
+        assert_eq!(disk.selection_block_reason(), Some("device or one of its partitions has active holders (for example device-mapper or RAID)"));
+    }
+
+    #[test]
     fn mounted_or_readonly_disks_are_never_selectable() {
         let mut disk = BlockDevice {
             name: "nvme0n1".into(), path: "/dev/nvme0n1".into(), size_bytes: 1,
