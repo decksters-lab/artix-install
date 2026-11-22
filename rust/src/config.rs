@@ -324,7 +324,7 @@ impl InstallConfig {
         }
         let user_services_supported = match self.system.init_system {
             InitSystem::Dinit => matches!(self.system.user_services, UserServices::None | UserServices::Userspawn | UserServices::Turnstile),
-            InitSystem::OpenRc => matches!(self.system.user_services, UserServices::None | UserServices::Native),
+            InitSystem::OpenRc => matches!(self.system.user_services, UserServices::None | UserServices::Native | UserServices::Turnstile),
             InitSystem::Runit => matches!(self.system.user_services, UserServices::None | UserServices::Userspawn),
             InitSystem::S6 => matches!(self.system.user_services, UserServices::None | UserServices::Manual),
         };
@@ -422,6 +422,8 @@ mod tests {
         config.system.user_services = UserServices::Userspawn;
         assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("user_services")));
         config.system.user_services = UserServices::Native;
+        assert!(config.validate().is_ok());
+        config.system.user_services = UserServices::Turnstile;
         assert!(config.validate().is_ok());
 
         config.system.init_system = InitSystem::Runit;
