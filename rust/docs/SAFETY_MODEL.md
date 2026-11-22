@@ -5,7 +5,7 @@ This milestone is intentionally unable to alter the host system.
 ## Current guarantees
 
 - There is no process-launching API in the Rust source (`std::process::Command`, shell execution, spawn or output calls are absent).
-- The source contains no disk-writing workflow. Partitioning, formatting, LUKS setup, mounting, chroot and package installation are not implemented.
+- The source contains no disk-writing workflow. The partition module is a pure plan generator; partitioning, formatting, LUKS setup, mounting, chroot and package installation are not implemented.
 - An unset `disk.target` is the default. The planner blocks storage and downstream installation steps when no explicit target is configured.
 - A configured target must be an explicit `/dev/...` path; `/dev/disk/by-id/...` is preferred for a future unattended workflow.
 - Dual-boot mode rejects `efi_policy = "format"`; EFI preservation is the default.
@@ -20,13 +20,17 @@ This milestone is intentionally unable to alter the host system.
 - The TUI refuses to select disks that are mounted, have active swap on the disk or any child partition, are read-only, or have active holders on the disk or any child partition. Removable status is shown but is not an automatic exclusion.
 - eMMC boot0/boot1 and RPMB special regions are not shown as normal installation disks.
 - Disk selection fails closed when the current mount table, active swap list, device read-only flag, holder directory or device number cannot be inspected; missing safety data is never treated as proof that a disk is free.
+- The partition manager's Manual mode only assigns existing partitions to root/EFI/swap roles; it does not launch cfdisk or create/resize partitions.
+- Dual-boot plans preserve the existing partition table and make EFI formatting impossible in the planner.
+- Automatic plans describe a GPT/UEFI or DOS/MBR layout, root filesystem, optional LUKS2, swap and Btrfs subvolume operations; those are not executed.
+- Btrfs swapfile plans explicitly place the file in a dedicated NOCOW subvolume (or at /swapfile for flat layouts).
 - A selected device path is still only configuration data; no disk operations exist in this milestone.
 
 ## Before a real executor is added
 
 1. Extend read-only block-device discovery to verify partition-table type, filesystem UUIDs/labels, holders, ancestry and live-media identity on target Artix ISOs.
 2. Reject the live medium, mounted devices, devices containing mounted descendants, and ambiguous/removable targets by default.
-3. For automatic mode, show the exact partition table and format operations; require a typed confirmation of the full device identity and target path.
+3. Extend the planner with live partition-table and stable device identity data, then show the exact partition table and format operations; require typed confirmation of the full device identity and target path.
 4. For manual mode, represent every selected partition, mountpoint and format policy in the plan before executing any action.
 5. For dual-boot, require explicit root and EFI partitions, verify the EFI filesystem and existing contents, and make EFI formatting structurally impossible in the executor.
 6. Re-check device identities immediately before each destructive operation to avoid stale device paths.
