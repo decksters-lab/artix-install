@@ -64,9 +64,8 @@ impl App {
             6 | 7 => {
                 let len = if self.selected == 6 { DESKTOP_CHOICES.len() } else { KERNEL_CHOICES.len() };
                 self.multi_cursor = (self.multi_cursor as isize + delta).rem_euclid(len as isize) as usize;
-                self.status = format!("Cursor: {}. Press Space to toggle.",
-                    if self.selected == 6 { self.multi_options()[self.multi_cursor].0.clone() }
-                    else { self.multi_options()[self.multi_cursor].0.clone() });
+                let cursor_label = self.multi_options()[self.multi_cursor].0.clone();
+                self.status = format!("Cursor: {cursor_label}. Press Space to toggle.");
                 return;
             }
             8 => self.config.software.cpu_vendor = cycle(self.config.software.cpu_vendor,
