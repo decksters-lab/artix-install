@@ -266,8 +266,13 @@ impl App {
             }
             3 => self.config.disk.root_filesystem = cycle(self.config.disk.root_filesystem,
                 &[Filesystem::Ext4, Filesystem::Btrfs, Filesystem::Xfs, Filesystem::F2fs, Filesystem::Jfs, Filesystem::Nilfs2], delta),
-            4 => self.config.disk.swap.mode = cycle(self.config.disk.swap.mode,
-                &[SwapMode::None, SwapMode::Zram, SwapMode::Partition, SwapMode::Swapfile, SwapMode::Both], delta),
+            4 => {
+                self.config.disk.swap.mode = cycle(self.config.disk.swap.mode,
+                    &[SwapMode::None, SwapMode::Zram, SwapMode::Partition, SwapMode::Swapfile, SwapMode::Both], delta);
+                if self.config.disk.swap.mode != SwapMode::Partition {
+                    self.config.disk.swap_partition = None;
+                }
+            },
             5 => self.config.disk.encryption = !self.config.disk.encryption,
             6 | 7 => {
                 let len = if self.selected == 6 { DESKTOP_CHOICES.len() } else { KERNEL_CHOICES.len() };
@@ -528,6 +533,22 @@ mod tests {
         app.multi_cursor = 7; // Hyprland
         app.toggle_multi_selection();
         assert!(app.config.software.desktop_environments.contains(&Desktop::Hyprland));
+    }
+
+    #[test]
+    fn changing_swap_away_from_partition_clears_stale_partition_assignment() {
+        let mut app = manual_app();
+        app.config.disk.root_partition = Some("/dev/nvme0n1p2".into());
+        app.config.disk.efi_partition = Some("/dev/nvme0n1p1".into());
+        app.config.disk.swap.mode = SwapMode::Partition;
+        app.config.disk.swap_partition = Some("/dev/nvme0n1p3".into());
+        app.selected = 4;
+
+        app.adjust(1);
+
+        assert_eq!(app.config.disk.swap.mode, SwapMode::Swapfile);
+        assert!(app.config.disk.swap_partition.is_none());
+        assert!(app.config.validate().is_ok());
     }
 
     #[test]
