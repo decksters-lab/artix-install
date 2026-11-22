@@ -141,18 +141,25 @@ fn plan_automatic(config: &InstallConfig, plan: &mut PartitionPlan, target: &str
 
 fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
     let root = config.disk.root_partition.as_ref().map(|p| p.display().to_string());
-    let Some(root) = root else {
-        plan.blocked.push("Manual mode requires disk.root_partition.".into());
-        return;
-    };
     let uefi = config.system.firmware == FirmwareMode::Uefi;
-    if uefi && config.disk.efi_partition.is_none() {
+    let efi = config.disk.efi_partition.as_ref().map(|p| p.display().to_string());
+
+    if root.is_none() {
+        plan.blocked.push("Manual mode requires disk.root_partition.".into());
+    }
+    if uefi && efi.is_none() {
         plan.blocked.push("Manual UEFI mode requires disk.efi_partition.".into());
+    }
+    if config.disk.swap.mode == SwapMode::Partition && config.disk.swap_partition.is_none() {
+        plan.blocked.push("Manual swap-partition mode requires disk.swap_partition.".into());
+    }
+    if !plan.blocked.is_empty() {
         return;
     }
+    let root = root.expect("root presence checked above");
 
     if uefi {
-        let efi = config.disk.efi_partition.as_ref().expect("checked above").display().to_string();
+        let efi = efi.expect("EFI presence checked above");
         if config.disk.efi_policy == EfiPolicy::Preserve {
             plan.operations.push(format!(
                 "Preserve existing EFI partition {efi} without formatting; verify it is a valid FAT32 EFI System Partition and mount it at /boot."
@@ -175,10 +182,7 @@ fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
     }
 
     if config.disk.swap.mode == SwapMode::Partition {
-        let Some(swap) = config.disk.swap_partition.as_ref() else {
-            plan.blocked.push("Manual swap-partition mode requires disk.swap_partition.".into());
-            return;
-        };
+        let swap = config.disk.swap_partition.as_ref().expect("swap presence checked above");
         plan.operations.push(format!(
             "Initialize selected swap partition {} with mkswap and enable it.",
             swap.display()
