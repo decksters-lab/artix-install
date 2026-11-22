@@ -116,6 +116,6 @@ mod tests {
     fn desktop_choices_appear_in_the_plan() {
         let mut config = InstallConfig::default();
         config.software.desktop_environments.push(Desktop::Hyprland);
-        assert!(format_plan(&config).contains("Hyprland"));
+        assert!(format_plan(&config).contains("hyprland"));
     }
 }
