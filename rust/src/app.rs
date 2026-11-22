@@ -2,6 +2,7 @@ use std::fs;
 
 use anyhow::{Context, Result};
 
+use crate::discovery::HardwareSnapshot;
 use crate::config::{
     Bootloader, CpuVendor, Desktop, EfiPolicy, Filesystem, FirmwareMode, GpuChoice,
     InitSystem, InstallConfig, Kernel, NetworkStack, Partitioning, PrivilegeEscalation,
@@ -26,14 +27,52 @@ pub struct App {
     pub show_plan: bool,
     pub show_help: bool,
     pub status: String,
+    pub hardware: HardwareSnapshot,
+    pub show_disks: bool,
+    pub selected_disk: usize,
 }
 
 impl App {
-    pub fn new(config: InstallConfig) -> Self {
+    pub fn new(config: InstallConfig, hardware: HardwareSnapshot) -> Self {
         Self {
             config, selected: 0, multi_cursor: 0, show_plan: false, show_help: false,
             status: "Review the defaults. No target disk is selected; disk operations are blocked.".into(),
+            hardware, show_disks: false, selected_disk: 0,
         }
+    }
+
+    pub fn toggle_disks(&mut self) {
+        self.show_disks = !self.show_disks;
+        if self.show_disks {
+            self.status = format!("Read-only inventory: {} physical disk(s) detected.", self.hardware.disks.len());
+        } else {
+            self.status = "Returned to configuration.".into();
+        }
+    }
+
+    pub fn move_disk_selection(&mut self, delta: isize) {
+        if self.hardware.disks.is_empty() {
+            self.selected_disk = 0;
+            return;
+        }
+        self.selected_disk = (self.selected_disk as isize + delta)
+            .rem_euclid(self.hardware.disks.len() as isize) as usize;
+    }
+
+    pub fn select_disk(&mut self) {
+        let Some(disk) = self.hardware.disks.get(self.selected_disk) else {
+            self.status = "No physical disk is available to select.".into();
+            return;
+        };
+        if let Some(reason) = disk.selection_block_reason() {
+            self.status = format!("Cannot select {}: {reason}.", disk.path.display());
+            return;
+        }
+        self.config.disk.target = Some(disk.path.clone());
+        self.status = format!(
+            "Selected {} for the plan only. No disk operation is implemented.",
+            disk.path.display()
+        );
     }
 
     pub fn move_selection(&mut self, delta: isize) {
@@ -183,7 +222,7 @@ impl App {
     pub fn setting_description(&self, index: usize) -> &'static str {
         match index {
             0 => "Choose dinit, OpenRC, runit or s6. Init-specific packages and services are central to Artix.",
-            1 => "Read-only in this milestone. The disk manager will inventory devices before allowing a target choice.",
+            1 => "Press D to inspect physical disks. Only unmounted, writable devices without active holders can be selected; selection only edits the plan.",
             2 => "Automatic replaces the selected drive layout; manual assigns existing partitions; dual-boot preserves existing partitions and EFI.",
             3 => "Root filesystems supported by the shell installer: ext4, Btrfs, XFS, F2FS, JFS and NILFS2.",
             4 => "Choose none, zram, swap partition, swapfile or both. zswap is modeled separately for real swap devices.",
@@ -236,13 +275,13 @@ mod tests {
     use super::*;
     #[test]
     fn defaults_to_safe_unselected_disk() {
-        let app = App::new(InstallConfig::default());
+        let app = App::new(InstallConfig::default(), HardwareSnapshot::default());
         assert_eq!(app.setting_value(1), "Not selected");
         assert!(app.config.disk.target.is_none());
     }
     #[test]
     fn toggles_desktop_multi_select() {
-        let mut app = App::new(InstallConfig::default());
+        let mut app = App::new(InstallConfig::default(), HardwareSnapshot::default());
         app.selected = 6;
         app.multi_cursor = 7; // Hyprland
         app.toggle_multi_selection();
