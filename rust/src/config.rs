@@ -208,8 +208,9 @@ impl InstallConfig {
         if self.disk.swap.zswap && !matches!(self.disk.swap.mode, SwapMode::Partition | SwapMode::Swapfile) {
             issues.push("zswap is only offered with a swap partition or swapfile".into());
         }
-        if let (Some(efi), Some(root)) = (&self.disk.efi_partition, &self.disk.root_partition) {
-            if efi == root { issues.push("EFI and root partitions must be different devices".into()); }
+        if let (Some(efi), Some(root)) = (&self.disk.efi_partition, &self.disk.root_partition)
+            && efi == root {
+            issues.push("EFI and root partitions must be different devices".into());
         }
         let mut devices = Vec::<PathBuf>::new();
         let mut mountpoints = Vec::<String>::new();
