@@ -41,9 +41,9 @@ pub fn format_plan(config: &InstallConfig) -> String {
 fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     let mut items = vec![
         PlanItem { title: "Inspect installer environment".into(),
-            detail: "Future discovery module: verify Artix live media, root permissions, firmware, memory, network, CPU/GPU and required tools.".into(), risk: Risk::Info },
+            detail: format!("Read-only discovery currently reports firmware {}, memory {}, CPU {}, {} GPU(s), {} network interface(s), and {} physical disk(s). Artix live-media and required-tool checks remain future work.", config.system.firmware, "see hardware report", config.software.cpu_vendor, "detected", "detected", "detected").into(), risk: Risk::Info },
         PlanItem { title: "Discover block devices".into(),
-            detail: "Future read-only module: inspect model, size, serial/WWN, partition table, filesystems, UUIDs, mountpoints and holders. Never choose the first disk automatically.".into(), risk: Risk::Info },
+            detail: "Read-only sysfs/procfs/udev discovery is available in the hardware report and TUI. Partition-table type, filesystem UUID binding, live-media ancestry and stable identity revalidation are still pending. Never choose the first disk automatically.".into(), risk: Risk::Info },
     ];
     match &config.disk.target {
         None => {
