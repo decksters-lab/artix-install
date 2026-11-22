@@ -232,8 +232,13 @@ impl App {
 
     pub fn adjust(&mut self, delta: isize) {
         match self.selected {
-            0 => self.config.system.init_system = cycle(self.config.system.init_system,
-                &[InitSystem::Dinit, InitSystem::OpenRc, InitSystem::Runit, InitSystem::S6], delta),
+            0 => {
+                self.config.system.init_system = cycle(self.config.system.init_system,
+                    &[InitSystem::Dinit, InitSystem::OpenRc, InitSystem::Runit, InitSystem::S6], delta);
+                if !user_service_choices(self.config.system.init_system).contains(&self.config.system.user_services) {
+                    self.config.system.user_services = UserServices::None;
+                }
+            },
             1 => {
                 self.status = "Disk selection is read-only in this milestone. No device is chosen implicitly.".into();
                 return;
@@ -280,7 +285,7 @@ impl App {
             11 => self.config.system.privilege_escalation = cycle(self.config.system.privilege_escalation,
                 &[PrivilegeEscalation::Doas, PrivilegeEscalation::Sudo], delta),
             12 => self.config.system.user_services = cycle(self.config.system.user_services,
-                &[UserServices::None, UserServices::Userspawn, UserServices::Turnstile], delta),
+                user_service_choices(self.config.system.init_system), delta),
             13 => self.config.software.network = cycle(self.config.software.network,
                 &[NetworkStack::Dhcpcd, NetworkStack::Iwd, NetworkStack::NetworkManager], delta),
             14 => self.config.software.multilib = !self.config.software.multilib,
@@ -397,7 +402,7 @@ impl App {
             9 => "Intel, AMD, NVIDIA, hybrid Intel+NVIDIA or VM/basic Mesa graphics choice.",
             10 => "UEFI supports GRUB2, Limine or rEFInd. BIOS is locked to GRUB2.",
             11 => "Choose doas or sudo.",
-            12 => "Choose userspawn, turnstile or neither; package availability depends on the selected init.",
+            12 => "Init-specific user services: dinit supports userspawn/turnstile, OpenRC native services, runit userspawn, and s6 manual user setup.",
             13 => "Choose dhcpcd, iwd or NetworkManager.",
             14 => "Enable multilib for Steam, Wine and 32-bit applications.",
             15 => "UEFI or BIOS. Future discovery will detect this from the live environment.",
@@ -428,6 +433,16 @@ fn list_values<T: std::fmt::Display>(values: &[T]) -> String {
     if values.is_empty() { "CLI only".into() }
     else { values.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ") }
 }
+
+fn user_service_choices(init: InitSystem) -> &'static [UserServices] {
+    match init {
+        InitSystem::Dinit => &[UserServices::None, UserServices::Userspawn, UserServices::Turnstile],
+        InitSystem::OpenRc => &[UserServices::None, UserServices::Native],
+        InitSystem::Runit => &[UserServices::None, UserServices::Userspawn],
+        InitSystem::S6 => &[UserServices::None, UserServices::Manual],
+    }
+}
+
 fn bool_label(value: bool) -> String { if value { "Enabled".into() } else { "Disabled".into() } }
 fn cycle<T: Copy + PartialEq>(current: T, options: &[T], delta: isize) -> T {
     let index = options.iter().position(|value| *value == current).unwrap_or(0) as isize;
