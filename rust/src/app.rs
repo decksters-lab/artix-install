@@ -78,11 +78,26 @@ impl App {
             self.status = format!("Cannot select {}: {reason}.", disk.path.display());
             return;
         }
+        let target_changed = self.config.disk.target.as_ref() != Some(&disk.path);
+        if target_changed {
+            self.config.disk.root_partition = None;
+            self.config.disk.efi_partition = None;
+            self.config.disk.swap_partition = None;
+            self.config.disk.additional_mounts.clear();
+            self.selected_partition = 0;
+        }
         self.config.disk.target = Some(disk.path.clone());
-        self.status = format!(
-            "Selected {} for the plan only. No disk operation is implemented.",
-            disk.path.display()
-        );
+        self.status = if target_changed {
+            format!(
+                "Selected {}. Cleared previous partition assignments because the target changed. Selection only updates the plan.",
+                disk.path.display()
+            )
+        } else {
+            format!(
+                "Selected {} for the plan only. No disk operation is implemented.",
+                disk.path.display()
+            )
+        };
     }
 
     pub fn toggle_storage(&mut self) {
