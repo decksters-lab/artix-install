@@ -51,7 +51,8 @@ pub fn format_plan(config: &InstallConfig) -> String {
 
 fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     let storage_plan = partition::build_partition_plan(config);
-    let storage_ready = storage_plan.is_reviewable();
+    let validation_issues = config.validate().err().unwrap_or_default();
+    let storage_ready = storage_plan.is_reviewable() && validation_issues.is_empty();
     let mut items = vec![
         PlanItem { title: "Inspect installer environment".into(),
             detail: "Read-only hardware discovery is available via --hardware and the TUI. This plan does not embed a fresh hardware snapshot; Artix live-media and required-tool checks remain future work.".into(), risk: Risk::Info },
@@ -69,10 +70,12 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
             items.push(PlanItem { title: format!("Review target disk {}", target.display()),
                 detail: "Future module: verify device identity, capacity, partition table, live-media ancestry and mount state; require typed confirmation of the exact device path.".into(), risk: Risk::Review });
             if !storage_ready {
-                let reason = if storage_plan.blocked.is_empty() {
+                let mut reasons = storage_plan.blocked.clone();
+                reasons.extend(validation_issues.iter().cloned());
+                let reason = if reasons.is_empty() {
                     "The selected storage configuration is incomplete.".to_owned()
                 } else {
-                    storage_plan.blocked.join(" ")
+                    reasons.join(" ")
                 };
                 items.push(PlanItem { title: "Partition and prepare storage".into(),
                     detail: format!("Blocked: {reason}"), risk: Risk::Blocked });
@@ -162,6 +165,18 @@ mod tests {
         assert!(output.contains("[BLOCKED] Partition and prepare storage"));
         assert!(output.contains("[BLOCKED] Set up encryption, filesystems and swap"));
         assert!(output.contains("Manual UEFI mode requires disk.efi_partition."));
+    }
+
+    #[test]
+    fn invalid_configuration_blocks_all_install_steps_in_plan() {
+        let mut config = InstallConfig::default();
+        config.disk.target = Some(PathBuf::from("/dev/disk/by-id/example"));
+        config.system.username = "INVALID USER".into();
+        let output = format_plan(&config);
+        assert!(output.contains("[BLOCKED] Partition and prepare storage"));
+        assert!(output.contains("[BLOCKED] Set up encryption, filesystems and swap"));
+        assert!(output.contains("[BLOCKED] Install Artix base system"));
+        assert!(output.contains("username must start with a lowercase letter"));
     }
 
     #[test]
