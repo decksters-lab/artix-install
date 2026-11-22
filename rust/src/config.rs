@@ -136,7 +136,10 @@ string_enum!(NetworkStack {
     Dhcpcd => "dhcpcd", Iwd => "iwd", NetworkManager => "network-manager"
 });
 string_enum!(PrivilegeEscalation { Doas => "doas", Sudo => "sudo" });
-string_enum!(UserServices { None => "none", Userspawn => "userspawn", Turnstile => "turnstile" });
+string_enum!(UserServices {
+    None => "none", Native => "native", Userspawn => "userspawn",
+    Turnstile => "turnstile", Manual => "manual"
+});
 
 impl Default for InstallConfig {
     fn default() -> Self {
@@ -319,6 +322,18 @@ impl InstallConfig {
         if self.software.kernels.is_empty() || !self.software.kernels.contains(&Kernel::Linux) {
             issues.push("software.kernels must include 'linux' as the guaranteed fallback kernel".into());
         }
+        let user_services_supported = match self.system.init_system {
+            InitSystem::Dinit => matches!(self.system.user_services, UserServices::None | UserServices::Userspawn | UserServices::Turnstile),
+            InitSystem::OpenRc => matches!(self.system.user_services, UserServices::None | UserServices::Native),
+            InitSystem::Runit => matches!(self.system.user_services, UserServices::None | UserServices::Userspawn),
+            InitSystem::S6 => matches!(self.system.user_services, UserServices::None | UserServices::Manual),
+        };
+        if !user_services_supported {
+            issues.push(format!(
+                "user_services = '{}' is not a supported setup choice for {}; choose an init-specific option",
+                self.system.user_services, self.system.init_system
+            ));
+        }
         if self.software.desktop_environments.contains(&Desktop::Cosmalia)
             && self.system.init_system != InitSystem::Dinit {
             issues.push("Cosmalia requires dinit".into());
@@ -392,6 +407,26 @@ mod tests {
         assert!(config.validate().is_err());
         config.software.desktop_environments = vec![Desktop::Umbriel, Desktop::SwayFx];
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn user_service_options_are_init_specific() {
+        let mut config = InstallConfig::default();
+        config.system.init_system = InitSystem::S6;
+        config.system.user_services = UserServices::Turnstile;
+        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("user_services")));
+        config.system.user_services = UserServices::Manual;
+        assert!(config.validate().is_ok());
+
+        config.system.init_system = InitSystem::OpenRc;
+        config.system.user_services = UserServices::Userspawn;
+        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("user_services")));
+        config.system.user_services = UserServices::Native;
+        assert!(config.validate().is_ok());
+
+        config.system.init_system = InitSystem::Runit;
+        config.system.user_services = UserServices::Userspawn;
+        assert!(config.validate().is_ok());
     }
 
     #[test]
