@@ -50,6 +50,8 @@ pub fn format_plan(config: &InstallConfig) -> String {
 }
 
 fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
+    let storage_plan = partition::build_partition_plan(config);
+    let storage_ready = storage_plan.is_reviewable();
     let mut items = vec![
         PlanItem { title: "Inspect installer environment".into(),
             detail: "Read-only hardware discovery is available via --hardware and the TUI. This plan does not embed a fresh hardware snapshot; Artix live-media and required-tool checks remain future work.".into(), risk: Risk::Info },
@@ -66,10 +68,14 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
         Some(target) => {
             items.push(PlanItem { title: format!("Review target disk {}", target.display()),
                 detail: "Future module: verify device identity, capacity, partition table, live-media ancestry and mount state; require typed confirmation of the exact device path.".into(), risk: Risk::Review });
-            if config.disk.partitioning == Partitioning::DualBoot
-                && (config.disk.efi_partition.is_none() || config.disk.root_partition.is_none()) {
-                items.push(PlanItem { title: "Choose existing EFI and root partitions".into(),
-                    detail: "Dual-boot mode needs explicit EFI and root partition selections. EFI is locked to preserve; it must not be formatted.".into(), risk: Risk::Blocked });
+            if !storage_ready {
+                let reason = if storage_plan.blocked.is_empty() {
+                    "The selected storage configuration is incomplete.".to_owned()
+                } else {
+                    storage_plan.blocked.join(" ")
+                };
+                items.push(PlanItem { title: "Partition and prepare storage".into(),
+                    detail: format!("Blocked: {reason}"), risk: Risk::Blocked });
             } else {
                 let detail = match config.disk.partitioning {
                     Partitioning::Automatic => format!("Would create a fresh partition layout on {} using {} root. This overwrites the target device and requires typed confirmation. EFI policy: {}.", target.display(), config.disk.root_filesystem, config.disk.efi_policy),
@@ -80,9 +86,6 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
             }
         }
     }
-    let storage_ready = config.disk.target.is_some()
-        && (config.disk.partitioning != Partitioning::DualBoot
-            || (config.disk.efi_partition.is_some() && config.disk.root_partition.is_some()));
     let risk = if storage_ready { Risk::Review } else { Risk::Blocked };
     items.push(PlanItem { title: "Set up encryption, filesystems and swap".into(),
         detail: format!("LUKS2: {}; root: {}; swap: {} ({} GiB); zswap: {}. EFI policy: {}. No passphrase is stored in the profile.", config.disk.encryption, config.disk.root_filesystem, config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap, config.disk.efi_policy), risk });
@@ -148,6 +151,19 @@ mod tests {
         assert!(output.contains("[DESTRUCTIVE — NOT EXECUTABLE]"));
         assert!(output.contains("No disk operation is permitted"));
     }
+
+    #[test]
+    fn incomplete_manual_layout_blocks_top_level_storage_steps() {
+        let mut config = InstallConfig::default();
+        config.disk.target = Some(PathBuf::from("/dev/disk/by-id/example"));
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.root_partition = Some(PathBuf::from("/dev/sda2"));
+        let output = format_plan(&config);
+        assert!(output.contains("[BLOCKED] Partition and prepare storage"));
+        assert!(output.contains("[BLOCKED] Set up encryption, filesystems and swap"));
+        assert!(output.contains("Manual UEFI mode requires disk.efi_partition."));
+    }
+
     #[test]
     fn s6_plan_leaves_user_services_to_the_user() {
         let mut config = InstallConfig::default();
