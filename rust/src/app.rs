@@ -519,6 +519,17 @@ mod tests {
     }
 
     #[test]
+    fn preserving_efi_requires_verified_vfat_filesystem() {
+        let mut hardware = sample_hardware();
+        hardware.disks[0].partitions[0].filesystem = None;
+        let mut app = manual_app();
+        app.hardware = hardware;
+        app.assign_partition(PartitionRole::Efi);
+        assert!(app.config.disk.efi_partition.is_none());
+        assert!(app.status.contains("not verified as FAT32/vfat"));
+    }
+
+    #[test]
     fn partition_manager_rejects_mounted_partitions() {
         let mut hardware = sample_hardware();
         hardware.disks[0].partitions[0].mounted_at = vec!["/boot/efi".into()];
