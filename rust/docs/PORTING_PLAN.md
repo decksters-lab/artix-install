@@ -26,7 +26,7 @@ The Rust application must grow beside the current 13-step Bash installer until f
 2. Finish schema migration and validation against every current wizard option (this prototype is the first pass).
 3. Add read-only hardware and disk discovery. The first pass reads sysfs/procfs/udev and lists physical disks, partitions, mounts, basic filesystem metadata, CPU/GPU, memory, firmware and network interfaces. No disk formatting is offered in this phase.
 4. Harden discovery with partition-table type, filesystem UUIDs, live-media ancestry and more robust device identity; add init-specific and package-availability probes, including dynamic availability checks for MangoWM, Umbriel, SwayFX, noctalia-greeter and userspawn/turnstile.
-5. Implement a deterministic install plan and snapshot tests for each init system, firmware mode, partitioning mode, filesystem, swap and desktop combination.
-6. Add storage planning and VM tests using disposable virtual disks, including dual-boot EFI preservation tests.
-7. Add the executor only after the plan and safety gates have high test coverage.
-8. Test the old and new installers in the same VM matrix; compare resulting packages, services, bootloader configuration and boot success before changing documentation or defaults.
+7. Implement a deterministic end-to-end install plan and snapshot tests for each init system, firmware mode, partitioning mode, filesystem, swap and desktop combination.
+8. Add storage backend and VM tests using disposable virtual disks, including dual-boot EFI preservation tests and failure recovery.
+9. Add the executor only after the plan and safety gates have high test coverage.
+10. Test the old and new installers in the same VM matrix; compare resulting packages, services, bootloader configuration and boot success before changing documentation or defaults.
