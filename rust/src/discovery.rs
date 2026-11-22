@@ -195,15 +195,15 @@ fn read_cpu_info() -> (Option<String>, Option<String>) {
     let mut vendor = None;
     let mut model = None;
     for line in cpuinfo.lines() {
-        if vendor.is_none() {
-            if let Some(value) = line.strip_prefix("vendor_id").and_then(|s| s.split_once(':').map(|(_, v)| v.trim())) {
-                vendor = Some(value.to_owned());
-            }
+        if vendor.is_none()
+            && let Some(value) = line.strip_prefix("vendor_id").and_then(|s| s.split_once(':').map(|(_, v)| v.trim()))
+        {
+            vendor = Some(value.to_owned());
         }
-        if model.is_none() {
-            if let Some(value) = line.strip_prefix("model name").and_then(|s| s.split_once(':').map(|(_, v)| v.trim())) {
-                model = Some(value.to_owned());
-            }
+        if model.is_none()
+            && let Some(value) = line.strip_prefix("model name").and_then(|s| s.split_once(':').map(|(_, v)| v.trim()))
+        {
+            model = Some(value.to_owned());
         }
         if vendor.is_some() && model.is_some() { break; }
     }
