@@ -2,7 +2,7 @@ use std::fs;
 
 use anyhow::{Context, Result};
 
-use crate::discovery::HardwareSnapshot;
+use crate::discovery::{BlockPartition, HardwareSnapshot};
 use crate::config::{
     Bootloader, CpuVendor, Desktop, EfiPolicy, Filesystem, FirmwareMode, GpuChoice,
     InitSystem, InstallConfig, Kernel, NetworkStack, Partitioning, PrivilegeEscalation,
@@ -20,6 +20,13 @@ pub const KERNEL_CHOICES: [Kernel; 5] = [
     Kernel::Linux, Kernel::LinuxLts, Kernel::LinuxZen, Kernel::LinuxLqx, Kernel::LinuxCachyos,
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartitionRole {
+    Root,
+    Efi,
+    Swap,
+}
+
 pub struct App {
     pub config: InstallConfig,
     pub selected: usize,
@@ -30,6 +37,8 @@ pub struct App {
     pub hardware: HardwareSnapshot,
     pub show_disks: bool,
     pub selected_disk: usize,
+    pub show_storage: bool,
+    pub selected_partition: usize,
 }
 
 impl App {
@@ -38,6 +47,7 @@ impl App {
             config, selected: 0, multi_cursor: 0, show_plan: false, show_help: false,
             status: "Review the defaults. No target disk is selected; disk operations are blocked.".into(),
             hardware, show_disks: false, selected_disk: 0,
+            show_storage: false, selected_partition: 0,
         }
     }
 
@@ -73,6 +83,120 @@ impl App {
             "Selected {} for the plan only. No disk operation is implemented.",
             disk.path.display()
         );
+    }
+
+    pub fn toggle_storage(&mut self) {
+        self.show_storage = !self.show_storage;
+        self.selected_partition = 0;
+        self.status = if self.show_storage {
+            "Partition manager is planning-only. No partitioning or formatting is available.".into()
+        } else {
+            "Returned to configuration.".into()
+        };
+    }
+
+    pub fn target_partitions(&self) -> &[BlockPartition] {
+        let Some(target) = self.config.disk.target.as_ref() else {
+            return &[];
+        };
+        self.hardware.disks.iter()
+            .find(|disk| disk.path == *target)
+            .map(|disk| disk.partitions.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub fn move_partition_selection(&mut self, delta: isize) {
+        let count = self.target_partitions().len();
+        if count == 0 {
+            self.selected_partition = 0;
+        } else {
+            self.selected_partition = (self.selected_partition as isize + delta)
+                .rem_euclid(count as isize) as usize;
+        }
+    }
+
+    pub fn assign_partition(&mut self, role: PartitionRole) {
+        if !matches!(self.config.disk.partitioning, Partitioning::Manual | Partitioning::DualBoot) {
+            self.status = "Partition role assignment is for Manual or Dual-boot mode. Automatic mode generates its own layout.".into();
+            return;
+        }
+        if role == PartitionRole::Efi && self.config.system.firmware != FirmwareMode::Uefi {
+            self.status = "EFI partition assignment is unavailable in BIOS mode.".into();
+            return;
+        }
+        if role == PartitionRole::Swap && self.config.disk.swap.mode != SwapMode::Partition {
+            self.status = "Select Swap = partition in the configuration before assigning a swap partition.".into();
+            return;
+        }
+        if role == PartitionRole::Swap && self.config.disk.partitioning == Partitioning::DualBoot {
+            self.status = "Dual-boot mode does not assign or reformat an existing swap partition.".into();
+            return;
+        }
+
+        let Some(partition) = self.target_partitions().get(self.selected_partition).cloned() else {
+            self.status = "No partition is selected. Choose a target disk with partitions first.".into();
+            return;
+        };
+
+        if !partition.safety_checks_complete {
+            self.status = format!("Cannot assign {}: partition safety metadata is incomplete.", partition.path.display());
+            return;
+        }
+        if !partition.mounted_at.is_empty() {
+            self.status = format!("Cannot assign {}: it is mounted at {}.", partition.path.display(), partition.mounted_at.join(", "));
+            return;
+        }
+        if partition.active_swap {
+            self.status = format!("Cannot assign {}: it is active swap.", partition.path.display());
+            return;
+        }
+        if partition.read_only || partition.has_holders {
+            self.status = format!("Cannot assign {}: it is read-only or has active holders.", partition.path.display());
+            return;
+        }
+
+        let path = partition.path.clone();
+        let already_used = match role {
+            PartitionRole::Root => self.config.disk.efi_partition.as_ref() == Some(&path)
+                || self.config.disk.swap_partition.as_ref() == Some(&path),
+            PartitionRole::Efi => self.config.disk.root_partition.as_ref() == Some(&path)
+                || self.config.disk.swap_partition.as_ref() == Some(&path),
+            PartitionRole::Swap => self.config.disk.root_partition.as_ref() == Some(&path)
+                || self.config.disk.efi_partition.as_ref() == Some(&path),
+        };
+        if already_used {
+            self.status = format!("{} is already assigned to another partition role.", path.display());
+            return;
+        }
+
+        match role {
+            PartitionRole::Root => self.config.disk.root_partition = Some(path.clone()),
+            PartitionRole::Efi => {
+                self.config.disk.efi_partition = Some(path.clone());
+                if self.config.disk.partitioning == Partitioning::DualBoot {
+                    self.config.disk.efi_policy = EfiPolicy::Preserve;
+                }
+            }
+            PartitionRole::Swap => self.config.disk.swap_partition = Some(path.clone()),
+        }
+        let role_name = match role {
+            PartitionRole::Root => "root",
+            PartitionRole::Efi => "EFI",
+            PartitionRole::Swap => "swap",
+        };
+        self.status = format!("Assigned {} as {role_name} for the plan only. No disk operation was performed.", path.display());
+    }
+
+    pub fn partition_role(&self, path: &std::path::Path) -> Option<&'static str> {
+        if self.config.disk.root_partition.as_deref() == Some(path) {
+            Some("ROOT")
+        } else if self.config.disk.efi_partition.as_deref() == Some(path) {
+            Some("EFI")
+        } else if self.config.disk.swap_partition.as_deref() == Some(path) {
+            Some("SWAP")
+        } else {
+            None
+        }
     }
 
     pub fn move_selection(&mut self, delta: isize) {
