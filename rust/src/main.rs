@@ -65,16 +65,7 @@ fn run() -> Result<()> {
         None => InstallConfig::default(),
     };
     if args.plan {
-        let mut report = String::new();
-        if let Err(issues) = config.validate() {
-            report.push_str("CONFIGURATION VALIDATION ISSUES\n--------------------------------\n");
-            for issue in issues {
-                report.push_str(&format!("- {issue}\n"));
-            }
-            report.push('\n');
-        }
-        report.push_str(&plan::format_plan(&config));
-        print!("{report}");
+        print!("{}", plan::format_plan(&config));
         return Ok(());
     }
     config.validate().map_err(|issues| {
