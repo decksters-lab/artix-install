@@ -214,6 +214,16 @@ impl InstallConfig {
         if self.disk.partitioning == Partitioning::DualBoot && self.disk.efi_policy == EfiPolicy::Format {
             issues.push("dual-boot mode requires efi_policy = 'preserve'".into());
         }
+        if self.disk.partitioning == Partitioning::DualBoot && self.system.firmware != FirmwareMode::Uefi {
+            issues.push("dual-boot partition planning currently requires UEFI firmware".into());
+        }
+        if self.disk.partitioning == Partitioning::Automatic
+            && (self.disk.efi_partition.is_some() || self.disk.root_partition.is_some() || self.disk.swap_partition.is_some()) {
+            issues.push("automatic mode calculates its own partition paths; clear manual EFI/root/swap partition assignments".into());
+        }
+        if self.disk.partitioning != Partitioning::Manual && !self.disk.additional_mounts.is_empty() {
+            issues.push("additional_mounts are currently supported only in manual partitioning mode".into());
+        }
         if self.system.firmware == FirmwareMode::Bios {
             if self.software.bootloader != Bootloader::Grub {
                 issues.push("BIOS installations use GRUB2; Limine and rEFInd are UEFI-only".into());
@@ -274,6 +284,21 @@ impl InstallConfig {
         if let (Some(swap), Some(efi)) = (&self.disk.swap_partition, &self.disk.efi_partition)
             && swap == efi {
             issues.push("swap and EFI partitions must be different devices".into());
+        }
+        if let Some(root) = &self.disk.root_partition {
+            if self.disk.additional_mounts.iter().any(|mount| &mount.device == root) {
+                issues.push("root partition cannot also be used as an additional mount".into());
+            }
+        }
+        if let Some(efi) = &self.disk.efi_partition {
+            if self.disk.additional_mounts.iter().any(|mount| &mount.device == efi) {
+                issues.push("EFI partition cannot also be used as an additional mount".into());
+            }
+        }
+        if let Some(swap) = &self.disk.swap_partition {
+            if self.disk.additional_mounts.iter().any(|mount| &mount.device == swap) {
+                issues.push("swap partition cannot also be used as an additional mount".into());
+            }
         }
         let mut devices = Vec::<PathBuf>::new();
         let mut mountpoints = Vec::<String>::new();
