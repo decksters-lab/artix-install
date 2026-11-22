@@ -412,6 +412,68 @@ mod tests {
     }
 
     #[test]
+    fn manual_uefi_requires_root_and_efi_partitions() {
+        let mut config = InstallConfig::default();
+        config.disk.partitioning = Partitioning::Manual;
+        let issues = config.validate().unwrap_err();
+        assert!(issues.iter().any(|issue| issue.contains("root_partition")));
+        assert!(issues.iter().any(|issue| issue.contains("efi_partition")));
+        config.disk.root_partition = Some("/dev/nvme0n1p2".into());
+        config.disk.efi_partition = Some("/dev/nvme0n1p1".into());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn manual_swap_partition_requires_an_explicit_device() {
+        let mut config = InstallConfig::default();
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.root_partition = Some("/dev/sda2".into());
+        config.disk.efi_partition = Some("/dev/sda1".into());
+        config.disk.swap.mode = SwapMode::Partition;
+        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("swap_partition")));
+        config.disk.swap_partition = Some("/dev/sda3".into());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn automatic_mode_rejects_stale_manual_partition_paths() {
+        let mut config = InstallConfig::default();
+        config.disk.root_partition = Some("/dev/sda2".into());
+        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("calculates its own partition paths")));
+    }
+
+    #[test]
+    fn dual_boot_requires_uefi_and_preserved_efi() {
+        let mut config = InstallConfig::default();
+        config.disk.partitioning = Partitioning::DualBoot;
+        config.disk.root_partition = Some("/dev/sda3".into());
+        config.disk.efi_partition = Some("/dev/sda1".into());
+        config.disk.efi_policy = EfiPolicy::Format;
+        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("preserve")));
+        config.system.firmware = FirmwareMode::Bios;
+        config.disk.efi_policy = EfiPolicy::Preserve;
+        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("UEFI")));
+        config.system.firmware = FirmwareMode::Uefi;
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn additional_mounts_are_manual_only() {
+        let mut config = InstallConfig::default();
+        config.disk.additional_mounts.push(MountConfig {
+            device: "/dev/sda4".into(),
+            mountpoint: "/home".into(),
+            filesystem: Filesystem::Ext4,
+            format: false,
+        });
+        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("manual partitioning")));
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.root_partition = Some("/dev/sda2".into());
+        config.disk.efi_partition = Some("/dev/sda1".into());
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
     fn shipped_profiles_parse_and_validate() {
         for profile in [
             include_str!("../configs/minimal-dinit.toml"),
