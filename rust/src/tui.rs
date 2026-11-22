@@ -16,10 +16,11 @@ use ratatui::{
 };
 
 use crate::{
-    app::{App, SETTING_COUNT},
+    app::{App, PartitionRole, SETTING_COUNT},
     config::InstallConfig,
     discovery::{format_bytes, HardwareSnapshot},
     plan,
+    partition,
 };
 
 type AppTerminal = Terminal<CrosstermBackend<Stdout>>;
@@ -58,6 +59,20 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
         terminal.draw(|frame| render(frame, app))?;
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Press { continue; }
+            if app.show_storage {
+                match key.code {
+                    KeyCode::Char('q') => break,
+                    KeyCode::Esc | KeyCode::Backspace | KeyCode::Char('m') => app.toggle_storage(),
+                    KeyCode::Up | KeyCode::Char('k') => app.move_partition_selection(-1),
+                    KeyCode::Down | KeyCode::Char('j') => app.move_partition_selection(1),
+                    KeyCode::Char('r') => app.assign_partition(PartitionRole::Root),
+                    KeyCode::Char('e') => app.assign_partition(PartitionRole::Efi),
+                    KeyCode::Char('w') => app.assign_partition(PartitionRole::Swap),
+                    KeyCode::Char('p') => app.show_plan = !app.show_plan,
+                    _ => {}
+                }
+                continue;
+            }
             if app.show_disks {
                 match key.code {
                     KeyCode::Char('q') => break,
@@ -65,6 +80,10 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                     KeyCode::Up | KeyCode::Char('k') => app.move_disk_selection(-1),
                     KeyCode::Down | KeyCode::Char('j') => app.move_disk_selection(1),
                     KeyCode::Enter => app.select_disk(),
+                    KeyCode::Char('m') => {
+                        app.toggle_disks();
+                        app.toggle_storage();
+                    }
                     _ => {}
                 }
                 continue;
@@ -72,6 +91,7 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => break,
                 KeyCode::Char('d') => app.toggle_disks(),
+                KeyCode::Char('m') => app.toggle_storage(),
                 KeyCode::Up | KeyCode::Char('k') => app.move_selection(-1),
                 KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
                 KeyCode::Left | KeyCode::Char('h') => app.adjust(-1),
@@ -95,6 +115,10 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
 }
 
 fn render(frame: &mut Frame<'_>, app: &App) {
+    if app.show_storage {
+        render_storage(frame, app);
+        return;
+    }
     if app.show_disks {
         render_disks(frame, app);
         return;
@@ -175,6 +199,129 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             keycap("S"), Span::raw(" Save  "),
             keycap("?"), Span::raw(" Help  "),
             keycap("Q"), Span::raw(" Quit"),
+        ]),
+        Line::from(Span::styled(app.status.as_str(), Style::default().fg(Color::Yellow))),
+    ];
+    frame.render_widget(Paragraph::new(footer).block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray))), outer[2]);
+}
+
+fn render_storage(frame: &mut Frame<'_>, app: &App) {
+    let outer = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(4), Constraint::Min(10), Constraint::Length(4)])
+        .split(frame.area());
+    let header = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled(" ARTIX ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(" PARTITION MANAGER", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   /   PLAN ONLY — NO DISK WRITES", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(Span::styled("Automatic layout preview, or assign existing partitions in Manual / Dual-boot mode.", Style::default().fg(Color::Gray))),
+    ]).block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Cyan)));
+    frame.render_widget(header, outer[0]);
+
+    let body = Layout::default().direction(Direction::Horizontal)
+        .constraints([Constraint::Length(42), Constraint::Min(30)])
+        .split(outer[1]);
+    let partitions = app.target_partitions();
+    let items: Vec<ListItem<'_>> = if app.config.disk.target.is_none() {
+        vec![ListItem::new(" Choose a target disk first (D)")]
+    } else if partitions.is_empty() {
+        vec![ListItem::new(" No partitions detected on the selected disk")]
+    } else {
+        partitions.iter().map(|part| {
+            let role = app.partition_role(&part.path).unwrap_or("");
+            let prefix = if role.is_empty() { "[ ]" } else { "[x]" };
+            let suffix = if role.is_empty() { String::new() } else { format!(" <{role}>") };
+            let fs = part.filesystem.as_deref().unwrap_or("unknown");
+            ListItem::new(format!(
+                " {prefix} {}  {}  {}{}",
+                part.name,
+                format_bytes(part.size_bytes),
+                fs,
+                suffix
+            ))
+        }).collect()
+    };
+    let title = match app.config.disk.partitioning {
+        crate::config::Partitioning::Automatic => " Detected partitions ",
+        crate::config::Partitioning::Manual => " Manual assignments ",
+        crate::config::Partitioning::DualBoot => " Dual-boot assignments ",
+    };
+    let list = List::new(items)
+        .block(Block::default().title(title).borders(Borders::ALL))
+        .highlight_style(Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .highlight_symbol("▸ ");
+    let mut state = ratatui::widgets::ListState::default();
+    if !partitions.is_empty() {
+        state.select(Some(app.selected_partition.min(partitions.len() - 1)));
+    }
+    frame.render_stateful_widget(list, body[0], &mut state);
+
+    let detail_block = Block::default().title(" Layout / role preview ").borders(Borders::ALL).border_style(Style::default().fg(Color::Blue));
+    let detail = if app.show_plan {
+        Paragraph::new(plan::format_plan(&app.config)).block(detail_block).wrap(Wrap { trim: true })
+    } else {
+        let target = app.config.disk.target.as_ref().map_or("NOT SELECTED".to_owned(), |p| p.display().to_string());
+        let mut lines = vec![
+            Line::from(Span::styled("CURRENT STORAGE CONFIGURATION", Style::default().add_modifier(Modifier::BOLD))),
+            Line::from(format!("Target: {target}")),
+            Line::from(format!("Mode: {}", app.config.disk.partitioning)),
+            Line::from(format!("Firmware: {}", app.config.system.firmware)),
+            Line::from(format!("Root filesystem: {}", app.config.disk.root_filesystem)),
+            Line::from(format!("LUKS2: {}", if app.config.disk.encryption { "requested" } else { "off" })),
+            Line::from(format!("Swap: {} ({} GiB)", app.config.disk.swap.mode, app.config.disk.swap.size_gib)),
+            Line::from(format!("Btrfs layout: {}", app.config.disk.btrfs.layout)),
+            Line::from(""),
+            Line::from(Span::styled("ASSIGNED PARTITIONS", Style::default().add_modifier(Modifier::BOLD))),
+            Line::from(format!("Root: {}", app.config.disk.root_partition.as_ref().map_or("not assigned".into(), |p| p.display().to_string()))),
+            Line::from(format!("EFI: {}", app.config.disk.efi_partition.as_ref().map_or("not assigned".into(), |p| p.display().to_string()))),
+            Line::from(format!("Swap: {}", app.config.disk.swap_partition.as_ref().map_or("not assigned".into(), |p| p.display().to_string()))),
+            Line::from(""),
+        ];
+        if let Some(part) = partitions.get(app.selected_partition) {
+            lines.push(Line::from(Span::styled(format!("SELECTED: {}", part.path.display()), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
+            lines.push(Line::from(format!("Filesystem: {}", part.filesystem.as_deref().unwrap_or("unknown"))));
+            lines.push(Line::from(format!("Label: {}", part.label.as_deref().unwrap_or("none"))));
+            lines.push(Line::from(format!("Mounted: {}", if part.mounted_at.is_empty() { "no".into() } else { part.mounted_at.join(", ") })));
+            lines.push(Line::from(format!("Active swap: {}   Read-only: {}   Holders: {}", part.active_swap, part.read_only, part.has_holders)));
+            if !part.safety_checks_complete {
+                lines.push(Line::from(Span::styled("Safety metadata incomplete — assignment blocked.", Style::default().fg(Color::Red))));
+            }
+        } else if partitions.is_empty() {
+            lines.push(Line::from("No target disk or partition table is available."));
+        }
+        lines.push(Line::from(""));
+        match app.config.disk.partitioning {
+            crate::config::Partitioning::Automatic => {
+                lines.push(Line::from("Automatic mode: layout is generated from firmware, root filesystem, swap and encryption settings."));
+                lines.push(Line::from("The new ESP in an automatic UEFI layout is formatted as FAT32."));
+            }
+            crate::config::Partitioning::Manual => {
+                lines.push(Line::from("Manual mode assigns partitions that already exist."));
+                lines.push(Line::from("Create/resize partitions outside this prototype, then assign them here."));
+                lines.push(Line::from("R = root   E = EFI   W = swap (when swap mode is Partition)"));
+                lines.push(Line::from(format!("EFI policy: {}. Preserve is safest for existing boot files.", app.config.disk.efi_policy)));
+            }
+            crate::config::Partitioning::DualBoot => {
+                lines.push(Line::from("Dual-boot preserves the existing partition table."));
+                lines.push(Line::from("Only the selected Artix root partition is planned for formatting."));
+                lines.push(Line::from("The selected EFI partition is ALWAYS preserved; it is never formatted."));
+                lines.push(Line::from("R = root   E = existing EFI"));
+            }
+        }
+        Paragraph::new(lines).block(detail_block).wrap(Wrap { trim: true })
+    };
+    frame.render_widget(detail, body[1]);
+
+    let footer = vec![
+        Line::from(vec![
+            keycap("↑/↓"), Span::raw(" Select partition  "),
+            keycap("R"), Span::raw(" Root  "),
+            keycap("E"), Span::raw(" EFI  "),
+            keycap("W"), Span::raw(" Swap  "),
+            keycap("P"), Span::raw(" Preview  "),
+            keycap("M/Esc"), Span::raw(" Back"),
         ]),
         Line::from(Span::styled(app.status.as_str(), Style::default().fg(Color::Yellow))),
     ];
@@ -283,6 +430,7 @@ fn help_text() -> String {
         "Left / Right Change a value, or move a multi-select cursor",
         "Space / Enter Toggle a desktop or kernel choice",
         "D            Open read-only hardware and disk inventory",
+        "M            Open partition manager and assign existing partitions",
         "P            Toggle installation plan preview",
         "S            Save profile as ./artix-setup.toml",
         "?            Toggle this help screen",
