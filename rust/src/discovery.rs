@@ -488,7 +488,7 @@ mod tests {
         let disk = BlockDevice {
             name: "sda".into(), path: "/dev/sda".into(), size_bytes: 1,
             model: None, vendor: None, serial: None, wwid: None, removable: false,
-            read_only: false, mounted_at: vec![], active_swap: false, has_holders: false,
+            read_only: false, mounted_at: vec![], active_swap: false, safety_checks_complete: true, has_holders: false,
             partitions: vec![BlockPartition {
                 name: "sda2".into(), path: "/dev/sda2".into(), size_bytes: 1,
                 filesystem: None, label: None, mounted_at: vec![], active_swap: true, read_only: false, safety_checks_complete: true,
@@ -497,6 +497,18 @@ mod tests {
         assert!(disk.is_busy());
         assert!(!disk.can_be_selected());
         assert_eq!(disk.selection_block_reason(), Some("device or one of its partitions is active swap"));
+    }
+
+    #[test]
+    fn incomplete_safety_data_fails_closed() {
+        let disk = BlockDevice {
+            name: "sdb".into(), path: "/dev/sdb".into(), size_bytes: 1,
+            model: None, vendor: None, serial: None, wwid: None, removable: false,
+            read_only: false, mounted_at: vec![], active_swap: false, safety_checks_complete: false,
+            has_holders: false, partitions: vec![],
+        };
+        assert!(!disk.can_be_selected());
+        assert_eq!(disk.selection_block_reason(), Some("could not verify device, mount and active-swap state"));
     }
 
     #[test]
