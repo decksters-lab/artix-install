@@ -441,7 +441,7 @@ mod tests {
         let disk = BlockDevice {
             name: "sda".into(), path: "/dev/sda".into(), size_bytes: 1,
             model: None, vendor: None, serial: None, wwid: None, removable: false,
-            read_only: false, mounted_at: vec![], has_holders: false,
+            read_only: false, mounted_at: vec![], active_swap: false, has_holders: false,
             partitions: vec![BlockPartition {
                 name: "sda1".into(), path: "/dev/sda1".into(), size_bytes: 1,
                 filesystem: Some("vfat".into()), label: None, mounted_at: vec!["/boot".into()], active_swap: false,
@@ -453,11 +453,33 @@ mod tests {
     }
 
     #[test]
+    fn proc_swaps_parser_finds_active_swap_paths() {
+        let input = "Filename Type Size Used Priority\n/dev/sda3 partition 8388604 0 -2\n";
+        assert_eq!(parse_proc_swaps(input), vec![PathBuf::from("/dev/sda3")]);
+    }
+
+    #[test]
+    fn active_swap_partition_blocks_its_parent_disk() {
+        let disk = BlockDevice {
+            name: "sda".into(), path: "/dev/sda".into(), size_bytes: 1,
+            model: None, vendor: None, serial: None, wwid: None, removable: false,
+            read_only: false, mounted_at: vec![], active_swap: false, has_holders: false,
+            partitions: vec![BlockPartition {
+                name: "sda2".into(), path: "/dev/sda2".into(), size_bytes: 1,
+                filesystem: None, label: None, mounted_at: vec![], active_swap: true,
+            }],
+        };
+        assert!(disk.is_busy());
+        assert!(!disk.can_be_selected());
+        assert_eq!(disk.selection_block_reason(), Some("device or one of its partitions is active swap"));
+    }
+
+    #[test]
     fn mounted_or_readonly_disks_are_never_selectable() {
         let mut disk = BlockDevice {
             name: "nvme0n1".into(), path: "/dev/nvme0n1".into(), size_bytes: 1,
             model: None, vendor: None, serial: None, wwid: None, removable: false,
-            read_only: true, mounted_at: vec![], has_holders: false, partitions: vec![],
+            read_only: true, mounted_at: vec![], active_swap: false, has_holders: false, partitions: vec![],
         };
         assert!(!disk.can_be_selected());
         disk.read_only = false;
