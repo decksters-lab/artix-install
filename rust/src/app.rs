@@ -396,7 +396,7 @@ impl App {
             3 => "Root filesystems supported by the shell installer: ext4, Btrfs, XFS, F2FS, JFS and NILFS2.",
             4 => "Choose none, zram, swap partition, swapfile or both. zswap is modeled separately for real swap devices.",
             5 => "LUKS2 intent only. Passphrases are never saved in profiles or logs.",
-            6 => "Multi-select desktops and window managers. Left/Right moves the cursor; Space toggles. Optional packages need live repo checks.",
+            6 => "Multi-select desktops and window managers. Cosmalia follows the upstream Dinit session: cosmic-comp --no-xwayland and Noctalia; no separate cosmic-osd package is listed upstream.",
             7 => "Multi-select kernels. Standard linux remains selected as the fallback. Left/Right moves the cursor; Space toggles.",
             8 => "Intel, AMD or Other / VM CPU choice for microcode selection.",
             9 => "Intel, AMD, NVIDIA, hybrid Intel+NVIDIA or VM/basic Mesa graphics choice.",
