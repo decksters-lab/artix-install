@@ -215,8 +215,22 @@ impl App {
             2 => {
                 self.config.disk.partitioning = cycle(self.config.disk.partitioning,
                     &[Partitioning::Automatic, Partitioning::Manual, Partitioning::DualBoot], delta);
-                if self.config.disk.partitioning == Partitioning::DualBoot {
-                    self.config.disk.efi_policy = EfiPolicy::Preserve;
+                match self.config.disk.partitioning {
+                    Partitioning::Automatic => {
+                        self.config.disk.efi_partition = None;
+                        self.config.disk.root_partition = None;
+                        self.config.disk.swap_partition = None;
+                        self.config.disk.additional_mounts.clear();
+                    }
+                    Partitioning::DualBoot => {
+                        self.config.disk.efi_policy = EfiPolicy::Preserve;
+                        self.config.disk.swap_partition = None;
+                        if self.config.disk.swap.mode == SwapMode::Partition {
+                            self.config.disk.swap.mode = SwapMode::Zram;
+                        }
+                        self.config.disk.additional_mounts.clear();
+                    }
+                    Partitioning::Manual => {}
                 }
             }
             3 => self.config.disk.root_filesystem = cycle(self.config.disk.root_filesystem,
