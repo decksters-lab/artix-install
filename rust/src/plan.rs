@@ -89,7 +89,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     items.push(PlanItem { title: "Install Artix base system".into(),
         detail: format!("Future bootstrap module: install base system and configure {} with init-specific package names and service handling.", config.system.init_system), risk });
     items.push(PlanItem { title: "Configure users and system defaults".into(),
-        detail: format!("Hostname {}, user {}, locale {}, timezone {}, keyboard {}; configure {} and {}.", config.system.hostname, config.system.username, config.system.locale, config.system.timezone, config.system.keyboard_layout, config.system.privilege_escalation, config.system.user_services), risk });
+        detail: format!("Hostname {}, user {}, locale {}, timezone {}, keyboard {}; configure {}. User-service handling: {}.", config.system.hostname, config.system.username, config.system.locale, config.system.timezone, config.system.keyboard_layout, config.system.privilege_escalation, user_services_detail(config)), risk });
     items.push(PlanItem { title: "Install kernels, graphics and desktop packages".into(),
         detail: format!("Kernels: {}; CPU: {}; GPU: {}; desktops: {}. Optional package availability must be checked against live repositories.", config.software.kernels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "), config.software.cpu_vendor, config.software.gpu, list_desktops(config)), risk });
     items.push(PlanItem { title: "Configure networking, multilib and bootloader".into(),
@@ -97,6 +97,19 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     items.push(PlanItem { title: "Verify boot and installed services".into(),
         detail: "Future verification module: validate fstab, initramfs, kernel command line, bootloader entries, display manager and enabled services before offering reboot.".into(), risk });
     items
+}
+
+fn user_services_detail(config: &InstallConfig) -> &'static str {
+    use crate::config::{InitSystem, UserServices};
+    match (config.system.init_system, config.system.user_services) {
+        (_, UserServices::None) => "not requested",
+        (InitSystem::Dinit, UserServices::Userspawn) => "use the Dinit userspawn integration; verify package availability before installation",
+        (InitSystem::Dinit, UserServices::Turnstile) => "use the Dinit-specific Turnstile integration; verify package availability before installation",
+        (InitSystem::OpenRc, UserServices::Native) => "use OpenRC native per-user service support; verify the installed OpenRC version and configuration",
+        (InitSystem::Runit, UserServices::Userspawn) => "use the runit userspawn integration; verify package availability before installation",
+        (InitSystem::S6, UserServices::Manual) => "manual user-managed setup; do not assume Turnstile or configure it automatically",
+        _ => "invalid init/user-service combination; configuration validation must block this plan",
+    }
 }
 
 fn list_desktops(config: &InstallConfig) -> String {
@@ -125,6 +138,16 @@ mod tests {
         assert!(output.contains("[DESTRUCTIVE — NOT EXECUTABLE]"));
         assert!(output.contains("No disk operation is permitted"));
     }
+    #[test]
+    fn s6_plan_leaves_user_services_to_the_user() {
+        let mut config = InstallConfig::default();
+        config.system.init_system = crate::config::InitSystem::S6;
+        config.system.user_services = crate::config::UserServices::Manual;
+        let output = format_plan(&config);
+        assert!(output.contains("manual user-managed setup"));
+        assert!(output.contains("do not assume Turnstile"));
+    }
+
     #[test]
     fn desktop_choices_appear_in_the_plan() {
         let mut config = InstallConfig::default();
