@@ -8,6 +8,13 @@ struct PlanItem { title: String, detail: String, risk: Risk }
 pub fn format_plan(config: &InstallConfig) -> String {
     let mut output = String::from("ARTIX SETUP — INSTALLATION PLAN\n================================\n\n");
     output.push_str("PLANNING-ONLY PROTOTYPE\nThis preview does not execute commands, partition disks, format filesystems,\nopen LUKS mappings, mount filesystems, install packages, or change the host.\n\n");
+    if let Err(issues) = config.validate() {
+        output.push_str("CONFIGURATION INVALID — INSTALL STEPS BLOCKED\n---------------------------------------------\n");
+        for issue in issues {
+            output.push_str(&format!("- {issue}\n"));
+        }
+        output.push('\n');
+    }
     for (index, item) in build_items(config).iter().enumerate() {
         let label = match item.risk {
             Risk::Info => "INFO", Risk::Review => "REVIEW",
