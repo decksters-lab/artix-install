@@ -82,7 +82,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
             } else {
                 let detail = match config.disk.partitioning {
                     Partitioning::Automatic => format!("Would create a fresh partition layout on {} using {} root. This overwrites the target device and requires typed confirmation. EFI policy: {}.", target.display(), config.disk.root_filesystem, config.disk.efi_policy),
-                    Partitioning::Manual => format!("Would guide partition selection for {} and assign root, EFI and optional extra mountpoints. Formatting is opt-in and separately reviewed.", target.display()),
+                    Partitioning::Manual => format!("Would assign existing root, EFI and optional extra mountpoint partitions on {}. The selected root partition is formatted as {}; EFI follows the explicit preserve/format policy, and each additional mount has its own format flag.", target.display(), config.disk.root_filesystem),
                     Partitioning::DualBoot => format!("Would preserve the partition table on {} and use root {} with existing EFI {}. EFI must never be formatted.", target.display(), config.disk.root_partition.as_ref().map_or("unset".into(), |p| p.display().to_string()), config.disk.efi_partition.as_ref().map_or("unset".into(), |p| p.display().to_string())),
                 };
                 items.push(PlanItem { title: "Partition and prepare storage".into(), detail, risk: Risk::Destructive });
@@ -153,6 +153,17 @@ mod tests {
         let output = format_plan(&config);
         assert!(output.contains("[DESTRUCTIVE — NOT EXECUTABLE]"));
         assert!(output.contains("No disk operation is permitted"));
+    }
+
+    #[test]
+    fn manual_plan_explicitly_discloses_root_formatting() {
+        let mut config = InstallConfig::default();
+        config.disk.target = Some(PathBuf::from("/dev/disk/by-id/example"));
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.root_partition = Some(PathBuf::from("/dev/sda2"));
+        config.disk.efi_partition = Some(PathBuf::from("/dev/sda1"));
+        let output = format_plan(&config);
+        assert!(output.contains("The selected root partition is formatted as ext4"));
     }
 
     #[test]
