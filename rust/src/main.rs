@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod discovery;
 mod plan;
 mod tui;
 
@@ -21,6 +22,9 @@ struct Args {
     /// Validate the configuration and exit.
     #[arg(long)]
     validate: bool,
+    /// Print read-only hardware and block-device discovery, then exit.
+    #[arg(long)]
+    hardware: bool,
     /// Write the default configuration to FILE and exit.
     #[arg(long, value_name = "FILE")]
     write_default: Option<PathBuf>,
@@ -38,6 +42,10 @@ fn main() -> ExitCode {
 
 fn run() -> Result<()> {
     let args = Args::parse();
+    if args.hardware {
+        println!("{}", discovery::discover().report());
+        return Ok(());
+    }
     if let Some(path) = args.write_default {
         let contents = toml::to_string_pretty(&InstallConfig::default())
             .context("serialize default configuration")?;
@@ -72,5 +80,6 @@ fn run() -> Result<()> {
     if !std::io::stdin().is_terminal() {
         bail!("interactive mode needs a terminal; use --plan or --validate in scripts");
     }
-    tui::run(config)
+    let hardware = discovery::discover();
+    tui::run(config, hardware)
 }
