@@ -422,8 +422,8 @@ mod tests {
         config.disk.partitioning = Partitioning::Manual;
         let plan = build_partition_plan(&config);
         assert!(!plan.is_reviewable());
-        assert!(plan.blocked.iter().any(|item| item.contains("root partition")));
-        assert!(plan.blocked.iter().any(|item| item.contains("EFI partition")));
+        assert!(plan.blocked.iter().any(|item| item.contains("root_partition")));
+        assert!(plan.blocked.iter().any(|item| item.contains("efi_partition")));
     }
 
     #[test]
@@ -469,7 +469,7 @@ mod tests {
         config.disk.swap.mode = SwapMode::Swapfile;
         let text = build_partition_plan(&config).render();
         assert!(text.contains("Create Btrfs subvolume @swap"));
-        assert!(text.contains("NOCOW on /swap/swapfile"));
+        assert!(text.contains("at /swap/swapfile; set NOCOW (+C) before allocation"));
     }
 
     #[test]
