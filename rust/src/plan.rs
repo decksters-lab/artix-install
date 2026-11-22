@@ -106,6 +106,7 @@ fn user_services_detail(config: &InstallConfig) -> &'static str {
         (InitSystem::Dinit, UserServices::Userspawn) => "use the Dinit userspawn integration; verify package availability before installation",
         (InitSystem::Dinit, UserServices::Turnstile) => "use the Dinit-specific Turnstile integration; verify package availability before installation",
         (InitSystem::OpenRc, UserServices::Native) => "use OpenRC native per-user service support; verify the installed OpenRC version and configuration",
+        (InitSystem::OpenRc, UserServices::Turnstile) => "use the OpenRC-specific Turnstile integration; verify package availability before installation",
         (InitSystem::Runit, UserServices::Userspawn) => "use the runit userspawn integration; verify package availability before installation",
         (InitSystem::S6, UserServices::Manual) => "manual user-managed setup; do not assume Turnstile or configure it automatically",
         _ => "invalid init/user-service combination; configuration validation must block this plan",
