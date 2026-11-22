@@ -240,7 +240,7 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
         for partition in &disk.partitions {
             lines.push(Line::from(format!("  {}  {}", partition.path.display(), format_bytes(partition.size_bytes))));
             lines.push(Line::from(format!("    FS: {}   Label: {}", partition.filesystem.as_deref().unwrap_or("unknown"), partition.label.as_deref().unwrap_or("none"))));
-            lines.push(Line::from(format!("    Mounted: {}   Active swap: {}", if partition.mounted_at.is_empty() { "no".into() } else { partition.mounted_at.join(", ") }, partition.active_swap)));
+            lines.push(Line::from(format!("    Mounted: {}   Active swap: {}   Holders: {}", if partition.mounted_at.is_empty() { "no".into() } else { partition.mounted_at.join(", ") }, partition.active_swap, partition.has_holders)));
         }
         lines.push(Line::from(""));
         if let Some(reason) = disk.selection_block_reason() {
