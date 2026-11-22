@@ -316,15 +316,15 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
         let device_mounts = mountpoints.get(&major_minor).cloned().unwrap_or_default();
         let ro_value = read_text(&class_path.join("ro"));
         let partition_read_only = ro_value.as_deref() == Some("1");
+        let size_sectors = read_text(&class_path.join("size"))
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        let size_verified = size_sectors > 0;
         let device_state_verified = mounts_verified
             && swaps_verified
             && !major_minor.is_empty()
             && ro_value.is_some()
             && size_verified;
-        let size_sectors = read_text(&class_path.join("size"))
-            .and_then(|value| value.parse::<u64>().ok())
-            .unwrap_or(0);
-        let size_verified = size_sectors > 0;
         let udev = read_udev_properties(&major_minor);
         let filesystem = udev.get("ID_FS_TYPE").cloned();
         let label = udev.get("ID_FS_LABEL").cloned().or_else(|| udev.get("ID_FS_LABEL_ENC").cloned());
