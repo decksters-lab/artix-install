@@ -453,8 +453,13 @@ fn read_udev_properties(major_minor: &str) -> HashMap<String, String> {
     if major_minor.is_empty() { return HashMap::new(); }
     let path = PathBuf::from("/run/udev/data").join(format!("b{major_minor}"));
     let Ok(contents) = fs::read_to_string(path) else { return HashMap::new(); };
+    parse_udev_properties(&contents)
+}
+
+fn parse_udev_properties(contents: &str) -> HashMap<String, String> {
     contents.lines().filter_map(|line| {
-        let (key, value) = line.split_once('=')?;
+        let (raw_key, value) = line.split_once('=')?;
+        let key = raw_key.strip_prefix("E:").unwrap_or(raw_key);
         if key.starts_with("ID_FS_") { Some((key.to_owned(), value.to_owned())) } else { None }
     }).collect()
 }
@@ -462,6 +467,15 @@ fn read_udev_properties(major_minor: &str) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn udev_filesystem_properties_accept_environment_prefix() {
+        let properties = parse_udev_properties("E:ID_FS_TYPE=btrfs\nE:ID_FS_LABEL=ArtixRoot\nE:ID_FS_UUID=abcd\nS:disk/by-label/ArtixRoot");
+        assert_eq!(properties.get("ID_FS_TYPE").map(String::as_str), Some("btrfs"));
+        assert_eq!(properties.get("ID_FS_LABEL").map(String::as_str), Some("ArtixRoot"));
+        assert_eq!(properties.get("ID_FS_UUID").map(String::as_str), Some("abcd"));
+        assert_eq!(properties.len(), 3);
+    }
 
     #[test]
     fn emmc_boot_and_rpmb_regions_are_not_offered_as_disks() {
