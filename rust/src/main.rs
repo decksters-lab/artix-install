@@ -64,6 +64,19 @@ fn run() -> Result<()> {
         }
         None => InstallConfig::default(),
     };
+    if args.plan {
+        let mut report = String::new();
+        if let Err(issues) = config.validate() {
+            report.push_str("CONFIGURATION VALIDATION ISSUES\n--------------------------------\n");
+            for issue in issues {
+                report.push_str(&format!("- {issue}\n"));
+            }
+            report.push('\n');
+        }
+        report.push_str(&plan::format_plan(&config));
+        print!("{report}");
+        return Ok(());
+    }
     config.validate().map_err(|issues| {
         anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
     })?;
@@ -72,10 +85,6 @@ fn run() -> Result<()> {
         if config.disk.target.is_none() {
             println!("No target disk is configured; disk operations remain blocked.");
         }
-        return Ok(());
-    }
-    if args.plan {
-        print!("{}", plan::format_plan(&config));
         return Ok(());
     }
     if !std::io::stdin().is_terminal() {
