@@ -1,4 +1,4 @@
-use crate::config::{InstallConfig, Partitioning};
+use crate::{config::{InstallConfig, Partitioning}, partition};
 
 #[derive(Debug, Clone, Copy)]
 enum Risk { Info, Review, Destructive, Blocked }
@@ -32,6 +32,8 @@ pub fn format_plan(config: &InstallConfig) -> String {
     output.push_str(&format!("Privilege:         {}\n", config.system.privilege_escalation));
     output.push_str(&format!("User services:     {}\n", config.system.user_services));
     output.push_str(&format!("Multilib:          {}\n", config.software.multilib));
+    output.push_str("\nPARTITION LAYOUT PREVIEW\n------------------------\n");
+    output.push_str(&partition::build_partition_plan(config).render());
     output.push_str("\nNo disk operation is permitted by this prototype.\n");
     output
 }
