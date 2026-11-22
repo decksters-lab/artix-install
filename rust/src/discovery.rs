@@ -46,6 +46,7 @@ pub struct BlockDevice {
     pub read_only: bool,
     pub mounted_at: Vec<String>,
     pub active_swap: bool,
+    pub safety_checks_complete: bool,
     pub has_holders: bool,
     pub partitions: Vec<BlockPartition>,
 }
@@ -59,6 +60,8 @@ pub struct BlockPartition {
     pub label: Option<String>,
     pub mounted_at: Vec<String>,
     pub active_swap: bool,
+    pub read_only: bool,
+    pub safety_checks_complete: bool,
 }
 
 impl BlockDevice {
@@ -71,18 +74,26 @@ impl BlockDevice {
     }
 
     pub fn can_be_selected(&self) -> bool {
-        !self.is_busy() && !self.read_only && !self.has_holders
+        self.safety_checks_complete
+            && self.partitions.iter().all(|partition| partition.safety_checks_complete && !partition.read_only)
+            && !self.is_busy()
+            && !self.read_only
+            && !self.has_holders
     }
 
     pub fn selection_block_reason(&self) -> Option<&'static str> {
-        if !self.mounted_at.is_empty()
+        if !self.safety_checks_complete
+            || self.partitions.iter().any(|partition| !partition.safety_checks_complete)
+        {
+            Some("could not verify device, mount and active-swap state")
+        } else if !self.mounted_at.is_empty()
             || self.partitions.iter().any(|partition| !partition.mounted_at.is_empty())
         {
             Some("device or one of its partitions is mounted")
         } else if self.active_swap || self.partitions.iter().any(|partition| partition.active_swap) {
             Some("device or one of its partitions is active swap")
-        } else if self.read_only {
-            Some("device is read-only")
+        } else if self.read_only || self.partitions.iter().any(|partition| partition.read_only) {
+            Some("device or one of its partitions is read-only")
         } else if self.has_holders {
             Some("device has active holders (for example device-mapper or RAID)")
         } else {
@@ -282,8 +293,8 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
             return Vec::new();
         }
     };
-    let mountpoints = read_mountpoints(warnings);
-    let active_swaps = read_active_swap_names(warnings);
+    let (mountpoints, mounts_verified) = read_mountpoints(warnings);
+    let (active_swaps, swaps_verified) = read_active_swap_names(warnings);
     let mut raw = Vec::new();
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -296,6 +307,9 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
         } else { None };
         let major_minor = read_text(&class_path.join("dev")).unwrap_or_default();
         let device_mounts = mountpoints.get(&major_minor).cloned().unwrap_or_default();
+        let ro_value = read_text(&class_path.join("ro"));
+        let partition_read_only = ro_value.as_deref() == Some("1");
+        let device_state_verified = mounts_verified && swaps_verified && !major_minor.is_empty() && ro_value.is_some();
         let size_sectors = read_text(&class_path.join("size")).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
         let udev = read_udev_properties(&major_minor);
         let filesystem = udev.get("ID_FS_TYPE").cloned();
@@ -308,28 +322,33 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
             label,
             mounted_at: device_mounts.clone(),
             active_swap: active_swaps.contains(&name),
+            read_only: partition_read_only,
+            safety_checks_complete: device_state_verified,
         };
-        let holders = fs::read_dir(class_path.join("holders")).map(|mut it| it.next().is_some()).unwrap_or(false);
-        raw.push((name, parent_name, partition, holders, class_path));
+        let (holders, holders_verified) = match fs::read_dir(class_path.join("holders")) {
+            Ok(mut entries) => (entries.next().is_some(), true),
+            Err(_) => (false, false),
+        };
+        raw.push((name, parent_name, partition, holders, holders_verified, class_path));
     }
 
     let mut disks = Vec::new();
     let mut partitions_by_parent: HashMap<String, Vec<BlockPartition>> = HashMap::new();
-    for (name, parent, partition, _holders, _path) in &raw {
+    for (name, parent, partition, _holders, _holders_verified, _path) in &raw {
         if let Some(parent) = parent {
             partitions_by_parent.entry(parent.clone()).or_default().push(partition.clone());
         } else {
             let _ = name;
         }
     }
-    for (name, parent, partition, holders, class_path) in raw {
+    for (name, parent, partition, holders, holders_verified, class_path) in raw {
         if parent.is_some() { continue; }
         let model = read_text(&class_path.join("device/model"));
         let vendor = read_text(&class_path.join("device/vendor"));
         let serial = read_text(&class_path.join("device/serial"));
         let wwid = read_text(&class_path.join("wwid")).or_else(|| read_text(&class_path.join("device/wwid")));
         let removable = read_text(&class_path.join("removable")).as_deref() == Some("1");
-        let read_only = read_text(&class_path.join("ro")).as_deref() == Some("1");
+        let read_only = partition.read_only;
         let size_bytes = partition.size_bytes;
         let mut children = partitions_by_parent.remove(&name).unwrap_or_default();
         children.sort_by(|a, b| a.name.cmp(&b.name));
@@ -345,6 +364,7 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
             read_only,
             mounted_at: partition.mounted_at,
             active_swap: partition.active_swap,
+            safety_checks_complete: partition.safety_checks_complete && holders_verified,
             has_holders: holders,
             partitions: children,
         });
@@ -366,18 +386,21 @@ fn is_physical_disk_candidate(name: &str, class_path: &Path) -> bool {
         || name.starts_with("hd")
 }
 
-fn read_active_swap_names(warnings: &mut Vec<String>) -> std::collections::HashSet<String> {
+fn read_active_swap_names(
+    warnings: &mut Vec<String>,
+) -> (std::collections::HashSet<String>, bool) {
     let Ok(contents) = fs::read_to_string("/proc/swaps") else {
-        warnings.push("Active swap list is unavailable; swap-device safety checks may be incomplete.".into());
-        return std::collections::HashSet::new();
+        warnings.push("Active swap list is unavailable; disk selection is disabled for safety.".into());
+        return (std::collections::HashSet::new(), false);
     };
-    parse_proc_swaps(&contents)
+    let names = parse_proc_swaps(&contents)
         .into_iter()
         .filter_map(|path| {
             let resolved = fs::canonicalize(&path).unwrap_or(path);
             resolved.file_name().map(|name| name.to_string_lossy().into_owned())
         })
-        .collect()
+        .collect();
+    (names, true)
 }
 
 fn parse_proc_swaps(contents: &str) -> Vec<PathBuf> {
@@ -390,12 +413,14 @@ fn parse_proc_swaps(contents: &str) -> Vec<PathBuf> {
         .collect()
 }
 
-fn read_mountpoints(warnings: &mut Vec<String>) -> HashMap<String, Vec<String>> {
+fn read_mountpoints(
+    warnings: &mut Vec<String>,
+) -> (HashMap<String, Vec<String>>, bool) {
     let Ok(contents) = fs::read_to_string("/proc/self/mountinfo") else {
-        warnings.push("Mount table is unavailable; mounted-device safety checks may be incomplete.".into());
-        return HashMap::new();
+        warnings.push("Mount table is unavailable; disk selection is disabled for safety.".into());
+        return (HashMap::new(), false);
     };
-    parse_mountinfo(&contents)
+    (parse_mountinfo(&contents), true)
 }
 
 /// Return mounted paths keyed by the kernel major:minor device number.
@@ -441,10 +466,10 @@ mod tests {
         let disk = BlockDevice {
             name: "sda".into(), path: "/dev/sda".into(), size_bytes: 1,
             model: None, vendor: None, serial: None, wwid: None, removable: false,
-            read_only: false, mounted_at: vec![], active_swap: false, has_holders: false,
+            read_only: false, mounted_at: vec![], active_swap: false, safety_checks_complete: true, has_holders: false,
             partitions: vec![BlockPartition {
                 name: "sda1".into(), path: "/dev/sda1".into(), size_bytes: 1,
-                filesystem: Some("vfat".into()), label: None, mounted_at: vec!["/boot".into()], active_swap: false,
+                filesystem: Some("vfat".into()), label: None, mounted_at: vec!["/boot".into()], active_swap: false, read_only: false, safety_checks_complete: true,
             }],
         };
         assert!(disk.is_busy());
@@ -466,7 +491,7 @@ mod tests {
             read_only: false, mounted_at: vec![], active_swap: false, has_holders: false,
             partitions: vec![BlockPartition {
                 name: "sda2".into(), path: "/dev/sda2".into(), size_bytes: 1,
-                filesystem: None, label: None, mounted_at: vec![], active_swap: true,
+                filesystem: None, label: None, mounted_at: vec![], active_swap: true, read_only: false, safety_checks_complete: true,
             }],
         };
         assert!(disk.is_busy());
@@ -479,7 +504,7 @@ mod tests {
         let mut disk = BlockDevice {
             name: "nvme0n1".into(), path: "/dev/nvme0n1".into(), size_bytes: 1,
             model: None, vendor: None, serial: None, wwid: None, removable: false,
-            read_only: true, mounted_at: vec![], active_swap: false, has_holders: false, partitions: vec![],
+            read_only: true, mounted_at: vec![], active_swap: false, safety_checks_complete: true, has_holders: false, partitions: vec![],
         };
         assert!(!disk.can_be_selected());
         disk.read_only = false;
