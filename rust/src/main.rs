@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod discovery;
 mod plan;
+mod partition;
 mod tui;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
