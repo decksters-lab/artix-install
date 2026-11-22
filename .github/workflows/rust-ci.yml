@@ -27,3 +27,5 @@ jobs:
       - run: cargo check --all-targets
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all-targets
+      - run: cargo run -- --hardware
+      - run: cargo run -- --plan
