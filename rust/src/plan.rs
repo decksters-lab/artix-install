@@ -23,7 +23,18 @@ pub fn format_plan(config: &InstallConfig) -> String {
     output.push_str(&format!("Root filesystem:   {}\n", config.disk.root_filesystem));
     output.push_str(&format!("Encryption:        {}\n", if config.disk.encryption { "LUKS2 requested" } else { "off" }));
     output.push_str(&format!("Swap:              {} ({} GiB, zswap: {})\n", config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap));
-    output.push_str(&format!("EFI policy:        {}\n", config.disk.efi_policy));
+    let efi_policy = if config.disk.partitioning == Partitioning::Automatic
+        && config.system.firmware == crate::config::FirmwareMode::Uefi {
+        "automatic: newly created EFI partition is formatted"
+    } else if config.system.firmware == crate::config::FirmwareMode::Bios {
+        "not applicable (BIOS)"
+    } else {
+        match config.disk.efi_policy {
+            crate::config::EfiPolicy::Preserve => "preserve existing EFI partition",
+            crate::config::EfiPolicy::Format => "format selected EFI partition",
+        }
+    };
+    output.push_str(&format!("EFI policy:        {efi_policy}\n"));
     output.push_str(&format!("Bootloader:        {}\n", config.software.bootloader));
     output.push_str(&format!("Desktops / WMs:    {}\n", list_desktops(config)));
     output.push_str(&format!("Kernels:            {}\n", config.software.kernels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")));
@@ -41,7 +52,7 @@ pub fn format_plan(config: &InstallConfig) -> String {
 fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     let mut items = vec![
         PlanItem { title: "Inspect installer environment".into(),
-            detail: format!("Read-only discovery currently reports firmware {}, memory {}, CPU {}, {} GPU(s), {} network interface(s), and {} physical disk(s). Artix live-media and required-tool checks remain future work.", config.system.firmware, "see hardware report", config.software.cpu_vendor, "detected", "detected", "detected").into(), risk: Risk::Info },
+            detail: "Read-only hardware discovery is available via --hardware and the TUI. This plan does not embed a fresh hardware snapshot; Artix live-media and required-tool checks remain future work.".into(), risk: Risk::Info },
         PlanItem { title: "Discover block devices".into(),
             detail: "Read-only sysfs/procfs/udev discovery is available in the hardware report and TUI. Partition-table type, filesystem UUID binding, live-media ancestry and stable identity revalidation are still pending. Never choose the first disk automatically.".into(), risk: Risk::Info },
     ];
