@@ -308,12 +308,23 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
         let parent_name = if is_partition {
             canonical.parent().and_then(Path::file_name).map(|v| v.to_string_lossy().into_owned())
         } else { None };
+        if is_partition && parent_name.is_none() {
+            warnings.push(format!("Could not resolve the parent disk for {name}; partition excluded from disk selection."));
+            continue;
+        }
         let major_minor = read_text(&class_path.join("dev")).unwrap_or_default();
         let device_mounts = mountpoints.get(&major_minor).cloned().unwrap_or_default();
         let ro_value = read_text(&class_path.join("ro"));
         let partition_read_only = ro_value.as_deref() == Some("1");
-        let device_state_verified = mounts_verified && swaps_verified && !major_minor.is_empty() && ro_value.is_some();
-        let size_sectors = read_text(&class_path.join("size")).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let device_state_verified = mounts_verified
+            && swaps_verified
+            && !major_minor.is_empty()
+            && ro_value.is_some()
+            && size_verified;
+        let size_sectors = read_text(&class_path.join("size"))
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        let size_verified = size_sectors > 0;
         let udev = read_udev_properties(&major_minor);
         let filesystem = udev.get("ID_FS_TYPE").cloned();
         let label = udev.get("ID_FS_LABEL").cloned().or_else(|| udev.get("ID_FS_LABEL_ENC").cloned());
