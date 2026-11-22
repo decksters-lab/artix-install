@@ -473,6 +473,54 @@ mod tests {
     }
 
     #[test]
+    fn btrfs_operations_mount_top_level_before_subvolumes_and_root_before_efi() {
+        let mut config = with_target();
+        config.disk.root_filesystem = Filesystem::Btrfs;
+        let plan = build_partition_plan(&config);
+        let operations = plan.operations.join("\n");
+        let format_root = operations.find("Format root partition").unwrap();
+        let top_level = operations.find("temporarily as the top-level volume").unwrap();
+        let create_root_subvolume = operations.find("Create Btrfs subvolume @ for /").unwrap();
+        let mount_root = operations.find("mount subvolume @ as the root filesystem").unwrap();
+        let mount_efi = operations.find("Mount EFI partition").unwrap();
+        assert!(format_root < top_level);
+        assert!(top_level < create_root_subvolume);
+        assert!(create_root_subvolume < mount_root);
+        assert!(mount_root < mount_efi);
+    }
+
+    #[test]
+    fn manual_root_is_mounted_before_efi_and_additional_mountpoints() {
+        let mut config = with_target();
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.efi_partition = Some("/dev/nvme0n1p1".into());
+        config.disk.root_partition = Some("/dev/nvme0n1p2".into());
+        config.disk.additional_mounts.push(crate::config::MountConfig {
+            device: "/dev/nvme0n1p3".into(),
+            mountpoint: "/home".into(),
+            filesystem: Filesystem::Ext4,
+            format: true,
+        });
+        let operations = build_partition_plan(&config).operations.join("\n");
+        let root_mount = operations.find("Mount /dev/nvme0n1p2 at /").unwrap();
+        let efi_mount = operations.find("Mount EFI partition /dev/nvme0n1p1").unwrap();
+        let home_mount = operations.find("mount it at /home").unwrap();
+        assert!(root_mount < efi_mount);
+        assert!(efi_mount < home_mount);
+    }
+
+    #[test]
+    fn btrfs_flat_swapfile_uses_flat_root_path_and_nocow() {
+        let mut config = with_target();
+        config.disk.root_filesystem = Filesystem::Btrfs;
+        config.disk.btrfs.layout = BtrfsLayout::Flat;
+        config.disk.swap.mode = SwapMode::Swapfile;
+        let operations = build_partition_plan(&config).operations.join("\n");
+        assert!(operations.contains("at /swapfile; set NOCOW (+C) before allocation"));
+        assert!(!operations.contains("Create Btrfs subvolume @swap"));
+    }
+
+    #[test]
     fn encrypted_root_formats_the_luks_mapping_not_the_raw_partition() {
         let mut config = with_target();
         config.disk.encryption = true;
