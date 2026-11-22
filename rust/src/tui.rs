@@ -194,6 +194,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             keycap("↑/↓"), Span::raw(" Navigate  "),
             keycap("←/→"), Span::raw(" Change / cursor  "),
             keycap("D"), Span::raw(" Disks  "),
+            keycap("M"), Span::raw(" Partitions  "),
             keycap("P"), Span::raw(" Plan  "),
             keycap("S"), Span::raw(" Save  "),
             keycap("?"), Span::raw(" Help  "),
