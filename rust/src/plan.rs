@@ -91,7 +91,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     items.push(PlanItem { title: "Configure users and system defaults".into(),
         detail: format!("Hostname {}, user {}, locale {}, timezone {}, keyboard {}; configure {}. User-service handling: {}.", config.system.hostname, config.system.username, config.system.locale, config.system.timezone, config.system.keyboard_layout, config.system.privilege_escalation, user_services_detail(config)), risk });
     items.push(PlanItem { title: "Install kernels, graphics and desktop packages".into(),
-        detail: format!("Kernels: {}; CPU: {}; GPU: {}; desktops: {}. Optional package availability must be checked against live repositories.", config.software.kernels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "), config.software.cpu_vendor, config.software.gpu, list_desktops(config)), risk });
+        detail: format!("Kernels: {}; CPU: {}; GPU: {}; desktops: {}. {} Optional package availability must be checked against live repositories.", config.software.kernels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "), config.software.cpu_vendor, config.software.gpu, list_desktops(config), desktop_details(config)), risk });
     items.push(PlanItem { title: "Configure networking, multilib and bootloader".into(),
         detail: format!("Network: {}; multilib: {}; bootloader: {}. Firmware compatibility and init-specific service activation must be validated.", config.software.network, config.software.multilib, config.software.bootloader), risk });
     items.push(PlanItem { title: "Verify boot and installed services".into(),
@@ -110,6 +110,15 @@ fn user_services_detail(config: &InstallConfig) -> &'static str {
         (InitSystem::Runit, UserServices::Userspawn) => "use the runit userspawn integration; verify package availability before installation",
         (InitSystem::S6, UserServices::Manual) => "manual user-managed setup; do not assume Turnstile or configure it automatically",
         _ => "invalid init/user-service combination; configuration validation must block this plan",
+    }
+}
+
+fn desktop_details(config: &InstallConfig) -> &'static str {
+    use crate::config::Desktop;
+    if config.software.desktop_environments.contains(&Desktop::Cosmalia) {
+        "Cosmalia follows grigio/cosmalia-session-dinit: Dinit session, cosmic-comp launched with --no-xwayland, and Noctalia as the shell. The upstream package manifest does not include a separate cosmic-osd component."
+    } else {
+        ""
     }
 }
 
