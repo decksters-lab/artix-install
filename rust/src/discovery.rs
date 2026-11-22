@@ -299,12 +299,31 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
     let (mountpoints, mounts_verified) = read_mountpoints(warnings);
     let (active_swaps, swaps_verified) = read_active_swap_names(warnings);
     let mut raw = Vec::new();
-    for entry in entries.flatten() {
+    let mut enumeration_verified = true;
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                warnings.push(format!("Could not enumerate every block device: {error}; disk selection is disabled for safety."));
+                enumeration_verified = false;
+                continue;
+            }
+        };
         let name = entry.file_name().to_string_lossy().into_owned();
         let class_path = entry.path();
         let is_partition = class_path.join("partition").exists();
         if !is_partition && !is_physical_disk_candidate(&name, &class_path) { continue; }
-        let canonical = fs::canonicalize(&class_path).unwrap_or(class_path.clone());
+        let canonical = match fs::canonicalize(&class_path) {
+            Ok(path) => path,
+            Err(error) => {
+                warnings.push(format!("Could not resolve sysfs identity for {name}: {error}; disk selection is disabled for safety."));
+                enumeration_verified = false;
+                if is_partition {
+                    continue;
+                }
+                class_path.clone()
+            }
+        };
         let parent_name = if is_partition {
             canonical.parent().and_then(Path::file_name).map(|v| v.to_string_lossy().into_owned())
         } else { None };
@@ -324,7 +343,8 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
             && swaps_verified
             && !major_minor.is_empty()
             && ro_value.is_some()
-            && size_verified;
+            && size_verified
+            && enumeration_verified;
         let udev = read_udev_properties(&major_minor);
         let filesystem = udev.get("ID_FS_TYPE").cloned();
         let label = udev.get("ID_FS_LABEL").cloned().or_else(|| udev.get("ID_FS_LABEL_ENC").cloned());
@@ -353,7 +373,7 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
         if let Some(parent) = parent {
             let mut child = partition.clone();
             child.has_holders = *holders;
-            child.safety_checks_complete &= *holders_verified;
+            child.safety_checks_complete &= *holders_verified && enumeration_verified;
             partitions_by_parent.entry(parent.clone()).or_default().push(child);
         }
     }
@@ -380,7 +400,7 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
             read_only,
             mounted_at: partition.mounted_at,
             active_swap: partition.active_swap,
-            safety_checks_complete: partition.safety_checks_complete && holders_verified,
+            safety_checks_complete: partition.safety_checks_complete && holders_verified && enumeration_verified,
             has_holders: holders,
             partitions: children,
         });
