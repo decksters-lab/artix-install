@@ -53,7 +53,7 @@ The schema is based on the current shell wizard and covers:
 - CPU/GPU selection: Intel, AMD, other/VM; Intel, AMD, NVIDIA, hybrid Intel+NVIDIA or VM/basic Mesa.
 - Network: dhcpcd, iwd or NetworkManager; optional multilib; optional noctalia-greeter.
 
-Some choices are conditional in the existing installer. Cosmalia is dinit-only. SwayFX conflicts with Sway and Umbriel. MangoWM, Umbriel, SwayFX and noctalia-greeter are offered only after live package availability checks. This prototype models those options and validates known conflicts, but the live package-discovery module is not implemented yet; the plan therefore calls out those checks as prerequisites.
+Some choices are conditional in the existing installer. Cosmalia is dinit-only and follows [grigio/cosmalia-session-dinit](https://github.com/grigio/cosmalia-session-dinit): its launcher runs `cosmic-comp --no-xwayland` and starts Noctalia as the shell. The upstream package manifest does not list a separate `cosmic-osd` component, so the installer treats XWayland as disabled and does not add a standalone COSMIC OSD package. SwayFX conflicts with Sway and Umbriel. MangoWM, Umbriel, SwayFX and noctalia-greeter are offered only after live package availability checks. This prototype models those options and validates known conflicts, but the live package-discovery module is not implemented yet; the plan therefore calls out those checks as prerequisites.
 
 ## Read-only hardware discovery
 
