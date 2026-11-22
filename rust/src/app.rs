@@ -142,6 +142,17 @@ impl App {
             self.status = format!("Cannot assign {}: partition safety metadata is incomplete.", partition.path.display());
             return;
         }
+        if role == PartitionRole::Efi
+            && (self.config.disk.partitioning == Partitioning::DualBoot
+                || self.config.disk.efi_policy == EfiPolicy::Preserve)
+            && partition.filesystem.as_deref() != Some("vfat")
+        {
+            self.status = format!(
+                "Cannot preserve {} as EFI: its filesystem is not verified as FAT32/vfat. Use a verified EFI System Partition.",
+                partition.path.display()
+            );
+            return;
+        }
         if !partition.mounted_at.is_empty() {
             self.status = format!("Cannot assign {}: it is mounted at {}.", partition.path.display(), partition.mounted_at.join(", "));
             return;
