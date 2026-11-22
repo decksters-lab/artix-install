@@ -326,6 +326,7 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
             mounted_at: device_mounts.clone(),
             active_swap: active_swaps.contains(&name),
             read_only: partition_read_only,
+            has_holders: false,
             safety_checks_complete: device_state_verified,
         };
         let (holders, holders_verified) = match fs::read_dir(class_path.join("holders")) {
