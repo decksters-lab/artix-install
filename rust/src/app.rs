@@ -397,12 +397,75 @@ fn cycle<T: Copy + PartialEq>(current: T, options: &[T], delta: isize) -> T {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::discovery::{BlockDevice, BlockPartition};
+
+    fn sample_hardware() -> HardwareSnapshot {
+        HardwareSnapshot {
+            firmware: "UEFI".into(),
+            memory_bytes: Some(8 * 1024 * 1024 * 1024),
+            cpu_vendor: Some("AuthenticAMD".into()),
+            cpu_model: Some("Test CPU".into()),
+            gpus: vec![],
+            network_interfaces: vec![],
+            disks: vec![BlockDevice {
+                name: "nvme0n1".into(),
+                path: "/dev/nvme0n1".into(),
+                size_bytes: 500 * 1024 * 1024 * 1024,
+                model: Some("Test NVMe".into()),
+                vendor: Some("Test".into()),
+                serial: Some("SERIAL123".into()),
+                wwid: None,
+                removable: false,
+                read_only: false,
+                mounted_at: vec![],
+                active_swap: false,
+                safety_checks_complete: true,
+                has_holders: false,
+                partitions: vec![
+                    BlockPartition {
+                        name: "nvme0n1p1".into(),
+                        path: "/dev/nvme0n1p1".into(),
+                        size_bytes: 1024 * 1024 * 1024,
+                        filesystem: Some("vfat".into()),
+                        label: Some("EFI".into()),
+                        mounted_at: vec![],
+                        active_swap: false,
+                        read_only: false,
+                        has_holders: false,
+                        safety_checks_complete: true,
+                    },
+                    BlockPartition {
+                        name: "nvme0n1p2".into(),
+                        path: "/dev/nvme0n1p2".into(),
+                        size_bytes: 499 * 1024 * 1024 * 1024,
+                        filesystem: Some("ext4".into()),
+                        label: None,
+                        mounted_at: vec![],
+                        active_swap: false,
+                        read_only: false,
+                        has_holders: false,
+                        safety_checks_complete: true,
+                    },
+                ],
+            }],
+            warnings: vec![],
+        }
+    }
+
+    fn manual_app() -> App {
+        let mut config = InstallConfig::default();
+        config.disk.target = Some("/dev/nvme0n1".into());
+        config.disk.partitioning = Partitioning::Manual;
+        App::new(config, sample_hardware())
+    }
+
     #[test]
     fn defaults_to_safe_unselected_disk() {
         let app = App::new(InstallConfig::default(), HardwareSnapshot::default());
         assert_eq!(app.setting_value(1), "Not selected");
         assert!(app.config.disk.target.is_none());
     }
+
     #[test]
     fn toggles_desktop_multi_select() {
         let mut app = App::new(InstallConfig::default(), HardwareSnapshot::default());
@@ -410,5 +473,44 @@ mod tests {
         app.multi_cursor = 7; // Hyprland
         app.toggle_multi_selection();
         assert!(app.config.software.desktop_environments.contains(&Desktop::Hyprland));
+    }
+
+    #[test]
+    fn manual_partition_manager_assigns_root_and_efi_from_target_disk() {
+        let mut app = manual_app();
+        app.assign_partition(PartitionRole::Efi);
+        assert_eq!(app.config.disk.efi_partition.as_deref(), Some(std::path::Path::new("/dev/nvme0n1p1")));
+        app.move_partition_selection(1);
+        app.assign_partition(PartitionRole::Root);
+        assert_eq!(app.config.disk.root_partition.as_deref(), Some(std::path::Path::new("/dev/nvme0n1p2")));
+    }
+
+    #[test]
+    fn partition_role_assignments_reject_duplicate_partition_use() {
+        let mut app = manual_app();
+        app.assign_partition(PartitionRole::Efi);
+        app.assign_partition(PartitionRole::Root);
+        assert!(app.config.disk.root_partition.is_none());
+    }
+
+    #[test]
+    fn partition_manager_rejects_mounted_partitions() {
+        let mut hardware = sample_hardware();
+        hardware.disks[0].partitions[0].mounted_at = vec!["/boot/efi".into()];
+        let mut app = manual_app();
+        app.hardware = hardware;
+        app.assign_partition(PartitionRole::Efi);
+        assert!(app.config.disk.efi_partition.is_none());
+        assert!(app.status.contains("mounted"));
+    }
+
+    #[test]
+    fn dual_boot_assignment_forces_efi_preservation() {
+        let mut app = manual_app();
+        app.config.disk.partitioning = Partitioning::DualBoot;
+        app.config.disk.efi_policy = EfiPolicy::Format;
+        app.assign_partition(PartitionRole::Efi);
+        assert_eq!(app.config.disk.efi_policy, EfiPolicy::Preserve);
+        assert_eq!(app.config.disk.efi_partition.as_deref(), Some(std::path::Path::new("/dev/nvme0n1p1")));
     }
 }
