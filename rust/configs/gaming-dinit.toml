@@ -1,0 +1,33 @@
+schema_version = 1
+
+[system]
+init_system = "dinit"
+hostname = "artix-gaming"
+username = "gamer"
+locale = "en_US.UTF-8"
+timezone = "Europe/London"
+keyboard_layout = "us"
+firmware = "uefi"
+privilege_escalation = "sudo"
+user_services = "userspawn"
+
+[disk]
+partitioning = "automatic"
+root_filesystem = "btrfs"
+encryption = false
+efi_policy = "preserve"
+
+[disk.swap]
+mode = "both"
+size_gib = 8
+zswap = false
+
+[software]
+desktop_environments = ["plasma"]
+kernels = ["linux", "linux-zen"]
+cpu_vendor = "amd"
+gpu = "amd"
+bootloader = "grub"
+network = "network-manager"
+multilib = true
+noctalia_greeter = false
