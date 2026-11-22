@@ -36,8 +36,12 @@ pub struct DiskConfig {
     pub efi_partition: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_partition: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub swap_partition: Option<PathBuf>,
     #[serde(default)]
     pub additional_mounts: Vec<MountConfig>,
+    #[serde(default)]
+    pub btrfs: BtrfsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +56,20 @@ pub struct MountConfig {
     pub device: PathBuf,
     pub mountpoint: String,
     pub filesystem: Filesystem,
+    #[serde(default)]
+    pub format: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BtrfsConfig {
+    pub layout: BtrfsLayout,
+    pub compression: BtrfsCompression,
+}
+
+impl Default for BtrfsConfig {
+    fn default() -> Self {
+        Self { layout: BtrfsLayout::Standard, compression: BtrfsCompression::Zstd }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -96,6 +114,8 @@ string_enum!(SwapMode {
     None => "none", Zram => "zram", Partition => "partition", Swapfile => "swapfile", Both => "both"
 });
 string_enum!(EfiPolicy { Preserve => "preserve", Format => "format" });
+string_enum!(BtrfsLayout { Flat => "flat", Standard => "standard", Snapshots => "snapshots" });
+string_enum!(BtrfsCompression { None => "none", Zstd => "zstd", Lzo => "lzo" });
 string_enum!(Desktop {
     Plasma => "plasma", Xfce => "xfce", Cinnamon => "cinnamon", Mate => "mate", Lxqt => "lxqt",
     Moksha => "moksha", Cosmic => "cosmic", Hyprland => "hyprland", Niri => "niri",
@@ -142,7 +162,9 @@ impl Default for InstallConfig {
                 efi_policy: EfiPolicy::Preserve,
                 efi_partition: None,
                 root_partition: None,
+                swap_partition: None,
                 additional_mounts: Vec::new(),
+                btrfs: BtrfsConfig::default(),
             },
             software: SoftwareConfig {
                 desktop_environments: Vec::new(),
@@ -187,6 +209,7 @@ impl InstallConfig {
         if let Some(target) = &self.disk.target { validate_device_path(target, "disk.target", &mut issues); }
         if let Some(efi) = &self.disk.efi_partition { validate_device_path(efi, "disk.efi_partition", &mut issues); }
         if let Some(root) = &self.disk.root_partition { validate_device_path(root, "disk.root_partition", &mut issues); }
+        if let Some(swap) = &self.disk.swap_partition { validate_device_path(swap, "disk.swap_partition", &mut issues); }
 
         if self.disk.partitioning == Partitioning::DualBoot && self.disk.efi_policy == EfiPolicy::Format {
             issues.push("dual-boot mode requires efi_policy = 'preserve'".into());
@@ -205,12 +228,52 @@ impl InstallConfig {
         if self.disk.swap.size_gib == 0 || self.disk.swap.size_gib > 64 {
             issues.push("swap.size_gib must be between 1 and 64".into());
         }
-        if self.disk.swap.zswap && !matches!(self.disk.swap.mode, SwapMode::Partition | SwapMode::Swapfile) {
-            issues.push("zswap is only offered with a swap partition or swapfile".into());
+        if self.disk.swap.zswap && !matches!(self.disk.swap.mode, SwapMode::Partition | SwapMode::Swapfile | SwapMode::Both) {
+            issues.push("zswap requires a swap partition or swapfile (Swapfile or Both mode)".into());
+        }
+        if self.disk.swap.mode != SwapMode::Partition && self.disk.swap_partition.is_some() {
+            issues.push("disk.swap_partition is only valid when swap.mode = 'partition'".into());
+        }
+        if self.disk.partitioning == Partitioning::DualBoot && self.disk.swap.mode == SwapMode::Partition {
+            issues.push("dual-boot mode does not create or reformat a swap partition; use zram or a swapfile".into());
+        }
+        if self.disk.partitioning == Partitioning::DualBoot && self.disk.swap_partition.is_some() {
+            issues.push("dual-boot mode cannot assign a new swap partition".into());
+        }
+        if self.disk.partitioning == Partitioning::Manual && self.disk.swap.mode == SwapMode::Partition
+            && self.disk.swap_partition.is_none() {
+            issues.push("manual partitioning with swap.mode = 'partition' requires disk.swap_partition".into());
+        }
+        if self.disk.partitioning == Partitioning::Manual {
+            if self.disk.root_partition.is_none() {
+                issues.push("manual partitioning requires disk.root_partition".into());
+            }
+            if self.system.firmware == FirmwareMode::Uefi && self.disk.efi_partition.is_none() {
+                issues.push("manual UEFI partitioning requires disk.efi_partition".into());
+            }
+        }
+        if self.disk.partitioning == Partitioning::DualBoot {
+            if self.disk.root_partition.is_none() {
+                issues.push("dual-boot requires an existing disk.root_partition".into());
+            }
+            if self.disk.efi_partition.is_none() {
+                issues.push("dual-boot requires an existing disk.efi_partition".into());
+            }
+            if self.disk.efi_policy != EfiPolicy::Preserve {
+                issues.push("dual-boot must preserve the existing EFI partition".into());
+            }
         }
         if let (Some(efi), Some(root)) = (&self.disk.efi_partition, &self.disk.root_partition)
             && efi == root {
             issues.push("EFI and root partitions must be different devices".into());
+        }
+        if let (Some(swap), Some(root)) = (&self.disk.swap_partition, &self.disk.root_partition)
+            && swap == root {
+            issues.push("swap and root partitions must be different devices".into());
+        }
+        if let (Some(swap), Some(efi)) = (&self.disk.swap_partition, &self.disk.efi_partition)
+            && swap == efi {
+            issues.push("swap and EFI partitions must be different devices".into());
         }
         let mut devices = Vec::<PathBuf>::new();
         let mut mountpoints = Vec::<String>::new();
