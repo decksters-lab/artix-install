@@ -231,7 +231,7 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
         lines.push(Line::from(format!("Vendor: {}", disk.vendor.as_deref().unwrap_or("unknown"))));
         lines.push(Line::from(format!("Serial / WWID: {}", disk.serial.as_deref().or(disk.wwid.as_deref()).unwrap_or("unknown"))));
         lines.push(Line::from(format!("Removable: {}   Read-only: {}", disk.removable, disk.read_only)));
-        lines.push(Line::from(format!("Holders: {}", disk.has_holders)));
+        lines.push(Line::from(format!("Active swap: {}   Holders: {}", disk.active_swap, disk.has_holders)));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(format!("Partitions ({})", disk.partitions.len()), Style::default().add_modifier(Modifier::BOLD))));
         if disk.partitions.is_empty() {
@@ -240,7 +240,7 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
         for partition in &disk.partitions {
             lines.push(Line::from(format!("  {}  {}", partition.path.display(), format_bytes(partition.size_bytes))));
             lines.push(Line::from(format!("    FS: {}   Label: {}", partition.filesystem.as_deref().unwrap_or("unknown"), partition.label.as_deref().unwrap_or("none"))));
-            lines.push(Line::from(format!("    Mounted: {}", if partition.mounted_at.is_empty() { "no".into() } else { partition.mounted_at.join(", ") })));
+            lines.push(Line::from(format!("    Mounted: {}   Active swap: {}", if partition.mounted_at.is_empty() { "no".into() } else { partition.mounted_at.join(", ") }, partition.active_swap)));
         }
         lines.push(Line::from(""));
         if let Some(reason) = disk.selection_block_reason() {
