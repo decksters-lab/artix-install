@@ -22,6 +22,7 @@ cargo run -- --plan
 cargo run -- --validate --config configs/gaming-dinit.toml
 cargo run -- --config configs/wayland-hyprland.toml --plan
 cargo run -- --write-default artix-setup.toml
+cargo run -- --hardware
 ```
 
 Inside the TUI:
@@ -32,6 +33,7 @@ Inside the TUI:
 - `p`: preview the generated plan
 - `s`: save `./artix-setup.toml`
 - `?`: help
+- `d`: open the read-only hardware/disk inventory
 - `q` / `Esc`: quit
 
 ## Current configuration coverage
@@ -50,6 +52,12 @@ The schema is based on the current shell wizard and covers:
 - Network: dhcpcd, iwd or NetworkManager; optional multilib; optional noctalia-greeter.
 
 Some choices are conditional in the existing installer. Cosmalia is dinit-only. SwayFX conflicts with Sway and Umbriel. MangoWM, Umbriel, SwayFX and noctalia-greeter are offered only after live package availability checks. This prototype models those options and validates known conflicts, but the live package-discovery module is not implemented yet; the plan therefore calls out those checks as prerequisites.
+
+## Read-only hardware discovery
+
+The `--hardware` mode and the TUI's `d` screen read Linux `/sys`, `/proc` and udev metadata without spawning commands or opening block devices for writing. The inventory includes detected firmware mode, memory, CPU identity, PCI display controllers, network interfaces, whole block devices, their partitions, filesystem metadata where udev has it, and mountpoints.
+
+Disk selection is deliberately conservative: a device is not selectable when it or any child partition is mounted, when it is read-only, or when it has active holders. Removable drives are shown but visibly marked. Selecting a device only stores its path in the TOML plan; it does not partition, format, mount or otherwise modify it. Device inventory is a snapshot and must be rechecked before any future destructive workflow.
 
 ## Safety model
 
