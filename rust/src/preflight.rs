@@ -410,7 +410,7 @@ mod tests {
                 firmware: "UEFI".into(),
                 ..HardwareSnapshot::default()
             },
-            Some("ID=artix\\n"),
+            Some("ID=artix\n"),
             Some(0),
             directory.as_os_str(),
         );
