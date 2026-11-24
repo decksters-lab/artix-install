@@ -146,7 +146,9 @@ pub fn evaluate(
         ),
         (crate::config::FirmwareMode::Bios, detected) => (
             CheckStatus::Warning,
-            format!("UEFI was not detected ({detected}); sysfs cannot positively distinguish legacy BIOS from unavailable firmware information."),
+            format!(
+                "UEFI was not detected ({detected}); sysfs cannot positively distinguish legacy BIOS from unavailable firmware information."
+            ),
         ),
     };
     checks.push(PreflightCheck {
@@ -265,7 +267,7 @@ pub fn evaluate(
             )
         } else {
             format!(
-                "Not currently found (may need to be installed in the live session before a future installer executor can use them): {}.",
+                "Not currently found (may need to be installed in the live session before a future installer executor can use them): {}",
                 missing.join(", ")
             )
         },
@@ -348,7 +350,7 @@ mod tests {
         config::{FirmwareMode, Partitioning},
         discovery::HardwareSnapshot,
     };
-    use std::{fs, os::unix::fs::PermissionsExt};
+    use std::fs;
 
     fn executable_dir(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
