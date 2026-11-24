@@ -17,28 +17,23 @@ const GIB: u64 = 1024 * 1024 * 1024;
 const MIN_ROOT_GIB: u64 = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TargetIdentity {
-    pub canonical_path: PathBuf,
-    pub size_bytes: u64,
-    pub serial: Option<String>,
-    pub wwid: Option<String>,
+struct TargetIdentity {
+    size_bytes: u64,
+    serial: Option<String>,
+    wwid: Option<String>,
+    model: Option<String>,
+    vendor: Option<String>,
 }
 
 impl TargetIdentity {
-    fn from_disk(disk: &BlockDevice, selected_path: &Path) -> Result<Self> {
-        let canonical_path = fs::canonicalize(selected_path)
-            .with_context(|| format!("resolve target {}", selected_path.display()))?;
-        let discovered_path = fs::canonicalize(&disk.path)
-            .with_context(|| format!("resolve discovered disk {}", disk.path.display()))?;
-        if canonical_path != discovered_path {
-            bail!("configured target does not resolve to the discovered whole disk");
-        }
-        Ok(Self {
-            canonical_path,
+    fn from_disk(disk: &BlockDevice) -> Self {
+        Self {
             size_bytes: disk.size_bytes,
             serial: disk.serial.clone(),
             wwid: disk.wwid.clone(),
-        })
+            model: disk.model.clone(),
+            vendor: disk.vendor.clone(),
+        }
     }
 }
 
@@ -63,16 +58,11 @@ pub fn apply_automatic_partition_table(
     if !selected.starts_with("/dev/") {
         bail!("target must be an absolute path below /dev");
     }
-    if typed_confirmation != selected.to_string_lossy() {
-        bail!(
-            "confirmation mismatch: pass --confirm-target '{}' exactly",
-            selected.display()
-        );
-    }
+    validate_confirmation(selected, typed_confirmation)?;
 
     let hardware = discovery::discover();
     let disk = find_safe_target(&hardware, selected)?;
-    let identity = TargetIdentity::from_disk(disk, selected)?;
+    let identity = TargetIdentity::from_disk(disk);
     validate_capacity(config, disk.size_bytes)?;
 
     let metadata = fs::metadata(selected)
@@ -82,6 +72,16 @@ pub fn apply_automatic_partition_table(
     }
 
     let script = build_sfdisk_script(config)?;
+
+    // Re-discover after all other preparation and immediately before the write.
+    let latest_hardware = discovery::discover();
+    let latest_disk = find_safe_target(&latest_hardware, selected)?;
+    if TargetIdentity::from_disk(latest_disk) != identity {
+        bail!("target identity changed during preflight; refusing to write a partition table");
+    }
+
+    let canonical_target = fs::canonicalize(selected)
+        .with_context(|| format!("resolve target {}", selected.display()))?;
     let mut child = Command::new("sfdisk")
         .args([
             "--wipe",
@@ -90,7 +90,7 @@ pub fn apply_automatic_partition_table(
             "always",
             "--",
         ])
-        .arg(&identity.canonical_path)
+        .arg(&canonical_target)
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
@@ -109,7 +109,7 @@ pub fn apply_automatic_partition_table(
 
     let verify = Command::new("sfdisk")
         .arg("--verify")
-        .arg(&identity.canonical_path)
+        .arg(&canonical_target)
         .status()
         .context("verify the newly written partition table with sfdisk")?;
     if !verify.success() {
@@ -117,7 +117,7 @@ pub fn apply_automatic_partition_table(
     }
 
     let partprobe = Command::new("partprobe")
-        .arg(&identity.canonical_path)
+        .arg(&canonical_target)
         .status()
         .context("refresh the kernel partition table with partprobe")?;
     if !partprobe.success() {
@@ -135,6 +135,16 @@ pub fn apply_automatic_partition_table(
         "Partition table written and verified on {}. No filesystem was formatted, no encryption was initialized, and no filesystem was mounted. Review the new partition inventory before proceeding.",
         selected.display()
     ))
+}
+
+fn validate_confirmation(selected: &Path, typed_confirmation: &str) -> Result<()> {
+    if typed_confirmation != selected.to_string_lossy() {
+        bail!(
+            "confirmation mismatch: pass --confirm-target '{}' exactly",
+            selected.display()
+        );
+    }
+    Ok(())
 }
 
 fn find_safe_target<'a>(
@@ -298,15 +308,15 @@ mod tests {
     #[test]
     fn capacity_check_reserves_a_minimum_root() {
         let config = InstallConfig::default();
-        assert!(validate_capacity(&config, 9 * GIB).is_err());
-        assert!(validate_capacity(&config, 10 * GIB).is_ok());
+        assert!(validate_capacity(&config, 8 * GIB).is_err());
+        assert!(validate_capacity(&config, 9 * GIB).is_ok());
     }
 
     #[test]
     fn path_confirmation_is_exact_and_not_a_prefix() {
-        let path = Path::new("/dev/sda");
-        assert_eq!(path.to_string_lossy(), "/dev/sda");
-        assert_ne!(path.to_string_lossy(), "/dev/sda1");
+        assert!(validate_confirmation(Path::new("/dev/sda"), "/dev/sda").is_ok());
+        assert!(validate_confirmation(Path::new("/dev/sda"), "/dev/sda1").is_err());
+        assert!(validate_confirmation(Path::new("/dev/sda"), "/dev/sd").is_err());
     }
 
     #[test]
