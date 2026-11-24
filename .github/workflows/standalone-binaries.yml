@@ -1,0 +1,97 @@
+name: Build standalone Linux binaries
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build x86_64 (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            label: gnu
+          - target: x86_64-unknown-linux-musl
+            label: musl
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl linker
+        if: matrix.label == 'musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+
+      - name: Build release executable
+        working-directory: rust
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Smoke-test executable
+        run: |
+          BIN="rust/target/${{ matrix.target }}/release/artix-setup"
+          "$BIN" --version
+          "$BIN" --hardware
+          "$BIN" --plan
+          file "$BIN"
+          if [ "${{ matrix.label }}" = musl ]; then
+            if readelf -l "$BIN" | grep -q 'INTERP'; then
+              echo "Expected a statically linked musl executable, but found an ELF interpreter."
+              exit 1
+            fi
+          fi
+
+      - name: Package binary and checksum
+        run: |
+          set -eu
+          LABEL="${{ matrix.label }}"
+          BIN="rust/target/${{ matrix.target }}/release/artix-setup"
+          mkdir -p "dist/artix-setup-${LABEL}"
+          install -m 0755 "$BIN" "dist/artix-setup-${LABEL}/artix-setup"
+          cat > "dist/artix-setup-${LABEL}/README.txt" <<EOF
+          Artix Setup standalone Linux executable
+          Architecture: x86_64
+          Build target: ${{ matrix.target }}
+
+          Run from a terminal with:
+            ./artix-setup
+
+          This archive contains a prebuilt executable. Rust and Cargo are
+          not required on the target Artix live environment.
+          EOF
+          tar -C dist -czf "dist/artix-setup-x86_64-linux-${LABEL}.tar.gz" "artix-setup-${LABEL}"
+          cd dist
+          sha256sum "artix-setup-x86_64-linux-${LABEL}.tar.gz" > "artix-setup-x86_64-linux-${LABEL}.tar.gz.sha256"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artix-setup-x86_64-linux-${{ matrix.label }}
+          path: |
+            dist/artix-setup-x86_64-linux-${{ matrix.label }}.tar.gz
+            dist/artix-setup-x86_64-linux-${{ matrix.label }}.tar.gz.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || gh release create "${GITHUB_REF_NAME}" --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" \
+            "dist/artix-setup-x86_64-linux-${{ matrix.label }}.tar.gz" \
+            "dist/artix-setup-x86_64-linux-${{ matrix.label }}.tar.gz.sha256" \
+            --clobber
