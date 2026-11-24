@@ -68,7 +68,10 @@ pub struct BtrfsConfig {
 
 impl Default for BtrfsConfig {
     fn default() -> Self {
-        Self { layout: BtrfsLayout::Standard, compression: BtrfsCompression::Zstd }
+        Self {
+            layout: BtrfsLayout::Standard,
+            compression: BtrfsCompression::Zstd,
+        }
     }
 }
 
@@ -160,7 +163,11 @@ impl Default for InstallConfig {
                 target: None,
                 partitioning: Partitioning::Automatic,
                 root_filesystem: Filesystem::Ext4,
-                swap: SwapConfig { mode: SwapMode::Zram, size_gib: 4, zswap: false },
+                swap: SwapConfig {
+                    mode: SwapMode::Zram,
+                    size_gib: 4,
+                    zswap: false,
+                },
                 encryption: false,
                 efi_policy: EfiPolicy::Preserve,
                 efi_partition: None,
@@ -188,16 +195,31 @@ impl InstallConfig {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut issues = Vec::new();
         if self.schema_version != 1 {
-            issues.push(format!("unsupported schema_version {}; expected 1", self.schema_version));
+            issues.push(format!(
+                "unsupported schema_version {}; expected 1",
+                self.schema_version
+            ));
         }
-        if self.system.hostname.is_empty() || self.system.hostname.len() > 63
-            || self.system.hostname.starts_with('-') || self.system.hostname.ends_with('-')
-            || !self.system.hostname.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        if self.system.hostname.is_empty()
+            || self.system.hostname.len() > 63
+            || self.system.hostname.starts_with('-')
+            || self.system.hostname.ends_with('-')
+            || !self
+                .system
+                .hostname
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-')
+        {
             issues.push("hostname must be 1-63 ASCII letters, numbers, or internal hyphens".into());
         }
         if self.system.username.is_empty()
             || !self.system.username.as_bytes()[0].is_ascii_lowercase()
-            || !self.system.username.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-') {
+            || !self
+                .system
+                .username
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+        {
             issues.push("username must start with a lowercase letter and contain only lowercase letters, numbers, _ or -".into());
         }
         for (name, value) in [
@@ -209,23 +231,41 @@ impl InstallConfig {
                 issues.push(format!("{name} must be a non-empty single-line value"));
             }
         }
-        if let Some(target) = &self.disk.target { validate_device_path(target, "disk.target", &mut issues); }
-        if let Some(efi) = &self.disk.efi_partition { validate_device_path(efi, "disk.efi_partition", &mut issues); }
-        if let Some(root) = &self.disk.root_partition { validate_device_path(root, "disk.root_partition", &mut issues); }
-        if let Some(swap) = &self.disk.swap_partition { validate_device_path(swap, "disk.swap_partition", &mut issues); }
+        if let Some(target) = &self.disk.target {
+            validate_device_path(target, "disk.target", &mut issues);
+        }
+        if let Some(efi) = &self.disk.efi_partition {
+            validate_device_path(efi, "disk.efi_partition", &mut issues);
+        }
+        if let Some(root) = &self.disk.root_partition {
+            validate_device_path(root, "disk.root_partition", &mut issues);
+        }
+        if let Some(swap) = &self.disk.swap_partition {
+            validate_device_path(swap, "disk.swap_partition", &mut issues);
+        }
 
-        if self.disk.partitioning == Partitioning::DualBoot && self.disk.efi_policy == EfiPolicy::Format {
+        if self.disk.partitioning == Partitioning::DualBoot
+            && self.disk.efi_policy == EfiPolicy::Format
+        {
             issues.push("dual-boot mode requires efi_policy = 'preserve'".into());
         }
-        if self.disk.partitioning == Partitioning::DualBoot && self.system.firmware != FirmwareMode::Uefi {
+        if self.disk.partitioning == Partitioning::DualBoot
+            && self.system.firmware != FirmwareMode::Uefi
+        {
             issues.push("dual-boot partition planning currently requires UEFI firmware".into());
         }
         if self.disk.partitioning == Partitioning::Automatic
-            && (self.disk.efi_partition.is_some() || self.disk.root_partition.is_some() || self.disk.swap_partition.is_some()) {
+            && (self.disk.efi_partition.is_some()
+                || self.disk.root_partition.is_some()
+                || self.disk.swap_partition.is_some())
+        {
             issues.push("automatic mode calculates its own partition paths; clear manual EFI/root/swap partition assignments".into());
         }
-        if self.disk.partitioning != Partitioning::Manual && !self.disk.additional_mounts.is_empty() {
-            issues.push("additional_mounts are currently supported only in manual partitioning mode".into());
+        if self.disk.partitioning != Partitioning::Manual && !self.disk.additional_mounts.is_empty()
+        {
+            issues.push(
+                "additional_mounts are currently supported only in manual partitioning mode".into(),
+            );
         }
         if self.system.firmware == FirmwareMode::Bios {
             if self.software.bootloader != Bootloader::Grub {
@@ -235,27 +275,43 @@ impl InstallConfig {
                 issues.push("BIOS + F2FS needs a deliberate GRUB compatibility override; use ext4, XFS or Btrfs by default".into());
             }
         }
-        if matches!(self.disk.root_filesystem, Filesystem::Vfat | Filesystem::Exfat | Filesystem::Ntfs) {
+        if matches!(
+            self.disk.root_filesystem,
+            Filesystem::Vfat | Filesystem::Exfat | Filesystem::Ntfs
+        ) {
             issues.push("FAT32, exFAT and NTFS are not supported root filesystems".into());
         }
         if self.disk.swap.size_gib == 0 || self.disk.swap.size_gib > 64 {
             issues.push("swap.size_gib must be between 1 and 64".into());
         }
-        if self.disk.swap.zswap && !matches!(self.disk.swap.mode, SwapMode::Partition | SwapMode::Swapfile | SwapMode::Both) {
-            issues.push("zswap requires a swap partition or swapfile (Swapfile or Both mode)".into());
+        if self.disk.swap.zswap
+            && !matches!(
+                self.disk.swap.mode,
+                SwapMode::Partition | SwapMode::Swapfile | SwapMode::Both
+            )
+        {
+            issues
+                .push("zswap requires a swap partition or swapfile (Swapfile or Both mode)".into());
         }
         if self.disk.swap.mode != SwapMode::Partition && self.disk.swap_partition.is_some() {
             issues.push("disk.swap_partition is only valid when swap.mode = 'partition'".into());
         }
-        if self.disk.partitioning == Partitioning::DualBoot && self.disk.swap.mode == SwapMode::Partition {
+        if self.disk.partitioning == Partitioning::DualBoot
+            && self.disk.swap.mode == SwapMode::Partition
+        {
             issues.push("dual-boot mode does not create or reformat a swap partition; use zram or a swapfile".into());
         }
         if self.disk.partitioning == Partitioning::DualBoot && self.disk.swap_partition.is_some() {
             issues.push("dual-boot mode cannot assign a new swap partition".into());
         }
-        if self.disk.partitioning == Partitioning::Manual && self.disk.swap.mode == SwapMode::Partition
-            && self.disk.swap_partition.is_none() {
-            issues.push("manual partitioning with swap.mode = 'partition' requires disk.swap_partition".into());
+        if self.disk.partitioning == Partitioning::Manual
+            && self.disk.swap.mode == SwapMode::Partition
+            && self.disk.swap_partition.is_none()
+        {
+            issues.push(
+                "manual partitioning with swap.mode = 'partition' requires disk.swap_partition"
+                    .into(),
+            );
         }
         if self.disk.partitioning == Partitioning::Manual {
             if self.disk.root_partition.is_none() {
@@ -277,29 +333,44 @@ impl InstallConfig {
             }
         }
         if let (Some(efi), Some(root)) = (&self.disk.efi_partition, &self.disk.root_partition)
-            && efi == root {
+            && efi == root
+        {
             issues.push("EFI and root partitions must be different devices".into());
         }
         if let (Some(swap), Some(root)) = (&self.disk.swap_partition, &self.disk.root_partition)
-            && swap == root {
+            && swap == root
+        {
             issues.push("swap and root partitions must be different devices".into());
         }
         if let (Some(swap), Some(efi)) = (&self.disk.swap_partition, &self.disk.efi_partition)
-            && swap == efi {
+            && swap == efi
+        {
             issues.push("swap and EFI partitions must be different devices".into());
         }
         if let Some(root) = &self.disk.root_partition
-            && self.disk.additional_mounts.iter().any(|mount| &mount.device == root)
+            && self
+                .disk
+                .additional_mounts
+                .iter()
+                .any(|mount| &mount.device == root)
         {
             issues.push("root partition cannot also be used as an additional mount".into());
         }
         if let Some(efi) = &self.disk.efi_partition
-            && self.disk.additional_mounts.iter().any(|mount| &mount.device == efi)
+            && self
+                .disk
+                .additional_mounts
+                .iter()
+                .any(|mount| &mount.device == efi)
         {
             issues.push("EFI partition cannot also be used as an additional mount".into());
         }
         if let Some(swap) = &self.disk.swap_partition
-            && self.disk.additional_mounts.iter().any(|mount| &mount.device == swap)
+            && self
+                .disk
+                .additional_mounts
+                .iter()
+                .any(|mount| &mount.device == swap)
         {
             issues.push("swap partition cannot also be used as an additional mount".into());
         }
@@ -307,26 +378,52 @@ impl InstallConfig {
         let mut mountpoints = Vec::<String>::new();
         for mount in &self.disk.additional_mounts {
             validate_device_path(&mount.device, "additional_mounts.device", &mut issues);
-            if !mount.mountpoint.starts_with('/') || mount.mountpoint == "/" || mount.mountpoint.contains("..") {
-                issues.push(format!("mountpoint '{}' must be absolute, non-root and without '..'", mount.mountpoint));
+            if !mount.mountpoint.starts_with('/')
+                || mount.mountpoint == "/"
+                || mount.mountpoint.contains("..")
+            {
+                issues.push(format!(
+                    "mountpoint '{}' must be absolute, non-root and without '..'",
+                    mount.mountpoint
+                ));
             }
             if devices.contains(&mount.device) {
-                issues.push(format!("device {} appears more than once", mount.device.display()));
+                issues.push(format!(
+                    "device {} appears more than once",
+                    mount.device.display()
+                ));
             }
             if mountpoints.contains(&mount.mountpoint) {
-                issues.push(format!("mountpoint '{}' appears more than once", mount.mountpoint));
+                issues.push(format!(
+                    "mountpoint '{}' appears more than once",
+                    mount.mountpoint
+                ));
             }
             devices.push(mount.device.clone());
             mountpoints.push(mount.mountpoint.clone());
         }
         if self.software.kernels.is_empty() || !self.software.kernels.contains(&Kernel::Linux) {
-            issues.push("software.kernels must include 'linux' as the guaranteed fallback kernel".into());
+            issues.push(
+                "software.kernels must include 'linux' as the guaranteed fallback kernel".into(),
+            );
         }
         let user_services_supported = match self.system.init_system {
-            InitSystem::Dinit => matches!(self.system.user_services, UserServices::None | UserServices::Userspawn | UserServices::Turnstile),
-            InitSystem::OpenRc => matches!(self.system.user_services, UserServices::None | UserServices::Native | UserServices::Turnstile),
-            InitSystem::Runit => matches!(self.system.user_services, UserServices::None | UserServices::Userspawn),
-            InitSystem::S6 => matches!(self.system.user_services, UserServices::None | UserServices::Manual),
+            InitSystem::Dinit => matches!(
+                self.system.user_services,
+                UserServices::None | UserServices::Userspawn | UserServices::Turnstile
+            ),
+            InitSystem::OpenRc => matches!(
+                self.system.user_services,
+                UserServices::None | UserServices::Native | UserServices::Turnstile
+            ),
+            InitSystem::Runit => matches!(
+                self.system.user_services,
+                UserServices::None | UserServices::Userspawn
+            ),
+            InitSystem::S6 => matches!(
+                self.system.user_services,
+                UserServices::None | UserServices::Manual
+            ),
         };
         if !user_services_supported {
             issues.push(format!(
@@ -334,31 +431,62 @@ impl InstallConfig {
                 self.system.user_services, self.system.init_system
             ));
         }
-        if self.software.desktop_environments.contains(&Desktop::Cosmalia)
-            && self.system.init_system != InitSystem::Dinit {
+        if self
+            .software
+            .desktop_environments
+            .contains(&Desktop::Cosmalia)
+            && self.system.init_system != InitSystem::Dinit
+        {
             issues.push("Cosmalia requires dinit".into());
         }
-        if self.software.desktop_environments.contains(&Desktop::SwayFx)
-            && self.software.desktop_environments.contains(&Desktop::Sway) {
+        if self
+            .software
+            .desktop_environments
+            .contains(&Desktop::SwayFx)
+            && self.software.desktop_environments.contains(&Desktop::Sway)
+        {
             issues.push("SwayFX replaces Sway; select only one".into());
         }
-        if self.software.desktop_environments.contains(&Desktop::SwayFx)
-            && self.software.desktop_environments.contains(&Desktop::Umbriel) {
-            issues.push("SwayFX and Umbriel require conflicting scenefx versions; select only one".into());
+        if self
+            .software
+            .desktop_environments
+            .contains(&Desktop::SwayFx)
+            && self
+                .software
+                .desktop_environments
+                .contains(&Desktop::Umbriel)
+        {
+            issues.push(
+                "SwayFX and Umbriel require conflicting scenefx versions; select only one".into(),
+            );
         }
         if self.software.noctalia_greeter
-            && (self.software.desktop_environments.is_empty() || self.software.desktop_environments.contains(&Desktop::Cosmic)) {
+            && (self.software.desktop_environments.is_empty()
+                || self
+                    .software
+                    .desktop_environments
+                    .contains(&Desktop::Cosmic))
+        {
             issues.push("noctalia-greeter requires a non-COSMIC desktop/WM selection".into());
         }
-        if issues.is_empty() { Ok(()) } else { Err(issues) }
+        if issues.is_empty() {
+            Ok(())
+        } else {
+            Err(issues)
+        }
     }
 }
 
 fn validate_device_path(path: &Path, field: &str, issues: &mut Vec<String>) {
     let text = path.to_string_lossy();
-    if !text.starts_with("/dev/") || text.contains('\n') || text.contains('\r')
-        || text.split('/').any(|part| part == "..") {
-        issues.push(format!("{field} must be an explicit /dev/... path without '..' (prefer /dev/disk/by-id/...)"));
+    if !text.starts_with("/dev/")
+        || text.contains('\n')
+        || text.contains('\r')
+        || text.split('/').any(|part| part == "..")
+    {
+        issues.push(format!(
+            "{field} must be an explicit /dev/... path without '..' (prefer /dev/disk/by-id/...)"
+        ));
     }
 }
 
@@ -414,13 +542,25 @@ mod tests {
         let mut config = InstallConfig::default();
         config.system.init_system = InitSystem::S6;
         config.system.user_services = UserServices::Turnstile;
-        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("user_services")));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("user_services"))
+        );
         config.system.user_services = UserServices::Manual;
         assert!(config.validate().is_ok());
 
         config.system.init_system = InitSystem::OpenRc;
         config.system.user_services = UserServices::Userspawn;
-        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("user_services")));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("user_services"))
+        );
         config.system.user_services = UserServices::Native;
         assert!(config.validate().is_ok());
         config.system.user_services = UserServices::Turnstile;
@@ -467,7 +607,13 @@ mod tests {
         config.disk.root_partition = Some("/dev/sda2".into());
         config.disk.efi_partition = Some("/dev/sda1".into());
         config.disk.swap.mode = SwapMode::Partition;
-        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("swap_partition")));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("swap_partition"))
+        );
         config.disk.swap_partition = Some("/dev/sda3".into());
         assert!(config.validate().is_ok());
     }
@@ -476,7 +622,13 @@ mod tests {
     fn automatic_mode_rejects_stale_manual_partition_paths() {
         let mut config = InstallConfig::default();
         config.disk.root_partition = Some("/dev/sda2".into());
-        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("calculates its own partition paths")));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("calculates its own partition paths"))
+        );
     }
 
     #[test]
@@ -486,10 +638,22 @@ mod tests {
         config.disk.root_partition = Some("/dev/sda3".into());
         config.disk.efi_partition = Some("/dev/sda1".into());
         config.disk.efi_policy = EfiPolicy::Format;
-        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("preserve")));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("preserve"))
+        );
         config.system.firmware = FirmwareMode::Bios;
         config.disk.efi_policy = EfiPolicy::Preserve;
-        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("UEFI")));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("UEFI"))
+        );
         config.system.firmware = FirmwareMode::Uefi;
         assert!(config.validate().is_ok());
     }
@@ -503,7 +667,13 @@ mod tests {
             filesystem: Filesystem::Ext4,
             format: false,
         });
-        assert!(config.validate().unwrap_err().iter().any(|issue| issue.contains("manual partitioning")));
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("manual partitioning"))
+        );
         config.disk.partitioning = Partitioning::Manual;
         config.disk.root_partition = Some("/dev/sda2".into());
         config.disk.efi_partition = Some("/dev/sda1".into());

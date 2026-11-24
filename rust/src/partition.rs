@@ -16,12 +16,16 @@ impl PartitionPlan {
     }
 
     pub fn render(&self) -> String {
-        let mut out = String::from("PARTITION LAYOUT PLAN — PREVIEW ONLY\n====================================\n\n");
+        let mut out = String::from(
+            "PARTITION LAYOUT PLAN — PREVIEW ONLY\n====================================\n\n",
+        );
         out.push_str("This is a description of proposed operations. Nothing is executed.\n");
         out.push_str("There is no partitioner, formatter, cryptsetup, mount or swap activation code in this build.\n\n");
 
         if !self.blocked.is_empty() {
-            out.push_str("BLOCKED — CONFIGURATION INCOMPLETE\n----------------------------------\n");
+            out.push_str(
+                "BLOCKED — CONFIGURATION INCOMPLETE\n----------------------------------\n",
+            );
             for item in &self.blocked {
                 out.push_str(&format!("- {item}\n"));
             }
@@ -47,7 +51,9 @@ impl PartitionPlan {
         if self.is_reviewable() {
             out.push_str("Status: layout is complete enough for human review only.\n");
         } else {
-            out.push_str("Status: no destructive action is available; resolve the blocked items first.\n");
+            out.push_str(
+                "Status: no destructive action is available; resolve the blocked items first.\n",
+            );
         }
         out.push_str("Execution status: DISABLED — this build cannot change disks.\n");
         out
@@ -61,7 +67,8 @@ pub fn build_partition_plan(config: &InstallConfig) -> PartitionPlan {
         return plan;
     }
     let Some(target) = config.disk.target.as_ref() else {
-        plan.blocked.push("Choose an explicit target disk in the read-only disk inventory.".into());
+        plan.blocked
+            .push("Choose an explicit target disk in the read-only disk inventory.".into());
         return plan;
     };
 
@@ -85,8 +92,11 @@ pub fn build_partition_plan(config: &InstallConfig) -> PartitionPlan {
         } else {
             match config.disk.partitioning {
                 Partitioning::Automatic => "<planned root partition>".to_owned(),
-                Partitioning::Manual | Partitioning::DualBoot => config.disk.root_partition
-                    .as_ref().map(|path| path.display().to_string())
+                Partitioning::Manual | Partitioning::DualBoot => config
+                    .disk
+                    .root_partition
+                    .as_ref()
+                    .map(|path| path.display().to_string())
                     .unwrap_or_else(|| "<selected root partition>".into()),
             }
         };
@@ -143,18 +153,29 @@ fn plan_automatic(config: &InstallConfig, plan: &mut PartitionPlan, target: &str
 }
 
 fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
-    let root = config.disk.root_partition.as_ref().map(|p| p.display().to_string());
+    let root = config
+        .disk
+        .root_partition
+        .as_ref()
+        .map(|p| p.display().to_string());
     let uefi = config.system.firmware == FirmwareMode::Uefi;
-    let efi = config.disk.efi_partition.as_ref().map(|p| p.display().to_string());
+    let efi = config
+        .disk
+        .efi_partition
+        .as_ref()
+        .map(|p| p.display().to_string());
 
     if root.is_none() {
-        plan.blocked.push("Manual mode requires disk.root_partition.".into());
+        plan.blocked
+            .push("Manual mode requires disk.root_partition.".into());
     }
     if uefi && efi.is_none() {
-        plan.blocked.push("Manual UEFI mode requires disk.efi_partition.".into());
+        plan.blocked
+            .push("Manual UEFI mode requires disk.efi_partition.".into());
     }
     if config.disk.swap.mode == SwapMode::Partition && config.disk.swap_partition.is_none() {
-        plan.blocked.push("Manual swap-partition mode requires disk.swap_partition.".into());
+        plan.blocked
+            .push("Manual swap-partition mode requires disk.swap_partition.".into());
     }
     if !plan.blocked.is_empty() {
         return;
@@ -174,18 +195,24 @@ fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
         }
     }
 
-    plan.operations.push(format!("Use manually-created root partition {root}."));
+    plan.operations
+        .push(format!("Use manually-created root partition {root}."));
     if config.disk.encryption {
         plan.operations.push(format!(
             "Apply LUKS2 to {root}, open it as /dev/mapper/cryptroot, and format the mapped device as {}.",
             config.disk.root_filesystem
         ));
     } else {
-        plan.operations.push(format!("Format {root} as {}.", config.disk.root_filesystem));
+        plan.operations
+            .push(format!("Format {root} as {}.", config.disk.root_filesystem));
     }
 
     if config.disk.swap.mode == SwapMode::Partition {
-        let swap = config.disk.swap_partition.as_ref().expect("swap presence checked above");
+        let swap = config
+            .disk
+            .swap_partition
+            .as_ref()
+            .expect("swap presence checked above");
         plan.operations.push(format!(
             "Initialize selected swap partition {} with mkswap; it will be enabled after the root and mountpoints are ready.",
             swap.display()
@@ -195,24 +222,29 @@ fn plan_manual(config: &InstallConfig, plan: &mut PartitionPlan) {
             swap.display()
         ));
     }
-
 }
 
 fn plan_dual_boot(config: &InstallConfig, plan: &mut PartitionPlan) {
     let Some(efi) = config.disk.efi_partition.as_ref() else {
-        plan.blocked.push("Dual-boot requires an explicitly selected existing EFI partition.".into());
+        plan.blocked
+            .push("Dual-boot requires an explicitly selected existing EFI partition.".into());
         return;
     };
     let Some(root) = config.disk.root_partition.as_ref() else {
-        plan.blocked.push("Dual-boot requires an explicitly selected root partition.".into());
+        plan.blocked
+            .push("Dual-boot requires an explicitly selected root partition.".into());
         return;
     };
     if efi == root {
-        plan.blocked.push("EFI and root cannot be the same partition.".into());
+        plan.blocked
+            .push("EFI and root cannot be the same partition.".into());
         return;
     }
 
-    plan.operations.push("Preserve the existing partition table. Do not run wipefs, repartitioning or mklabel.".into());
+    plan.operations.push(
+        "Preserve the existing partition table. Do not run wipefs, repartitioning or mklabel."
+            .into(),
+    );
     plan.operations.push(format!(
         "Preserve EFI partition {} byte-for-byte: do not format it. Verify it is FAT32.",
         efi.display()
@@ -238,7 +270,9 @@ fn plan_additional_mounts(config: &InstallConfig, plan: &mut PartitionPlan) {
         if mount.format {
             plan.operations.push(format!(
                 "Format additional partition {} as {} and mount it at {}.",
-                mount.device.display(), mount.filesystem, mount.mountpoint
+                mount.device.display(),
+                mount.filesystem,
+                mount.mountpoint
             ));
         } else {
             plan.operations.push(format!(
@@ -253,27 +287,35 @@ fn plan_root_and_boot(config: &InstallConfig, plan: &mut PartitionPlan, root_dev
     if config.disk.root_filesystem == Filesystem::Btrfs {
         plan_btrfs_layout(config, plan, root_device);
     } else {
-        plan.operations.push(format!("Mount {root_device} at / as the root filesystem."));
+        plan.operations
+            .push(format!("Mount {root_device} at / as the root filesystem."));
     }
 
     if config.system.firmware == FirmwareMode::Uefi {
         let efi_device = match config.disk.partitioning {
             Partitioning::Automatic => "<planned EFI partition 1>".to_owned(),
-            Partitioning::Manual | Partitioning::DualBoot => config.disk.efi_partition
-                .as_ref().map(|path| path.display().to_string())
+            Partitioning::Manual | Partitioning::DualBoot => config
+                .disk
+                .efi_partition
+                .as_ref()
+                .map(|path| path.display().to_string())
                 .unwrap_or_else(|| "<selected EFI partition>".into()),
         };
-        plan.operations.push(format!("Mount EFI partition {efi_device} at /boot after the root filesystem is mounted."));
+        plan.operations.push(format!(
+            "Mount EFI partition {efi_device} at /boot after the root filesystem is mounted."
+        ));
     }
 
     match config.disk.swap.mode {
         SwapMode::None => {}
         SwapMode::Zram | SwapMode::Both => {
-            plan.operations.push("Enable zram-backed compressed swap at boot.".into());
+            plan.operations
+                .push("Enable zram-backed compressed swap at boot.".into());
         }
         SwapMode::Partition => {
             if let Some(partition) = config.disk.swap_partition.as_ref() {
-                plan.operations.push(format!("Enable swap partition {}.", partition.display()));
+                plan.operations
+                    .push(format!("Enable swap partition {}.", partition.display()));
             } else if config.disk.partitioning == Partitioning::Automatic {
                 plan.operations.push(format!(
                     "Enable the planned {} GiB swap partition.",
@@ -295,7 +337,10 @@ fn plan_root_and_boot(config: &InstallConfig, plan: &mut PartitionPlan, root_dev
                 "Create a {} GiB Btrfs swap file at {swap_path}; set NOCOW (+C) before allocation, set mode 0600, then mkswap and enable it.",
                 config.disk.swap.size_gib
             ));
-        } else if matches!(config.disk.root_filesystem, Filesystem::F2fs | Filesystem::Nilfs2) {
+        } else if matches!(
+            config.disk.root_filesystem,
+            Filesystem::F2fs | Filesystem::Nilfs2
+        ) {
             plan.warnings.push(format!(
                 "Swapfile support on {} must be verified by a live capability check; the existing shell installer skips the file if swapon fails. Prefer zram or a swap partition if unsupported.",
                 config.disk.root_filesystem
@@ -313,7 +358,9 @@ fn plan_root_and_boot(config: &InstallConfig, plan: &mut PartitionPlan, root_dev
     }
 
     if config.disk.swap.zswap {
-        plan.operations.push("Enable the zswap kernel parameter in the selected bootloader configuration.".into());
+        plan.operations.push(
+            "Enable the zswap kernel parameter in the selected bootloader configuration.".into(),
+        );
     }
 }
 
@@ -323,7 +370,8 @@ fn plan_btrfs_layout(config: &InstallConfig, plan: &mut PartitionPlan, root_devi
             "Use a flat Btrfs root on {root_device}; do not create subvolumes."
         ));
         let options = btrfs_mount_options(config, None);
-        plan.operations.push(format!("Mount {root_device} at / with options: {options}."));
+        plan.operations
+            .push(format!("Mount {root_device} at / with options: {options}."));
         return;
     }
 
@@ -344,7 +392,8 @@ fn plan_btrfs_layout(config: &InstallConfig, plan: &mut PartitionPlan, root_devi
         "Mount Btrfs filesystem {root_device} temporarily as the top-level volume; create the following subvolumes:"
     ));
     for (name, mountpoint) in &subvolumes {
-        plan.operations.push(format!("Create Btrfs subvolume {name} for {mountpoint}."));
+        plan.operations
+            .push(format!("Create Btrfs subvolume {name} for {mountpoint}."));
     }
     plan.operations.push("Unmount the temporary top-level mount, then mount subvolume @ as the root filesystem at /.".into());
     for (name, mountpoint) in subvolumes.iter().skip(1) {
@@ -354,7 +403,8 @@ fn plan_btrfs_layout(config: &InstallConfig, plan: &mut PartitionPlan, root_devi
         ));
     }
     let root_options = btrfs_mount_options(config, Some("@"));
-    plan.operations.push(format!("Root mount options: {root_options}."));
+    plan.operations
+        .push(format!("Root mount options: {root_options}."));
 }
 
 fn btrfs_mount_options(config: &InstallConfig, subvolume: Option<&str>) -> String {
@@ -388,14 +438,22 @@ mod tests {
         let plan = build_partition_plan(&config);
         assert!(!plan.is_reviewable());
         assert!(plan.operations.is_empty());
-        assert!(plan.blocked.iter().any(|issue| issue.contains("username must start")));
+        assert!(
+            plan.blocked
+                .iter()
+                .any(|issue| issue.contains("username must start"))
+        );
     }
 
     #[test]
     fn no_target_blocks_all_partition_steps() {
         let plan = build_partition_plan(&InstallConfig::default());
         assert!(!plan.is_reviewable());
-        assert!(plan.blocked.iter().any(|item| item.contains("explicit target disk")));
+        assert!(
+            plan.blocked
+                .iter()
+                .any(|item| item.contains("explicit target disk"))
+        );
         assert!(plan.operations.is_empty());
     }
 
@@ -436,8 +494,16 @@ mod tests {
         config.disk.partitioning = Partitioning::Manual;
         let plan = build_partition_plan(&config);
         assert!(!plan.is_reviewable());
-        assert!(plan.blocked.iter().any(|item| item.contains("root_partition")));
-        assert!(plan.blocked.iter().any(|item| item.contains("efi_partition")));
+        assert!(
+            plan.blocked
+                .iter()
+                .any(|item| item.contains("root_partition"))
+        );
+        assert!(
+            plan.blocked
+                .iter()
+                .any(|item| item.contains("efi_partition"))
+        );
     }
 
     #[test]
@@ -493,9 +559,13 @@ mod tests {
         let plan = build_partition_plan(&config);
         let operations = plan.operations.join("\n");
         let format_root = operations.find("Format root partition").unwrap();
-        let top_level = operations.find("temporarily as the top-level volume").unwrap();
+        let top_level = operations
+            .find("temporarily as the top-level volume")
+            .unwrap();
         let create_root_subvolume = operations.find("Create Btrfs subvolume @ for /").unwrap();
-        let mount_root = operations.find("mount subvolume @ as the root filesystem").unwrap();
+        let mount_root = operations
+            .find("mount subvolume @ as the root filesystem")
+            .unwrap();
         let mount_efi = operations.find("Mount EFI partition").unwrap();
         assert!(format_root < top_level);
         assert!(top_level < create_root_subvolume);
@@ -509,15 +579,20 @@ mod tests {
         config.disk.partitioning = Partitioning::Manual;
         config.disk.efi_partition = Some("/dev/nvme0n1p1".into());
         config.disk.root_partition = Some("/dev/nvme0n1p2".into());
-        config.disk.additional_mounts.push(crate::config::MountConfig {
-            device: "/dev/nvme0n1p3".into(),
-            mountpoint: "/home".into(),
-            filesystem: Filesystem::Ext4,
-            format: true,
-        });
+        config
+            .disk
+            .additional_mounts
+            .push(crate::config::MountConfig {
+                device: "/dev/nvme0n1p3".into(),
+                mountpoint: "/home".into(),
+                filesystem: Filesystem::Ext4,
+                format: true,
+            });
         let operations = build_partition_plan(&config).operations.join("\n");
         let root_mount = operations.find("Mount /dev/nvme0n1p2 at /").unwrap();
-        let efi_mount = operations.find("Mount EFI partition /dev/nvme0n1p1").unwrap();
+        let efi_mount = operations
+            .find("Mount EFI partition /dev/nvme0n1p1")
+            .unwrap();
         let home_mount = operations.find("mount it at /home").unwrap();
         assert!(root_mount < efi_mount);
         assert!(efi_mount < home_mount);

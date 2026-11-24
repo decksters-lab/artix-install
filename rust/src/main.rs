@@ -1,8 +1,8 @@
 mod app;
 mod config;
 mod discovery;
-mod plan;
 mod partition;
+mod plan;
 mod tui;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
@@ -12,7 +12,11 @@ use clap::Parser;
 use config::InstallConfig;
 
 #[derive(Debug, Parser)]
-#[command(name = "artix-setup", version, about = "A configuration-driven Artix Linux installer prototype")]
+#[command(
+    name = "artix-setup",
+    version,
+    about = "A configuration-driven Artix Linux installer prototype"
+)]
 struct Args {
     /// Load an installation profile from a TOML file.
     #[arg(short, long, value_name = "FILE")]
@@ -69,7 +73,10 @@ fn run() -> Result<()> {
         return Ok(());
     }
     config.validate().map_err(|issues| {
-        anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
+        anyhow::anyhow!(
+            "configuration validation failed:\n- {}",
+            issues.join("\n- ")
+        )
     })?;
     if args.validate {
         println!("Configuration is valid.");

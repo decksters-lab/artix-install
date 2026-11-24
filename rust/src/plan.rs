@@ -1,12 +1,25 @@
-use crate::{config::{InstallConfig, Partitioning}, partition};
+use crate::{
+    config::{InstallConfig, Partitioning},
+    partition,
+};
 
 #[derive(Debug, Clone, Copy)]
-enum Risk { Info, Review, Destructive, Blocked }
+enum Risk {
+    Info,
+    Review,
+    Destructive,
+    Blocked,
+}
 
-struct PlanItem { title: String, detail: String, risk: Risk }
+struct PlanItem {
+    title: String,
+    detail: String,
+    risk: Risk,
+}
 
 pub fn format_plan(config: &InstallConfig) -> String {
-    let mut output = String::from("ARTIX SETUP — INSTALLATION PLAN\n================================\n\n");
+    let mut output =
+        String::from("ARTIX SETUP — INSTALLATION PLAN\n================================\n\n");
     output.push_str("PLANNING-ONLY PROTOTYPE\nThis preview does not execute commands, partition disks, format filesystems,\nopen LUKS mappings, mount filesystems, install packages, or change the host.\n\n");
     if let Err(issues) = config.validate() {
         output.push_str("CONFIGURATION INVALID — INSTALL STEPS BLOCKED\n---------------------------------------------\n");
@@ -17,21 +30,56 @@ pub fn format_plan(config: &InstallConfig) -> String {
     }
     for (index, item) in build_items(config).iter().enumerate() {
         let label = match item.risk {
-            Risk::Info => "INFO", Risk::Review => "REVIEW",
-            Risk::Destructive => "DESTRUCTIVE — NOT EXECUTABLE", Risk::Blocked => "BLOCKED",
+            Risk::Info => "INFO",
+            Risk::Review => "REVIEW",
+            Risk::Destructive => "DESTRUCTIVE — NOT EXECUTABLE",
+            Risk::Blocked => "BLOCKED",
         };
-        output.push_str(&format!("{:>2}. [{}] {}\n    {}\n", index + 1, label, item.title, item.detail));
+        output.push_str(&format!(
+            "{:>2}. [{}] {}\n    {}\n",
+            index + 1,
+            label,
+            item.title,
+            item.detail
+        ));
     }
     output.push_str("\nSELECTED CONFIGURATION\n----------------------\n");
-    output.push_str(&format!("Init system:       {}\n", config.system.init_system));
+    output.push_str(&format!(
+        "Init system:       {}\n",
+        config.system.init_system
+    ));
     output.push_str(&format!("Firmware:          {}\n", config.system.firmware));
-    output.push_str(&format!("Target disk:       {}\n", config.disk.target.as_ref().map_or_else(|| "NOT SELECTED".into(), |p| p.display().to_string())));
-    output.push_str(&format!("Partitioning:      {}\n", config.disk.partitioning));
-    output.push_str(&format!("Root filesystem:   {}\n", config.disk.root_filesystem));
-    output.push_str(&format!("Encryption:        {}\n", if config.disk.encryption { "LUKS2 requested" } else { "off" }));
-    output.push_str(&format!("Swap:              {} ({} GiB, zswap: {})\n", config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap));
+    output.push_str(&format!(
+        "Target disk:       {}\n",
+        config
+            .disk
+            .target
+            .as_ref()
+            .map_or_else(|| "NOT SELECTED".into(), |p| p.display().to_string())
+    ));
+    output.push_str(&format!(
+        "Partitioning:      {}\n",
+        config.disk.partitioning
+    ));
+    output.push_str(&format!(
+        "Root filesystem:   {}\n",
+        config.disk.root_filesystem
+    ));
+    output.push_str(&format!(
+        "Encryption:        {}\n",
+        if config.disk.encryption {
+            "LUKS2 requested"
+        } else {
+            "off"
+        }
+    ));
+    output.push_str(&format!(
+        "Swap:              {} ({} GiB, zswap: {})\n",
+        config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap
+    ));
     let efi_policy = if config.disk.partitioning == Partitioning::Automatic
-        && config.system.firmware == crate::config::FirmwareMode::Uefi {
+        && config.system.firmware == crate::config::FirmwareMode::Uefi
+    {
         "automatic: newly created EFI partition is formatted"
     } else if config.system.firmware == crate::config::FirmwareMode::Bios {
         "not applicable (BIOS)"
@@ -42,14 +90,38 @@ pub fn format_plan(config: &InstallConfig) -> String {
         }
     };
     output.push_str(&format!("EFI policy:        {efi_policy}\n"));
-    output.push_str(&format!("Bootloader:        {}\n", config.software.bootloader));
+    output.push_str(&format!(
+        "Bootloader:        {}\n",
+        config.software.bootloader
+    ));
     output.push_str(&format!("Desktops / WMs:    {}\n", list_desktops(config)));
-    output.push_str(&format!("Kernels:            {}\n", config.software.kernels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")));
-    output.push_str(&format!("CPU / GPU:         {} / {}\n", config.software.cpu_vendor, config.software.gpu));
+    output.push_str(&format!(
+        "Kernels:            {}\n",
+        config
+            .software
+            .kernels
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
+    output.push_str(&format!(
+        "CPU / GPU:         {} / {}\n",
+        config.software.cpu_vendor, config.software.gpu
+    ));
     output.push_str(&format!("Network:           {}\n", config.software.network));
-    output.push_str(&format!("Privilege:         {}\n", config.system.privilege_escalation));
-    output.push_str(&format!("User services:     {}\n", config.system.user_services));
-    output.push_str(&format!("Multilib:          {}\n", config.software.multilib));
+    output.push_str(&format!(
+        "Privilege:         {}\n",
+        config.system.privilege_escalation
+    ));
+    output.push_str(&format!(
+        "User services:     {}\n",
+        config.system.user_services
+    ));
+    output.push_str(&format!(
+        "Multilib:          {}\n",
+        config.software.multilib
+    ));
     output.push_str("\nPARTITION LAYOUT PREVIEW\n------------------------\n");
     output.push_str(&partition::build_partition_plan(config).render());
     output.push_str("\nNo disk operation is permitted by this prototype.\n");
@@ -88,19 +160,52 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
                 } else {
                     reasons.join(" ")
                 };
-                items.push(PlanItem { title: "Partition and prepare storage".into(),
-                    detail: format!("Blocked: {reason}"), risk: Risk::Blocked });
+                items.push(PlanItem {
+                    title: "Partition and prepare storage".into(),
+                    detail: format!("Blocked: {reason}"),
+                    risk: Risk::Blocked,
+                });
             } else {
                 let detail = match config.disk.partitioning {
-                    Partitioning::Automatic => format!("Would create a fresh partition layout on {} using {} root. This overwrites the target device and requires typed confirmation. EFI policy: {}.", target.display(), config.disk.root_filesystem, config.disk.efi_policy),
-                    Partitioning::Manual => format!("Would assign existing root, EFI and optional extra mountpoint partitions on {}. The selected root partition is formatted as {}; EFI follows the explicit preserve/format policy, and each additional mount has its own format flag.", target.display(), config.disk.root_filesystem),
-                    Partitioning::DualBoot => format!("Would preserve the partition table on {} and use root {} with existing EFI {}. EFI must never be formatted.", target.display(), config.disk.root_partition.as_ref().map_or("unset".into(), |p| p.display().to_string()), config.disk.efi_partition.as_ref().map_or("unset".into(), |p| p.display().to_string())),
+                    Partitioning::Automatic => format!(
+                        "Would create a fresh partition layout on {} using {} root. This overwrites the target device and requires typed confirmation. EFI policy: {}.",
+                        target.display(),
+                        config.disk.root_filesystem,
+                        config.disk.efi_policy
+                    ),
+                    Partitioning::Manual => format!(
+                        "Would assign existing root, EFI and optional extra mountpoint partitions on {}. The selected root partition is formatted as {}; EFI follows the explicit preserve/format policy, and each additional mount has its own format flag.",
+                        target.display(),
+                        config.disk.root_filesystem
+                    ),
+                    Partitioning::DualBoot => format!(
+                        "Would preserve the partition table on {} and use root {} with existing EFI {}. EFI must never be formatted.",
+                        target.display(),
+                        config
+                            .disk
+                            .root_partition
+                            .as_ref()
+                            .map_or("unset".into(), |p| p.display().to_string()),
+                        config
+                            .disk
+                            .efi_partition
+                            .as_ref()
+                            .map_or("unset".into(), |p| p.display().to_string())
+                    ),
                 };
-                items.push(PlanItem { title: "Partition and prepare storage".into(), detail, risk: Risk::Destructive });
+                items.push(PlanItem {
+                    title: "Partition and prepare storage".into(),
+                    detail,
+                    risk: Risk::Destructive,
+                });
             }
         }
     }
-    let risk = if storage_ready { Risk::Review } else { Risk::Blocked };
+    let risk = if storage_ready {
+        Risk::Review
+    } else {
+        Risk::Blocked
+    };
     items.push(PlanItem { title: "Set up encryption, filesystems and swap".into(),
         detail: format!("LUKS2: {}; root: {}; swap: {} ({} GiB); zswap: {}. EFI policy: {}. No passphrase is stored in the profile.", config.disk.encryption, config.disk.root_filesystem, config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap, config.disk.efi_policy), risk });
     items.push(PlanItem { title: "Install Artix base system".into(),
@@ -120,19 +225,35 @@ fn user_services_detail(config: &InstallConfig) -> &'static str {
     use crate::config::{InitSystem, UserServices};
     match (config.system.init_system, config.system.user_services) {
         (_, UserServices::None) => "not requested",
-        (InitSystem::Dinit, UserServices::Userspawn) => "use the Dinit userspawn integration; verify package availability before installation",
-        (InitSystem::Dinit, UserServices::Turnstile) => "use the Dinit-specific Turnstile integration; verify package availability before installation",
-        (InitSystem::OpenRc, UserServices::Native) => "use OpenRC native per-user service support; verify the installed OpenRC version and configuration",
-        (InitSystem::OpenRc, UserServices::Turnstile) => "use the OpenRC-specific Turnstile integration; verify package availability before installation",
-        (InitSystem::Runit, UserServices::Userspawn) => "use the runit userspawn integration; verify package availability before installation",
-        (InitSystem::S6, UserServices::Manual) => "manual user-managed setup; do not assume Turnstile or configure it automatically",
+        (InitSystem::Dinit, UserServices::Userspawn) => {
+            "use the Dinit userspawn integration; verify package availability before installation"
+        }
+        (InitSystem::Dinit, UserServices::Turnstile) => {
+            "use the Dinit-specific Turnstile integration; verify package availability before installation"
+        }
+        (InitSystem::OpenRc, UserServices::Native) => {
+            "use OpenRC native per-user service support; verify the installed OpenRC version and configuration"
+        }
+        (InitSystem::OpenRc, UserServices::Turnstile) => {
+            "use the OpenRC-specific Turnstile integration; verify package availability before installation"
+        }
+        (InitSystem::Runit, UserServices::Userspawn) => {
+            "use the runit userspawn integration; verify package availability before installation"
+        }
+        (InitSystem::S6, UserServices::Manual) => {
+            "manual user-managed setup; do not assume Turnstile or configure it automatically"
+        }
         _ => "invalid init/user-service combination; configuration validation must block this plan",
     }
 }
 
 fn desktop_details(config: &InstallConfig) -> &'static str {
     use crate::config::Desktop;
-    if config.software.desktop_environments.contains(&Desktop::Cosmalia) {
+    if config
+        .software
+        .desktop_environments
+        .contains(&Desktop::Cosmalia)
+    {
         "Cosmalia follows grigio/cosmalia-session-dinit: Dinit session, cosmic-comp launched with --no-xwayland, and Noctalia as the shell. The upstream package manifest does not include a separate cosmic-osd component."
     } else {
         ""
@@ -140,8 +261,17 @@ fn desktop_details(config: &InstallConfig) -> &'static str {
 }
 
 fn list_desktops(config: &InstallConfig) -> String {
-    if config.software.desktop_environments.is_empty() { "CLI only".into() }
-    else { config.software.desktop_environments.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ") }
+    if config.software.desktop_environments.is_empty() {
+        "CLI only".into()
+    } else {
+        config
+            .software
+            .desktop_environments
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 #[cfg(test)]
