@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path, process::Command};
 use anyhow::{Context, Result};
 
 use crate::{
-    config::{InstallConfig, Kernel},
+    config::{InstallConfig, Kernel, UserServices},
     packages::{self, PackageSource},
 };
 
@@ -259,6 +259,17 @@ mod tests {
             item.name == "base-devel" && item.availability == Availability::Missing
         }));
         assert!(report.has_problems());
+        fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn selected_user_service_packages_are_included_in_availability_checks() {
+        let mut config = InstallConfig::default();
+        config.system.user_services = UserServices::Turnstile;
+        let pacman = fake_pacman("user-services");
+        let report = check(&config, &pacman).unwrap();
+        assert!(report.checks.iter().any(|item| item.name == "turnstile"));
+        assert!(report.checks.iter().any(|item| item.name == "turnstile-dinit"));
         fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 
