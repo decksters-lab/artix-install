@@ -51,6 +51,7 @@ pub struct PackagePlan {
     pub network_packages: Vec<&'static str>,
     pub xorg_packages: Vec<&'static str>,
     pub audio_packages: Vec<&'static str>,
+    pub optional_service_packages: Vec<&'static str>,
     pub privilege_packages: Vec<&'static str>,
     pub desktop_recipes: Vec<DesktopRecipe>,
     pub deferred: Vec<String>,
@@ -231,6 +232,24 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     } else {
         Vec::new()
     };
+    let optional_service_packages = if needs_audio {
+        match config.system.init_system {
+            InitSystem::Dinit => {
+                vec!["pipewire-dinit", "pipewire-pulse-dinit", "wireplumber-dinit"]
+            }
+            InitSystem::OpenRc => {
+                vec!["pipewire-openrc", "pipewire-pulse-openrc", "wireplumber-openrc"]
+            }
+            InitSystem::Runit => {
+                vec!["pipewire-runit", "pipewire-pulse-runit", "wireplumber-runit"]
+            }
+            InitSystem::S6 => {
+                vec!["pipewire-s6", "pipewire-pulse-s6", "wireplumber-s6"]
+            }
+        }
+    } else {
+        Vec::new()
+    };
     let privilege_packages = match config.system.privilege_escalation {
         PrivilegeEscalation::Doas => vec!["doas"],
         PrivilegeEscalation::Sudo => vec!["sudo"],
@@ -263,6 +282,7 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         network_packages,
         xorg_packages,
         audio_packages,
+        optional_service_packages,
         privilege_packages,
         desktop_recipes,
         deferred,
