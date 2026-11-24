@@ -1,8 +1,8 @@
 mod app;
 mod config;
 mod discovery;
-mod packages;
 mod package_check;
+mod packages;
 mod partition;
 mod plan;
 mod preflight;
