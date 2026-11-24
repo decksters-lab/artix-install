@@ -159,10 +159,9 @@ pub fn apply_automatic_partition_table(
 
     // Confirm that the kernel and sysfs now expose the same number of child partitions.
     let refreshed_hardware = discovery::discover();
-    let refreshed_disk = find_safe_target(&refreshed_hardware, selected)
-        .context(
-            "partition table was written, but fresh device discovery could not verify the target",
-        )?;
+    let refreshed_disk = find_safe_target(&refreshed_hardware, selected).context(
+        "partition table was written, but fresh device discovery could not verify the target",
+    )?;
     let expected_count = expected_partition_types(config).len();
     if refreshed_disk.partitions.len() != expected_count {
         bail!(
@@ -178,10 +177,12 @@ pub fn apply_automatic_partition_table(
                 index + 1
             );
         }
-        let partition_metadata = fs::metadata(&partition.path)
-            .with_context(|| {
-                format!("inspect newly discovered partition {}", partition.path.display())
-            })?;
+        let partition_metadata = fs::metadata(&partition.path).with_context(|| {
+            format!(
+                "inspect newly discovered partition {}",
+                partition.path.display()
+            )
+        })?;
         if !partition_metadata.file_type().is_block_device() {
             bail!(
                 "partition table was written, but {} is not a block device; do not continue",
@@ -560,7 +561,9 @@ mod tests {
         let config = InstallConfig::default();
         let wrong_type = "label: gpt\\n/dev/vda1 : start= 2048, size= 2097152, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n/dev/vda2 : start= 2099200, size= 91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n";
         assert!(verify_partition_table_dump(&config, wrong_type).is_err());
-        let extra = format!("{wrong_type}/dev/vda3 : start= 93952000, size= 100, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n");
+        let extra = format!(
+            "{wrong_type}/dev/vda3 : start= 93952000, size= 100, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n"
+        );
         assert!(verify_partition_table_dump(&config, &extra).is_err());
     }
 
