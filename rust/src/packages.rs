@@ -664,6 +664,8 @@ mod tests {
         assert!(plan.xorg_packages.is_empty());
         assert!(plan.audio_packages.contains(&"pipewire"));
         assert!(plan.audio_packages.contains(&"rtkit"));
+        assert!(plan.optional_service_packages.contains(&"pipewire-dinit"));
+        assert!(plan.optional_service_packages.contains(&"wireplumber-dinit"));
     }
 
     #[test]
