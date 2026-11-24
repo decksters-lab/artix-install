@@ -2,8 +2,8 @@
 //! This module deliberately performs no repository queries or package operations.
 
 use crate::config::{
-    Bootloader, CpuVendor, Desktop, Filesystem, FirmwareMode, GpuChoice, InitSystem,
-    InstallConfig, Kernel, NetworkStack, Partitioning, PrivilegeEscalation, UserServices,
+    Bootloader, CpuVendor, Desktop, Filesystem, FirmwareMode, GpuChoice, InitSystem, InstallConfig,
+    Kernel, NetworkStack, Partitioning, PrivilegeEscalation, UserServices,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
