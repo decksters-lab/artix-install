@@ -235,13 +235,25 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     let optional_service_packages = if needs_audio {
         match config.system.init_system {
             InitSystem::Dinit => {
-                vec!["pipewire-dinit", "pipewire-pulse-dinit", "wireplumber-dinit"]
+                vec![
+                    "pipewire-dinit",
+                    "pipewire-pulse-dinit",
+                    "wireplumber-dinit",
+                ]
             }
             InitSystem::OpenRc => {
-                vec!["pipewire-openrc", "pipewire-pulse-openrc", "wireplumber-openrc"]
+                vec![
+                    "pipewire-openrc",
+                    "pipewire-pulse-openrc",
+                    "wireplumber-openrc",
+                ]
             }
             InitSystem::Runit => {
-                vec!["pipewire-runit", "pipewire-pulse-runit", "wireplumber-runit"]
+                vec![
+                    "pipewire-runit",
+                    "pipewire-pulse-runit",
+                    "wireplumber-runit",
+                ]
             }
             InitSystem::S6 => {
                 vec!["pipewire-s6", "pipewire-pulse-s6", "wireplumber-s6"]
@@ -665,7 +677,10 @@ mod tests {
         assert!(plan.audio_packages.contains(&"pipewire"));
         assert!(plan.audio_packages.contains(&"rtkit"));
         assert!(plan.optional_service_packages.contains(&"pipewire-dinit"));
-        assert!(plan.optional_service_packages.contains(&"wireplumber-dinit"));
+        assert!(
+            plan.optional_service_packages
+                .contains(&"wireplumber-dinit")
+        );
     }
 
     #[test]
