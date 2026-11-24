@@ -1,8 +1,8 @@
 mod app;
 mod config;
 mod discovery;
-mod partition;
 mod packages;
+mod partition;
 mod plan;
 mod tui;
 
