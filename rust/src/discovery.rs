@@ -431,7 +431,7 @@ fn find_orphaned_partitions<'a>(
         .into_iter()
         .filter_map(|(name, parent)| {
             parent
-                .filter(|parent| !known_disks.contains(parent))
+                .filter(|parent| !known_disks.contains(*parent))
                 .map(|parent| (name.to_owned(), parent.to_owned()))
         })
         .collect()
