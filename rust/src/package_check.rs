@@ -91,6 +91,14 @@ impl PackageCheckReport {
     }
 }
 
+
+fn is_missing_error(stderr: &str, package: &str) -> bool {
+    let message = stderr.to_ascii_lowercase();
+    message.contains("target not found")
+        || message.contains(&format!("package '{package}' was not found"))
+        || message.contains(&format!("group '{package}' was not found"))
+}
+
 pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport> {
     let plan = packages::build_package_plan(config);
     let mut packages = BTreeMap::<String, PackageSource>::new();
@@ -160,7 +168,7 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
         } else {
             let stderr = String::from_utf8_lossy(&result.stderr);
             let missing = (is_group && result.stdout.is_empty())
-                || stderr.to_ascii_lowercase().contains("not found");
+                || is_missing_error(&stderr, &name);
             checks.push(PackageCheck {
                 name,
                 source,
@@ -226,6 +234,23 @@ mod tests {
         permissions.set_mode(0o755);
         fs::set_permissions(&path, permissions).unwrap();
         path
+    }
+
+
+    #[test]
+    fn distinguishes_missing_packages_from_missing_sync_databases() {
+        assert!(is_missing_error(
+            "error: target not found: foo",
+            "foo"
+        ));
+        assert!(is_missing_error(
+            "error: package 'foo' was not found",
+            "foo"
+        ));
+        assert!(!is_missing_error(
+            "error: database 'extra' was not found",
+            "foo"
+        ));
     }
 
     #[test]
