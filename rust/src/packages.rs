@@ -3,7 +3,7 @@
 
 use crate::config::{
     CpuVendor, Desktop, GpuChoice, InitSystem, InstallConfig, Kernel, NetworkStack,
-    PrivilegeEscalation,
+    PrivilegeEscalation, UserServices,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +45,7 @@ pub struct PackagePlan {
     pub microcode_packages: Vec<&'static str>,
     pub gpu_packages: Vec<&'static str>,
     pub init_packages: Vec<&'static str>,
+    pub user_service_packages: Vec<&'static str>,
     pub network_packages: Vec<&'static str>,
     pub xorg_packages: Vec<&'static str>,
     pub audio_packages: Vec<&'static str>,
@@ -59,6 +60,13 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         InitSystem::OpenRc => vec!["openrc", "elogind-openrc", "dbus-openrc"],
         InitSystem::Runit => vec!["runit", "elogind-runit", "dbus-runit"],
         InitSystem::S6 => vec!["s6-base", "elogind-s6", "dbus-s6"],
+    };
+    let user_service_packages = match (config.system.init_system, config.system.user_services) {
+        (InitSystem::Dinit, UserServices::Userspawn) => vec!["userspawn-dinit"],
+        (InitSystem::Dinit, UserServices::Turnstile) => vec!["turnstile", "turnstile-dinit"],
+        (InitSystem::OpenRc, UserServices::Turnstile) => vec!["turnstile", "turnstile-openrc"],
+        (InitSystem::Runit, UserServices::Userspawn) => vec!["userspawn-runit"],
+        _ => Vec::new(),
     };
     let mut deferred = vec![
         "Package names and availability must be checked against the selected live Artix repositories before installation.".to_owned(),
@@ -192,6 +200,7 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         microcode_packages,
         gpu_packages,
         init_packages,
+        user_service_packages,
         network_packages,
         xorg_packages,
         audio_packages,
