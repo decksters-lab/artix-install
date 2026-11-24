@@ -99,10 +99,7 @@ pub fn apply_automatic_partition_table(
         .stderr(Stdio::inherit())
         .spawn()
         .context("start sfdisk; ensure util-linux is installed")?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .context("open sfdisk standard input")?;
+    let mut stdin = child.stdin.take().context("open sfdisk standard input")?;
     if let Err(error) = stdin.write_all(script.as_bytes()) {
         let _ = child.kill();
         drop(stdin);
