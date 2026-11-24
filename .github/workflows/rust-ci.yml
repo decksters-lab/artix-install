@@ -1,5 +1,8 @@
 name: Rust CI
 
+permissions:
+  contents: write
+
 on:
   push:
     paths:
@@ -25,6 +28,16 @@ jobs:
       # Temporary formatting pass: publish the rustfmt output so the source can be
       # committed back to the feature branch, then restore a strict check-only gate.
       - run: cargo fmt --all
+      - name: Commit rustfmt output to the feature branch
+        if: github.event_name == 'push'
+        run: |
+          if ! git diff --quiet -- rust/src; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add rust/src
+            git commit -m "Format Rust sources with rustfmt"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: rustfmt-source
