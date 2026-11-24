@@ -127,10 +127,15 @@ pub fn format_plan(config: &InstallConfig) -> String {
     output.push_str("\nPACKAGE PLAN PREVIEW\n--------------------\n");
     let package_plan = crate::packages::build_package_plan(config);
     output.push_str(&format!(
-        "Base packages: {}\nKernel packages: {}\nInit packages: {}\nNetwork: {}\nPrivilege: {}\n",
+        "Base packages: {}\nKernel packages: {}\nInit packages: {}\nUser service packages: {}\nNetwork: {}\nPrivilege: {}\n",
         package_plan.base_packages.join(" "),
         package_plan.kernel_packages.join(" "),
         package_plan.init_packages.join(" "),
+        if package_plan.user_service_packages.is_empty() {
+            "none".to_owned()
+        } else {
+            package_plan.user_service_packages.join(" ")
+        },
         package_plan.network_packages.join(" "),
         package_plan.privilege_packages.join(" ")
     ));
