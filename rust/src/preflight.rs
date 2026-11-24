@@ -128,33 +128,48 @@ pub fn evaluate(
         }),
     }
 
-    let expected_firmware = match config.system.firmware {
-        crate::config::FirmwareMode::Uefi => "UEFI",
-        crate::config::FirmwareMode::Bios => "BIOS / legacy or unavailable",
-    };
-    let firmware_matches = if expected_firmware == "UEFI" {
-        hardware.firmware == "UEFI"
-    } else {
-        hardware.firmware != "UEFI"
+    let (firmware_status, firmware_detail) = match (
+        config.system.firmware,
+        hardware.firmware.as_str(),
+    ) {
+        (crate::config::FirmwareMode::Uefi, "UEFI") => (
+            CheckStatus::Pass,
+            "UEFI boot was detected and matches the selected firmware mode.".into(),
+        ),
+        (crate::config::FirmwareMode::Uefi, detected) => (
+            CheckStatus::Fail,
+            format!("UEFI was selected, but detected firmware is {detected}."),
+        ),
+        (crate::config::FirmwareMode::Bios, "UEFI") => (
+            CheckStatus::Fail,
+            "BIOS was selected, but the live system was booted in UEFI mode.".into(),
+        ),
+        (crate::config::FirmwareMode::Bios, detected) => (
+            CheckStatus::Warning,
+            format!("UEFI was not detected ({detected}); sysfs cannot positively distinguish legacy BIOS from unavailable firmware information."),
+        ),
     };
     checks.push(PreflightCheck {
         name: "Firmware mode",
-        status: if firmware_matches {
+        status: firmware_status,
+        detail: firmware_detail,
+    });
+
+    let active_network = hardware
+        .network_interfaces
+        .iter()
+        .any(|interface| interface.state.as_deref() == Some("up"));
+    checks.push(PreflightCheck {
+        name: "Network interface",
+        status: if active_network {
             CheckStatus::Pass
         } else {
-            CheckStatus::Fail
+            CheckStatus::Warning
         },
-        detail: if firmware_matches {
-            format!(
-                "Detected firmware is compatible with configured {} mode.",
-                config.system.firmware
-            )
+        detail: if active_network {
+            "At least one network interface reports link state up; internet access is not verified.".into()
         } else {
-            format!(
-                "Configured {} mode does not match detected {} firmware.",
-                config.system.firmware,
-                hardware.firmware
-            )
+            "No network interface reports link state up. Connect to the network before package installation; internet access is not verified by this check.".into()
         },
     });
 
@@ -418,6 +433,28 @@ mod tests {
             check.name == "Target disk" && check.status == CheckStatus::Fail
         }));
         assert!(!report.is_ready());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+
+    #[test]
+    fn unavailable_firmware_metadata_is_not_a_bios_pass() {
+        let directory = executable_dir("firmware-unknown");
+        let mut config = InstallConfig::default();
+        config.system.firmware = FirmwareMode::Bios;
+        let report = evaluate(
+            &config,
+            &HardwareSnapshot {
+                firmware: "BIOS / legacy or unavailable".into(),
+                ..HardwareSnapshot::default()
+            },
+            Some("ID=artix\\n"),
+            Some(0),
+            directory.as_os_str(),
+        );
+        assert!(report.checks.iter().any(|check| {
+            check.name == "Firmware mode" && check.status == CheckStatus::Warning
+        }));
         fs::remove_dir_all(directory).unwrap();
     }
 
