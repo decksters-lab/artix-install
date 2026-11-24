@@ -415,15 +415,10 @@ impl InstallConfig {
             if self.disk.root_filesystem == Filesystem::Btrfs
                 && self.disk.btrfs.layout != BtrfsLayout::Flat
             {
-                let built_in = matches!(
-                    point,
-                    "/home" | "/var/log" | "/var/cache"
-                ) || (self.disk.btrfs.layout == BtrfsLayout::Snapshots
-                    && point == "/.snapshots")
-                    || (matches!(
-                        self.disk.swap.mode,
-                        SwapMode::Swapfile | SwapMode::Both
-                    ) && point == "/swap");
+                let built_in = matches!(point, "/home" | "/var/log" | "/var/cache")
+                    || (self.disk.btrfs.layout == BtrfsLayout::Snapshots && point == "/.snapshots")
+                    || (matches!(self.disk.swap.mode, SwapMode::Swapfile | SwapMode::Both)
+                        && point == "/swap");
                 if built_in {
                     issues.push(format!(
                         "additional mountpoint '{point}' conflicts with a Btrfs subvolume mount created by the selected layout"
@@ -746,7 +741,11 @@ mod tests {
             },
         ];
         let issues = config.validate().unwrap_err();
-        assert!(issues.iter().any(|issue| issue.contains("normalized absolute path")));
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.contains("normalized absolute path"))
+        );
     }
 
     #[test]
