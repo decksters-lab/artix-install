@@ -273,7 +273,7 @@ fn required_tools(config: &InstallConfig) -> Vec<&'static str> {
     ];
     if config.disk.partitioning == Partitioning::Automatic {
         // The existing Bash installer writes both GPT and DOS layouts with sfdisk.
-        tools.push("sfdisk");
+        tools.extend(["sfdisk", "partprobe", "udevadm"]);
     }
 
     let mut filesystems = vec![config.disk.root_filesystem];
