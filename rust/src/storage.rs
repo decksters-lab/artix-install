@@ -349,7 +349,7 @@ mod tests {
         config.disk.root_filesystem = Filesystem::Btrfs;
         assert_eq!(
             build_sfdisk_script(&config).unwrap().lines().count(),
-            3
+            4
         );
     }
 
