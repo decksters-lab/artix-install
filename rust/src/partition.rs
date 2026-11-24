@@ -56,6 +56,10 @@ impl PartitionPlan {
 
 pub fn build_partition_plan(config: &InstallConfig) -> PartitionPlan {
     let mut plan = PartitionPlan::default();
+    if let Err(issues) = config.validate() {
+        plan.blocked.extend(issues);
+        return plan;
+    }
     let Some(target) = config.disk.target.as_ref() else {
         plan.blocked.push("Choose an explicit target disk in the read-only disk inventory.".into());
         return plan;
@@ -375,6 +379,16 @@ mod tests {
         let mut config = InstallConfig::default();
         config.disk.target = Some(PathBuf::from("/dev/nvme0n1"));
         config
+    }
+
+    #[test]
+    fn invalid_configuration_never_emits_partition_operations() {
+        let mut config = with_target();
+        config.system.username = "INVALID USER".into();
+        let plan = build_partition_plan(&config);
+        assert!(!plan.is_reviewable());
+        assert!(plan.operations.is_empty());
+        assert!(plan.blocked.iter().any(|issue| issue.contains("username must start")));
     }
 
     #[test]
