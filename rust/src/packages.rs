@@ -2,8 +2,8 @@
 //! This module deliberately performs no repository queries or package operations.
 
 use crate::config::{
-    CpuVendor, Desktop, GpuChoice, InitSystem, InstallConfig, Kernel, NetworkStack,
-    PrivilegeEscalation, UserServices,
+    Bootloader, CpuVendor, Desktop, EfiPolicy, Filesystem, FirmwareMode, GpuChoice, InitSystem,
+    InstallConfig, Kernel, NetworkStack, Partitioning, PrivilegeEscalation, UserServices,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +46,8 @@ pub struct PackagePlan {
     pub gpu_packages: Vec<&'static str>,
     pub init_packages: Vec<&'static str>,
     pub user_service_packages: Vec<&'static str>,
+    pub storage_packages: Vec<&'static str>,
+    pub bootloader_packages: Vec<&'static str>,
     pub network_packages: Vec<&'static str>,
     pub xorg_packages: Vec<&'static str>,
     pub audio_packages: Vec<&'static str>,
@@ -112,6 +114,53 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     if matches!(config.software.gpu, GpuChoice::Nvidia | GpuChoice::Hybrid) {
         deferred.push("NVIDIA DKMS needs matching headers for every kernel that will use the module; verify kernel/header availability and supported hardware before installation.".to_owned());
     }
+    let mut storage_packages = Vec::new();
+    let mut filesystems = vec![config.disk.root_filesystem];
+    filesystems.extend(
+        config
+            .disk
+            .additional_mounts
+            .iter()
+            .map(|mount| mount.filesystem),
+    );
+    if config.system.firmware == FirmwareMode::Uefi {
+        filesystems.push(Filesystem::Vfat);
+    }
+    if config.disk.encryption {
+        storage_packages.push("cryptsetup");
+    }
+    for filesystem in filesystems {
+        let package = match filesystem {
+            Filesystem::Btrfs => Some("btrfs-progs"),
+            Filesystem::Ext4 => None,
+            Filesystem::Xfs => Some("xfsprogs"),
+            Filesystem::F2fs => Some("f2fs-tools"),
+            Filesystem::Jfs => Some("jfsutils"),
+            Filesystem::Nilfs2 => Some("nilfs-utils"),
+            Filesystem::Vfat => Some("dosfstools"),
+            Filesystem::Exfat => Some("exfatprogs"),
+            Filesystem::Ntfs => Some("ntfs-3g"),
+        };
+        if let Some(package) = package {
+            if !storage_packages.contains(&package) {
+                storage_packages.push(package);
+            }
+        }
+    }
+    let bootloader_packages = match config.software.bootloader {
+        Bootloader::Grub => {
+            let mut packages = vec!["grub"];
+            if config.system.firmware == FirmwareMode::Uefi {
+                packages.push("efibootmgr");
+            }
+            if config.disk.partitioning == Partitioning::DualBoot {
+                packages.push("os-prober");
+            }
+            packages
+        }
+        Bootloader::Limine => vec!["limine", "efibootmgr", "limine-mkinitcpio-hook"],
+        Bootloader::Refind => vec!["refind", "efibootmgr"],
+    };
     let network_packages = match config.software.network {
         NetworkStack::Dhcpcd => vec!["dhcpcd"],
         NetworkStack::Iwd => vec!["iwd"],
@@ -201,6 +250,8 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         gpu_packages,
         init_packages,
         user_service_packages,
+        storage_packages,
+        bootloader_packages,
         network_packages,
         xorg_packages,
         audio_packages,
