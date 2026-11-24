@@ -1,7 +1,7 @@
 //! Deterministic package recipe previews ported from the existing Bash installer.
 //! This module deliberately performs no repository queries or package operations.
 
-use crate::config::{Desktop, InitSystem, InstallConfig, NetworkStack, PrivilegeEscalation};
+use crate::config::{Desktop, InitSystem, InstallConfig, Kernel, NetworkStack, PrivilegeEscalation};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PackageSource {
@@ -35,6 +35,8 @@ pub struct DesktopRecipe {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackagePlan {
     pub base_packages: Vec<&'static str>,
+    pub kernel_packages: Vec<String>,
+    pub kernel_notes: Vec<String>,
     pub init_packages: Vec<&'static str>,
     pub network_packages: Vec<&'static str>,
     pub privilege_packages: Vec<&'static str>,
@@ -49,6 +51,30 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         InitSystem::Runit => vec!["runit", "elogind-runit", "dbus-runit"],
         InitSystem::S6 => vec!["s6-base", "elogind-s6", "dbus-s6"],
     };
+    let mut kernel_packages = Vec::new();
+    let mut kernel_notes = Vec::new();
+    for kernel in &config.software.kernels {
+        let package = match kernel {
+            Kernel::Linux => "linux",
+            Kernel::LinuxLts => "linux-lts",
+            Kernel::LinuxZen => "linux-zen",
+            Kernel::LinuxLqx => "linux-lqx",
+            Kernel::LinuxCachyos => "linux-cachyos",
+        };
+        kernel_packages.push(package.to_owned());
+        match kernel {
+            Kernel::LinuxLqx => kernel_packages.push("linux-lqx-headers".to_owned()),
+            Kernel::LinuxCachyos => kernel_notes.push("linux-cachyos requires CachyOS keyring/repository setup; its package bundles headers.".to_owned()),
+            Kernel::Linux => {},
+            _ => kernel_packages.push(format!("{package}-headers")),
+        }
+    }
+    if !config.software.kernels.contains(&Kernel::Linux) {
+        deferred.push("The selected kernel list has no linux fallback; the current shell installer keeps linux as its guaranteed first-install fallback.".to_owned());
+    }
+    if config.software.kernels.contains(&Kernel::LinuxLqx) {
+        kernel_notes.push("linux-lqx requires the Liquorix repository and signing-key setup.".to_owned());
+    }
     let network_packages = match config.software.network {
         NetworkStack::Dhcpcd => vec!["dhcpcd"],
         NetworkStack::Iwd => vec!["iwd"],
@@ -72,9 +98,11 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
 
     PackagePlan {
         base_packages: vec![
-            "base", "base-devel", "linux", "linux-firmware", "ttf-dejavu",
+            "base", "base-devel", "linux-firmware", "ttf-dejavu",
             "ttf-liberation", "noto-fonts",
         ],
+        kernel_packages,
+        kernel_notes,
         init_packages,
         network_packages,
         privilege_packages,
@@ -162,6 +190,19 @@ mod tests {
         config.system.init_system = InitSystem::S6;
         let plan = build_package_plan(&config);
         assert_eq!(plan.init_packages, ["s6-base", "elogind-s6", "dbus-s6"]);
+        assert_eq!(plan.kernel_packages, ["linux".to_owned()]);
+    }
+
+    #[test]
+    fn selected_kernel_packages_include_headers_and_repo_notes() {
+        let mut config = InstallConfig::default();
+        config.software.kernels = vec![Kernel::LinuxLts, Kernel::LinuxLqx, Kernel::LinuxCachyos];
+        let plan = build_package_plan(&config);
+        assert!(plan.kernel_packages.contains(&"linux-lts-headers".to_owned()));
+        assert!(plan.kernel_packages.contains(&"linux-lqx-headers".to_owned()));
+        assert!(plan.kernel_packages.contains(&"linux-cachyos".to_owned()));
+        assert!(plan.kernel_notes.iter().any(|note| note.contains("Liquorix")));
+        assert!(plan.kernel_notes.iter().any(|note| note.contains("CachyOS")));
     }
 
     #[test]
