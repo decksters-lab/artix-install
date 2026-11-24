@@ -138,7 +138,13 @@ pub fn format_plan(config: &InstallConfig) -> String {
         output.push_str(&format!("Kernel note: {note}\n"));
     }
     output.push_str(&format!(
-        "Xorg packages: {}\nAudio packages: {}\n",
+        "CPU microcode: {}\nGPU packages: {}\nXorg packages: {}\nAudio packages: {}\n",
+        if package_plan.microcode_packages.is_empty() {
+            "none".to_owned()
+        } else {
+            package_plan.microcode_packages.join(" ")
+        },
+        package_plan.gpu_packages.join(" "),
         if package_plan.xorg_packages.is_empty() {
             "not required".to_owned()
         } else {
