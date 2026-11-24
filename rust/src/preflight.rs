@@ -218,8 +218,6 @@ pub fn evaluate(
     }
 
     let required_tools = required_tools(config);
-    required_tools.sort_unstable();
-    required_tools.dedup();
     let missing = required_tools
         .iter()
         .filter(|tool| find_executable(tool, search_path).is_none())
