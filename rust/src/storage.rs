@@ -343,7 +343,7 @@ mod tests {
         let script = build_sfdisk_script(&config).unwrap();
         assert_eq!(
             script,
-            "label: dos\\nsize=+6G, type=82\\nsize=+, type=83, bootable\\n"
+            "label: dos\nsize=+6G, type=82\nsize=+, type=83, bootable\n"
         );
     }
 
