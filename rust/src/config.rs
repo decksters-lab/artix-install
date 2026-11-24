@@ -726,7 +726,7 @@ mod tests {
     }
 
     #[test]
-    fn additional_mountpoints_detect_duplicate_paths_after_normalization() {
+    fn additional_mountpoint_aliases_are_rejected() {
         let mut config = InstallConfig::default();
         config.disk.partitioning = Partitioning::Manual;
         config.disk.root_partition = Some("/dev/sda2".into());
