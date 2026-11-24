@@ -102,6 +102,12 @@ fn run() -> Result<()> {
             .confirm_target
             .as_deref()
             .context("--apply-partition-table requires --confirm-target with the exact configured device path")?;
+        let environment = discovery::discover();
+        let report = preflight::run(&config, &environment);
+        print!("{}", report.render());
+        if !report.is_ready() {
+            bail!("live environment preflight failed; partition table was not changed");
+        }
         let result = storage::apply_automatic_partition_table(&config, confirmation)?;
         println!("{result}");
         return Ok(());
