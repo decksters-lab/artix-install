@@ -587,6 +587,30 @@ mod tests {
     }
 
     #[test]
+    fn network_manager_uses_the_selected_init_service_package() {
+        let mut config = InstallConfig::default();
+        assert_eq!(
+            build_package_plan(&config).network_packages,
+            ["networkmanager", "networkmanager-dinit"]
+        );
+        config.system.init_system = InitSystem::OpenRc;
+        assert_eq!(
+            build_package_plan(&config).network_packages,
+            ["networkmanager", "networkmanager-openrc"]
+        );
+        config.system.init_system = InitSystem::Runit;
+        assert_eq!(
+            build_package_plan(&config).network_packages,
+            ["networkmanager", "networkmanager-runit"]
+        );
+        config.system.init_system = InitSystem::S6;
+        assert_eq!(
+            build_package_plan(&config).network_packages,
+            ["networkmanager", "networkmanager-s6"]
+        );
+    }
+
+    #[test]
     fn cpu_microcode_and_gpu_packages_follow_hardware_choices() {
         let mut config = InstallConfig::default();
         config.software.cpu_vendor = CpuVendor::Intel;
