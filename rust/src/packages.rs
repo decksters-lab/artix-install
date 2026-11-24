@@ -446,7 +446,11 @@ mod tests {
         assert_eq!(plan.microcode_packages, ["intel-ucode"]);
         assert!(plan.gpu_packages.contains(&"vulkan-intel"));
         assert!(plan.gpu_packages.contains(&"nvidia-dkms"));
-        assert!(plan.deferred.iter().any(|note| note.contains("matching headers")));
+        assert!(
+            plan.deferred
+                .iter()
+                .any(|note| note.contains("matching headers"))
+        );
     }
 
     #[test]
