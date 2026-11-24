@@ -4,6 +4,7 @@ mod discovery;
 mod packages;
 mod partition;
 mod plan;
+mod preflight;
 mod tui;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
@@ -31,6 +32,9 @@ struct Args {
     /// Print read-only hardware and block-device discovery, then exit.
     #[arg(long)]
     hardware: bool,
+    /// Check the live environment and selected configuration without changing the host.
+    #[arg(long)]
+    preflight: bool,
     /// Write the default configuration to FILE and exit.
     #[arg(long, value_name = "FILE")]
     write_default: Option<PathBuf>,
@@ -69,6 +73,15 @@ fn run() -> Result<()> {
         }
         None => InstallConfig::default(),
     };
+    if args.preflight {
+        let hardware = discovery::discover();
+        let report = preflight::run(&config, &hardware);
+        print!("{}", report.render());
+        if !report.is_ready() {
+            bail!("live environment preflight failed");
+        }
+        return Ok(());
+    }
     if args.plan {
         print!("{}", plan::format_plan(&config));
         return Ok(());
