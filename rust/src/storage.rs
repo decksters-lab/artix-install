@@ -42,7 +42,10 @@ pub fn apply_automatic_partition_table(
     typed_confirmation: &str,
 ) -> Result<String> {
     config.validate().map_err(|issues| {
-        anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
+        anyhow::anyhow!(
+            "configuration validation failed:\n- {}",
+            issues.join("\n- ")
+        )
     })?;
     if libc_effective_uid() != 0 {
         bail!("partition-table writing requires effective UID 0");
@@ -65,8 +68,8 @@ pub fn apply_automatic_partition_table(
     let identity = TargetIdentity::from_disk(disk);
     validate_capacity(config, disk.size_bytes)?;
 
-    let metadata = fs::metadata(selected)
-        .with_context(|| format!("inspect target {}", selected.display()))?;
+    let metadata =
+        fs::metadata(selected).with_context(|| format!("inspect target {}", selected.display()))?;
     if !metadata.file_type().is_block_device() {
         bail!("{} is not a block device", selected.display());
     }
@@ -89,13 +92,7 @@ pub fn apply_automatic_partition_table(
         bail!("target no longer resolves to a block device; refusing to write");
     }
     let mut child = Command::new("sfdisk")
-        .args([
-            "--wipe",
-            "always",
-            "--wipe-partitions",
-            "always",
-            "--",
-        ])
+        .args(["--wipe", "always", "--wipe-partitions", "always", "--"])
         .arg(&canonical_target)
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
@@ -124,7 +121,9 @@ pub fn apply_automatic_partition_table(
         .status()
         .context("verify the newly written partition table with sfdisk")?;
     if !verify.success() {
-        bail!("partition table was written, but sfdisk verification failed; do not continue to formatting");
+        bail!(
+            "partition table was written, but sfdisk verification failed; do not continue to formatting"
+        );
     }
 
     let partprobe = Command::new("partprobe")
@@ -132,14 +131,18 @@ pub fn apply_automatic_partition_table(
         .status()
         .context("refresh the kernel partition table with partprobe")?;
     if !partprobe.success() {
-        bail!("partition table was written and verified, but partprobe failed; reboot or resolve the kernel refresh before continuing");
+        bail!(
+            "partition table was written and verified, but partprobe failed; reboot or resolve the kernel refresh before continuing"
+        );
     }
     let settle = Command::new("udevadm")
         .args(["settle", "--timeout=10"])
         .status()
         .context("wait for udev partition device nodes")?;
     if !settle.success() {
-        bail!("partition table was written and kernel refreshed, but udev did not settle; inspect device nodes before continuing");
+        bail!(
+            "partition table was written and kernel refreshed, but udev did not settle; inspect device nodes before continuing"
+        );
     }
 
     Ok(format!(
@@ -167,7 +170,9 @@ fn ensure_partition_tools() -> Result<()> {
         || !help_text.contains("--wipe")
         || !help_text.contains("--wipe-partitions")
     {
-        bail!("installed sfdisk lacks the required explicit signature-wiping options; refusing to write");
+        bail!(
+            "installed sfdisk lacks the required explicit signature-wiping options; refusing to write"
+        );
     }
     Ok(())
 }
@@ -197,7 +202,8 @@ fn find_safe_target<'a>(
         bail!(
             "target {} is blocked by fresh safety discovery: {}",
             selected.display(),
-            disk.selection_block_reason().unwrap_or("safety checks incomplete")
+            disk.selection_block_reason()
+                .unwrap_or("safety checks incomplete")
         );
     }
     Ok(disk)
@@ -226,7 +232,10 @@ fn validate_capacity(config: &InstallConfig, size_bytes: u64) -> Result<()> {
 
 pub fn build_sfdisk_script(config: &InstallConfig) -> Result<String> {
     config.validate().map_err(|issues| {
-        anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
+        anyhow::anyhow!(
+            "configuration validation failed:\n- {}",
+            issues.join("\n- ")
+        )
     })?;
     if config.disk.partitioning != Partitioning::Automatic {
         bail!("only automatic partition layouts can be serialized for sfdisk");
@@ -365,10 +374,7 @@ mod tests {
     fn filesystem_config_does_not_change_partition_table_script() {
         let mut config = InstallConfig::default();
         config.disk.root_filesystem = Filesystem::Btrfs;
-        assert_eq!(
-            build_sfdisk_script(&config).unwrap().lines().count(),
-            4
-        );
+        assert_eq!(build_sfdisk_script(&config).unwrap().lines().count(), 4);
     }
 
     #[test]
