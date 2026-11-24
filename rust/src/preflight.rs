@@ -34,7 +34,9 @@ pub struct PreflightReport {
 
 impl PreflightReport {
     pub fn is_ready(&self) -> bool {
-        self.checks.iter().all(|check| check.status != CheckStatus::Fail)
+        self.checks
+            .iter()
+            .all(|check| check.status != CheckStatus::Fail)
     }
 
     pub fn render(&self) -> String {
@@ -294,9 +296,9 @@ fn parse_os_release(contents: &str) -> std::collections::HashMap<String, String>
         .filter_map(|line| {
             let (key, value) = line.split_once('=')?;
             if key.is_empty()
-                || !key.bytes().all(|byte| {
-                    byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_'
-                })
+                || !key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
             {
                 return None;
             }
@@ -313,8 +315,6 @@ fn parse_os_release(contents: &str) -> std::collections::HashMap<String, String>
         })
         .collect()
 }
-
-
 fn same_device_path(configured: &Path, discovered: &Path) -> bool {
     configured == discovered
         || matches!(
@@ -381,10 +381,8 @@ mod tests {
 
     #[test]
     fn stable_device_symlink_matches_discovered_kernel_path() {
-        let directory = std::env::temp_dir().join(format!(
-            "artix-setup-device-link-{}",
-            std::process::id()
-        ));
+        let directory =
+            std::env::temp_dir().join(format!("artix-setup-device-link-{}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
         let device = directory.join("sda");
         let stable = directory.join("by-id-disk");
@@ -412,12 +410,16 @@ mod tests {
             OsStr::new(""),
         );
         assert!(!report.is_ready());
-        assert!(report.checks.iter().any(|check| {
-            check.name == "Root privileges" && check.status == CheckStatus::Fail
-        }));
-        assert!(report.checks.iter().any(|check| {
-            check.name == "Package manager" && check.status == CheckStatus::Fail
-        }));
+        assert!(
+            report.checks.iter().any(|check| {
+                check.name == "Root privileges" && check.status == CheckStatus::Fail
+            })
+        );
+        assert!(
+            report.checks.iter().any(|check| {
+                check.name == "Package manager" && check.status == CheckStatus::Fail
+            })
+        );
     }
 
     #[test]
@@ -459,9 +461,12 @@ mod tests {
             Some(0),
             directory.as_os_str(),
         );
-        assert!(report.checks.iter().any(|check| {
-            check.name == "Target disk" && check.status == CheckStatus::Fail
-        }));
+        assert!(
+            report
+                .checks
+                .iter()
+                .any(|check| { check.name == "Target disk" && check.status == CheckStatus::Fail })
+        );
         assert!(!report.is_ready());
         fs::remove_dir_all(directory).unwrap();
     }
@@ -503,9 +508,11 @@ mod tests {
             Some(0),
             directory.as_os_str(),
         );
-        assert!(report.checks.iter().any(|check| {
-            check.name == "Firmware mode" && check.status == CheckStatus::Fail
-        }));
+        assert!(
+            report.checks.iter().any(|check| {
+                check.name == "Firmware mode" && check.status == CheckStatus::Fail
+            })
+        );
         fs::remove_dir_all(directory).unwrap();
     }
 }
