@@ -410,6 +410,37 @@ mod tests {
     }
 
     #[test]
+    fn user_service_packages_follow_each_supported_init_system() {
+        use crate::config::UserServices;
+
+        let mut config = InstallConfig::default();
+        config.system.user_services = UserServices::Userspawn;
+        assert_eq!(build_package_plan(&config).user_service_packages, ["userspawn-dinit"]);
+
+        config.system.user_services = UserServices::Turnstile;
+        assert_eq!(
+            build_package_plan(&config).user_service_packages,
+            ["turnstile", "turnstile-dinit"]
+        );
+
+        config.system.init_system = InitSystem::OpenRc;
+        assert_eq!(
+            build_package_plan(&config).user_service_packages,
+            ["turnstile", "turnstile-openrc"]
+        );
+        config.system.user_services = UserServices::Native;
+        assert!(build_package_plan(&config).user_service_packages.is_empty());
+
+        config.system.init_system = InitSystem::Runit;
+        config.system.user_services = UserServices::Userspawn;
+        assert_eq!(build_package_plan(&config).user_service_packages, ["userspawn-runit"]);
+
+        config.system.init_system = InitSystem::S6;
+        config.system.user_services = UserServices::Manual;
+        assert!(build_package_plan(&config).user_service_packages.is_empty());
+    }
+
+    #[test]
     fn selected_kernel_packages_include_headers_and_repo_notes() {
         let mut config = InstallConfig::default();
         config.software.kernels = vec![Kernel::LinuxLts, Kernel::LinuxLqx, Kernel::LinuxCachyos];
