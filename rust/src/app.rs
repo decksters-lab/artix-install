@@ -644,7 +644,7 @@ impl App {
             10 => "UEFI supports GRUB2, Limine or rEFInd. BIOS is locked to GRUB2.",
             11 => "Choose doas or sudo.",
             12 => {
-                "Init-specific user services: OpenRC native mode requires OpenRC 0.62+, XDG_RUNTIME_DIR and PAM session setup; Dinit/OpenRC also offer Turnstile, runit userspawn, s6 manual."
+                "Init-specific user services: Dinit userspawn-dinit or Turnstile; OpenRC native (0.62+, PAM/XDG_RUNTIME_DIR) or Turnstile; runit userspawn-runit; s6 manual."
             }
             13 => "Choose dhcpcd, iwd or NetworkManager.",
             14 => "Enable multilib for Steam, Wine and 32-bit applications.",
