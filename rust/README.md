@@ -47,7 +47,7 @@ The schema is based on the current shell wizard and covers:
 - Storage: automatic/manual/dual-boot layout planning; ext4, Btrfs, XFS, F2FS, JFS and NILFS2 root filesystems; optional manual additional mountpoints; LUKS2 intent; zram, swap partition, swapfile, combined zram+swapfile, swap size and zswap intent; configurable Btrfs subvolume/compression plans.
 - Locale, timezone, keyboard layout, hostname and username. Passwords/passphrases are deliberately not part of saved profiles.
 - Privilege escalation: doas or sudo.
-- User services are init-specific: Dinit offers userspawn or its Turnstile integration; OpenRC offers native per-user services (OpenRC 0.62+, with XDG_RUNTIME_DIR and PAM session auto-start configured) or its own Turnstile integration; runit offers userspawn; s6 is explicitly marked for manual, user-managed setup. The planner does not install or configure a generic Turnstile service across init systems.
+- User services are init-specific: Dinit offers `userspawn-dinit` or `turnstile-dinit`; OpenRC offers native per-user services (OpenRC 0.62+, with XDG_RUNTIME_DIR and PAM session auto-start configured) or `turnstile-openrc`; runit offers `userspawn-runit`; s6 is explicitly marked for manual, user-managed setup. The planner does not install or configure a generic Turnstile service across init systems.
 - Multi-select desktop/window-manager choices: Plasma, XFCE, Cinnamon, MATE, LXQt, Moksha, COSMIC, Hyprland, Niri, Wayfire, labwc, Sway, SwayFX, Umbriel, MangoWM, Cosmalia, i3, Openbox, Fluxbox and Qtile.
 - Multi-select kernels: linux, linux-lts, linux-zen, linux-lqx and linux-cachyos. `linux` is retained as a guaranteed fallback.
 - CPU/GPU selection: Intel, AMD, other/VM; Intel, AMD, NVIDIA, hybrid Intel+NVIDIA or VM/basic Mesa.
