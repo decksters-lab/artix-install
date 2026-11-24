@@ -448,7 +448,7 @@ mod tests {
                 firmware: "BIOS / legacy or unavailable".into(),
                 ..HardwareSnapshot::default()
             },
-            Some("ID=artix\\n"),
+            Some("ID=artix\n"),
             Some(0),
             directory.as_os_str(),
         );
