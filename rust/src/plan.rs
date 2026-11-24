@@ -149,7 +149,7 @@ pub fn format_plan(config: &InstallConfig) -> String {
         output.push_str(&format!("Kernel note: {note}\n"));
     }
     output.push_str(&format!(
-        "CPU microcode: {}\nGPU packages: {}\nXorg packages: {}\nAudio packages: {}\n",
+        "CPU microcode: {}\nGPU packages: {}\nXorg packages: {}\nAudio packages: {}\nOptional audio service integrations: {}\n",
         if package_plan.microcode_packages.is_empty() {
             "none".to_owned()
         } else {
@@ -165,6 +165,11 @@ pub fn format_plan(config: &InstallConfig) -> String {
             "not selected".to_owned()
         } else {
             package_plan.audio_packages.join(" ")
+        },
+        if package_plan.optional_service_packages.is_empty() {
+            "none".to_owned()
+        } else {
+            package_plan.optional_service_packages.join(" ")
         }
     ));
     for recipe in &package_plan.desktop_recipes {
