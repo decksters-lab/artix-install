@@ -104,7 +104,7 @@ fn is_missing_error(stderr: &str, package: &str) -> bool {
 
 pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport> {
     let plan = packages::build_package_plan(config);
-    let mut packages = BTreeMap::<String, PackageSource>::new();
+    let mut packages = BTreeMap::<String, (PackageSource, bool)>::new();
 
     for name in plan
         .base_packages
@@ -128,18 +128,26 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
         if !external_kernel {
             packages
                 .entry(name.to_owned())
-                .or_insert(PackageSource::Artix);
+                .or_insert((PackageSource::Artix, false));
         }
     }
 
     for recipe in &plan.desktop_recipes {
         for name in &recipe.packages {
-            packages.entry((*name).to_owned()).or_insert(recipe.source);
+            packages
+                .entry((*name).to_owned())
+                .or_insert((recipe.source, false));
         }
     }
 
+    for name in &plan.optional_service_packages {
+        packages
+            .entry((*name).to_owned())
+            .or_insert((PackageSource::Artix, true));
+    }
+
     let mut checks = Vec::with_capacity(packages.len());
-    for (name, source) in packages {
+    for (name, (source, optional)) in packages {
         if matches!(
             source,
             PackageSource::ExternalBuild | PackageSource::LiveRepositoryChoice
@@ -177,12 +185,16 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
             checks.push(PackageCheck {
                 name,
                 source,
-                availability: if missing {
+                availability: if missing && optional {
+                    Availability::Deferred
+                } else if missing {
                     Availability::Missing
                 } else {
                     Availability::CouldNotCheck
                 },
-                detail: if missing {
+                detail: if missing && optional {
+                    "Optional init-specific service package is not available; the service may need manual setup.".into()
+                } else if missing {
                     "Not found in enabled sync databases; the repository may need enabling or its sync database may need refreshing.".into()
                 } else if stderr.trim().is_empty() {
                     format!("pacman exited with status {}.", result.status)
