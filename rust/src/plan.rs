@@ -137,6 +137,19 @@ pub fn format_plan(config: &InstallConfig) -> String {
     for note in &package_plan.kernel_notes {
         output.push_str(&format!("Kernel note: {note}\n"));
     }
+    output.push_str(&format!(
+        "Xorg packages: {}\nAudio packages: {}\n",
+        if package_plan.xorg_packages.is_empty() {
+            "not required".to_owned()
+        } else {
+            package_plan.xorg_packages.join(" ")
+        },
+        if package_plan.audio_packages.is_empty() {
+            "not selected".to_owned()
+        } else {
+            package_plan.audio_packages.join(" ")
+        }
+    ));
     for recipe in &package_plan.desktop_recipes {
         output.push_str(&format!(
             "{} [{}]: {}\n",
