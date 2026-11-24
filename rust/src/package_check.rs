@@ -233,7 +233,7 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Bootloader, Filesystem, UserServices};
+    use crate::config::{Bootloader, Desktop, Filesystem, UserServices};
     use std::{fs, os::unix::fs::PermissionsExt};
 
     fn fake_pacman(name: &str) -> std::path::PathBuf {
@@ -312,6 +312,18 @@ mod tests {
                 .iter()
                 .any(|item| item.name == "turnstile-dinit")
         );
+        fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn missing_optional_audio_service_packages_are_deferred() {
+        let mut config = InstallConfig::default();
+        config.software.desktop_environments.push(Desktop::Cosmalia);
+        let pacman = fake_pacman("optional-audio-services");
+        let report = check(&config, &pacman).unwrap();
+        assert!(report.checks.iter().any(|item| {
+            item.name == "pipewire-dinit" && item.availability == Availability::Deferred
+        }));
         fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 
