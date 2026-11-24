@@ -192,7 +192,9 @@ impl App {
             .iter()
             .find(|disk| Some(&disk.path) == self.config.disk.target.as_ref())
         else {
-            self.status = "The configured target disk is not present in the current hardware inventory.".into();
+            self.status =
+                "The configured target disk is not present in the current hardware inventory."
+                    .into();
             return;
         };
         if let Some(reason) = target_disk.selection_block_reason() {
