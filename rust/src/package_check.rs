@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path, process::Command};
 use anyhow::{Context, Result};
 
 use crate::{
-    config::{InstallConfig, Kernel, UserServices},
+    config::{Bootloader, Filesystem, InstallConfig, Kernel, UserServices},
     packages::{self, PackageSource},
 };
 
@@ -272,6 +272,20 @@ mod tests {
         let report = check(&config, &pacman).unwrap();
         assert!(report.checks.iter().any(|item| item.name == "turnstile"));
         assert!(report.checks.iter().any(|item| item.name == "turnstile-dinit"));
+        fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn storage_and_bootloader_prerequisites_are_checked() {
+        let mut config = InstallConfig::default();
+        config.disk.root_filesystem = Filesystem::Btrfs;
+        config.disk.encryption = true;
+        config.software.bootloader = Bootloader::Limine;
+        let pacman = fake_pacman("storage-bootloader");
+        let report = check(&config, &pacman).unwrap();
+        for expected in ["btrfs-progs", "cryptsetup", "dosfstools", "limine", "efibootmgr", "limine-mkinitcpio-hook"] {
+            assert!(report.checks.iter().any(|item| item.name == expected), "missing check for {expected}");
+        }
         fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 
