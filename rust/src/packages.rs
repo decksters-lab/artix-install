@@ -51,6 +51,10 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         InitSystem::Runit => vec!["runit", "elogind-runit", "dbus-runit"],
         InitSystem::S6 => vec!["s6-base", "elogind-s6", "dbus-s6"],
     };
+    let mut deferred = vec![
+        "Package names and availability must be checked against the selected live Artix repositories before installation.".to_owned(),
+        "Init-specific service packages and activation scripts require per-package repository checks; a base package name alone does not guarantee its service integration package exists.".to_owned(),
+    ];
     let mut kernel_packages = Vec::new();
     let mut kernel_notes = Vec::new();
     for kernel in &config.software.kernels {
@@ -84,10 +88,6 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         PrivilegeEscalation::Doas => vec!["doas"],
         PrivilegeEscalation::Sudo => vec!["sudo"],
     };
-    let mut deferred = vec![
-        "Package names and availability must be checked against the selected live Artix repositories before installation.".to_owned(),
-        "Init-specific service packages and activation scripts require per-package repository checks; a base package name alone does not guarantee its service integration package exists.".to_owned(),
-    ];
     let desktop_recipes = config
         .software
         .desktop_environments
