@@ -143,10 +143,158 @@ pub fn apply_automatic_partition_table(
         );
     }
 
+    let dump = Command::new("sfdisk")
+        .arg("--dump")
+        .arg(&canonical_target)
+        .output()
+        .context("read back the written partition table")?;
+    if !dump.status.success() {
+        bail!("partition table was written, but could not be read back; do not continue to formatting");
+    }
+    let dump_text = String::from_utf8_lossy(&dump.stdout);
+    verify_partition_table_dump(config, &dump_text)
+        .context("written partition table does not match the requested layout; do not continue")?;
+
+    // Confirm that the kernel and sysfs now expose the same number of child partitions.
+    let refreshed_hardware = discovery::discover();
+    let refreshed_disk = find_safe_target(&refreshed_hardware, selected)
+        .context("partition table was written, but fresh device discovery could not verify the target")?;
+    let expected_count = expected_partition_types(config).len();
+    if refreshed_disk.partitions.len() != expected_count {
+        bail!(
+            "partition table was written, but fresh discovery found {} partitions instead of {}; do not continue to formatting",
+            refreshed_disk.partitions.len(),
+            expected_count
+        );
+    }
+    for (index, partition) in refreshed_disk.partitions.iter().enumerate() {
+        if !partition.safety_checks_complete || partition.size_bytes == 0 {
+            bail!(
+                "partition table was written, but partition {} failed post-write safety/size discovery; do not continue",
+                index + 1
+            );
+        }
+        let partition_metadata = fs::metadata(&partition.path)
+            .with_context(|| format!("inspect newly discovered partition {}", partition.path.display()))?;
+        if !partition_metadata.file_type().is_block_device() {
+            bail!(
+                "partition table was written, but {} is not a block device; do not continue",
+                partition.path.display()
+            );
+        }
+    }
+
     Ok(format!(
-        "Partition table written and verified on {}. No filesystem was formatted, no encryption was initialized, and no filesystem was mounted. Review the new partition inventory before proceeding.",
-        selected.display()
+        "Partition table written, read back, and matched the requested layout on {}. Fresh device discovery confirmed {} partitions. No filesystem was formatted, no encryption was initialized, and no filesystem was mounted.",
+        selected.display(),
+        expected_count
     ))
+}
+
+fn expected_partition_types(config: &InstallConfig) -> Vec<&'static str> {
+    let uefi = config.system.firmware == FirmwareMode::Uefi;
+    let mut types = Vec::new();
+    if uefi {
+        types.push("C12A7328-F81F-11D2-BA4B-00A0C93EC93B");
+    }
+    if config.disk.swap.mode == SwapMode::Partition {
+        types.push(if uefi {
+            "0657FD6D-A4AB-43C4-84E5-0933C84B4F4F"
+        } else {
+            "82"
+        });
+    }
+    types.push(if uefi {
+        "0FC63DAF-8483-4772-8E79-3D69D8477DE4"
+    } else {
+        "83"
+    });
+    types
+}
+
+/// Validate the actual sfdisk read-back, including partition order, start sectors,
+/// sizes for fixed-size partitions, and type identifiers.
+fn verify_partition_table_dump(config: &InstallConfig, dump: &str) -> Result<()> {
+    let expected_label = if config.system.firmware == FirmwareMode::Uefi {
+        "gpt"
+    } else {
+        "dos"
+    };
+    let label = dump
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("label:"))
+        .map(str::trim)
+        .context("sfdisk dump has no disklabel")?;
+    if label != expected_label {
+        bail!("expected {expected_label} partition table, found {label}");
+    }
+
+    let mut actual = Vec::<(u64, u64, String)>::new();
+    for line in dump.lines().filter(|line| line.trim_start().starts_with("/dev/")) {
+        let (_, fields) = line
+            .split_once(':')
+            .context("malformed partition row in sfdisk dump")?;
+        let field_value = |name: &str| -> Result<&str> {
+            fields
+                .split(',')
+                .find_map(|field| {
+                    let (key, value) = field.trim().split_once('=')?;
+                    (key.trim() == name).then_some(value.trim())
+                })
+                .with_context(|| format!("partition row is missing {name}"))
+        };
+        let start = field_value("start")?.parse::<u64>()
+            .context("partition start is not an integer")?;
+        let size = field_value("size")?.parse::<u64>()
+            .context("partition size is not an integer")?;
+        let kind = field_value("type")?.trim_matches('"').to_ascii_uppercase();
+        actual.push((start, size, kind));
+    }
+
+    let expected_types = expected_partition_types(config);
+    if actual.len() != expected_types.len() {
+        bail!(
+            "expected {} partitions, found {}",
+            expected_types.len(),
+            actual.len()
+        );
+    }
+
+    let mut expected_start = 2048_u64;
+    let mut index = 0;
+    if config.system.firmware == FirmwareMode::Uefi {
+        verify_partition_entry(&actual[index], expected_start, 1024 * 1024 * 1024 / 512, expected_types[index])?;
+        expected_start += 1024 * 1024 * 1024 / 512;
+        index += 1;
+    }
+    if config.disk.swap.mode == SwapMode::Partition {
+        let swap_sectors = u64::from(config.disk.swap.size_gib) * 1024 * 1024 * 1024 / 512;
+        verify_partition_entry(&actual[index], expected_start, swap_sectors, expected_types[index])?;
+        expected_start += swap_sectors;
+        index += 1;
+    }
+    let root = &actual[index];
+    if root.0 != expected_start || root.1 == 0 || root.2 != expected_types[index] {
+        bail!("root partition has an unexpected start, size, or type");
+    }
+    Ok(())
+}
+
+fn verify_partition_entry(
+    actual: &(u64, u64, String),
+    expected_start: u64,
+    expected_size: u64,
+    expected_type: &str,
+) -> Result<()> {
+    if actual.0 != expected_start || actual.1 != expected_size || actual.2 != expected_type {
+        bail!(
+            "partition mismatch: expected start={expected_start}, size={expected_size}, type={expected_type}; found start={}, size={}, type={}",
+            actual.0,
+            actual.1,
+            actual.2
+        );
+    }
+    Ok(())
 }
 
 fn ensure_partition_tools() -> Result<()> {
@@ -374,6 +522,32 @@ mod tests {
         let mut config = InstallConfig::default();
         config.disk.root_filesystem = Filesystem::Btrfs;
         assert_eq!(build_sfdisk_script(&config).unwrap().lines().count(), 4);
+    }
+
+    #[test]
+    fn readback_verification_accepts_the_expected_uefi_layout() {
+        let config = InstallConfig::default();
+        let dump = "label: gpt\\n/dev/vda1 : start= 2048, size= 2097152, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\\n/dev/vda2 : start= 2099200, size= 91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n";
+        assert!(verify_partition_table_dump(&config, dump).is_ok());
+    }
+
+    #[test]
+    fn readback_verification_rejects_wrong_partition_type_and_extra_partition() {
+        let config = InstallConfig::default();
+        let wrong_type = "label: gpt\\n/dev/vda1 : start= 2048, size= 2097152, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n/dev/vda2 : start= 2099200, size= 91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n";
+        assert!(verify_partition_table_dump(&config, wrong_type).is_err());
+        let extra = format!("{wrong_type}/dev/vda3 : start= 93952000, size= 100, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n");
+        assert!(verify_partition_table_dump(&config, &extra).is_err());
+    }
+
+    #[test]
+    fn readback_verification_checks_bios_swap_layout() {
+        let mut config = InstallConfig::default();
+        config.system.firmware = FirmwareMode::Bios;
+        config.disk.swap.mode = SwapMode::Partition;
+        config.disk.swap.size_gib = 4;
+        let dump = "label: dos\\n/dev/vda1 : start= 2048, size= 8388608, type=82\\n/dev/vda2 : start= 8390656, size= 1000000, type=83\\n";
+        assert!(verify_partition_table_dump(&config, dump).is_ok());
     }
 
     #[test]
