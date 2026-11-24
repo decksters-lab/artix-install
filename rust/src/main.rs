@@ -87,6 +87,12 @@ fn run() -> Result<()> {
         return Ok(());
     }
     if args.check_packages {
+        config.validate().map_err(|issues| {
+            anyhow::anyhow!(
+                "configuration validation failed:\n- {}",
+                issues.join("\n- ")
+            )
+        })?;
         let report = package_check::check(&config, std::path::Path::new("pacman"))?;
         print!("{}", report.render());
         if report.has_problems() {
