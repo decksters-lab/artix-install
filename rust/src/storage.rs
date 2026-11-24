@@ -83,6 +83,11 @@ pub fn apply_automatic_partition_table(
 
     let canonical_target = fs::canonicalize(selected)
         .with_context(|| format!("resolve target {}", selected.display()))?;
+    let final_metadata = fs::metadata(&canonical_target)
+        .with_context(|| format!("reinspect target {}", canonical_target.display()))?;
+    if !final_metadata.file_type().is_block_device() {
+        bail!("target no longer resolves to a block device; refusing to write");
+    }
     let mut child = Command::new("sfdisk")
         .args([
             "--wipe",
