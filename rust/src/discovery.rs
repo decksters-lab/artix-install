@@ -367,19 +367,14 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
         raw.push((name, parent_name, partition, holders, holders_verified, class_path));
     }
 
-    let known_disk_names: HashSet<&str> = raw
-        .iter()
-        .filter_map(|(name, parent, _, _, _, _)| parent.is_none().then_some(name.as_str()))
-        .collect();
-    for (name, parent, _, _, _, _) in &raw {
-        if let Some(parent) = parent
-            && !known_disk_names.contains(parent.as_str())
-        {
-            warnings.push(format!(
-                "Partition {name} refers to parent {parent}, but that whole disk was not discovered; disk selection is disabled for safety."
-            ));
-            enumeration_verified = false;
-        }
+    let orphaned_partitions = find_orphaned_partitions(
+        raw.iter().map(|(name, parent, _, _, _, _)| (name.as_str(), parent.as_deref())),
+    );
+    for (name, parent) in orphaned_partitions {
+        warnings.push(format!(
+            "Partition {name} refers to parent {parent}, but that whole disk was not discovered; disk selection is disabled for safety."
+        ));
+        enumeration_verified = false;
     }
 
     let mut disks = Vec::new();
@@ -422,6 +417,24 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
     }
     disks.sort_by(|a, b| a.name.cmp(&b.name));
     disks
+}
+
+fn find_orphaned_partitions<'a>(
+    devices: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
+) -> Vec<(String, String)> {
+    let devices: Vec<_> = devices.into_iter().collect();
+    let known_disks: HashSet<&str> = devices
+        .iter()
+        .filter_map(|(name, parent)| parent.is_none().then_some(*name))
+        .collect();
+    devices
+        .into_iter()
+        .filter_map(|(name, parent)| {
+            parent
+                .filter(|parent| !known_disks.contains(parent))
+                .map(|parent| (name.to_owned(), parent.to_owned()))
+        })
+        .collect()
 }
 
 fn is_physical_disk_candidate(name: &str, class_path: &Path) -> bool {
@@ -567,6 +580,32 @@ mod tests {
         );
         assert!(!verified);
         assert_eq!(paths, vec![PathBuf::from("/dev/sda3")]);
+    }
+
+    #[test]
+    fn orphaned_partitions_are_detected_when_parent_disk_is_missing() {
+        let devices = [
+            ("sda1", Some("sda")),
+            ("nvme0n1p1", Some("nvme0n1")),
+            ("sdb", None),
+        ];
+        assert_eq!(
+            find_orphaned_partitions(devices),
+            vec![
+                ("sda1".to_owned(), "sda".to_owned()),
+                ("nvme0n1p1".to_owned(), "nvme0n1".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn partitions_with_discovered_parent_are_not_orphaned() {
+        let devices = [
+            ("sda", None),
+            ("sda1", Some("sda")),
+            ("sda2", Some("sda")),
+        ];
+        assert!(find_orphaned_partitions(devices).is_empty());
     }
 
     #[test]
