@@ -474,7 +474,10 @@ mod tests {
 
         let mut config = InstallConfig::default();
         config.system.user_services = UserServices::Userspawn;
-        assert_eq!(build_package_plan(&config).user_service_packages, ["userspawn-dinit"]);
+        assert_eq!(
+            build_package_plan(&config).user_service_packages,
+            ["userspawn", "userspawn-dinit"]
+        );
 
         config.system.user_services = UserServices::Turnstile;
         assert_eq!(
@@ -492,7 +495,10 @@ mod tests {
 
         config.system.init_system = InitSystem::Runit;
         config.system.user_services = UserServices::Userspawn;
-        assert_eq!(build_package_plan(&config).user_service_packages, ["userspawn", "userspawn-runit"]);
+        assert_eq!(
+            build_package_plan(&config).user_service_packages,
+            ["userspawn", "userspawn-runit"]
+        );
 
         config.system.init_system = InitSystem::S6;
         config.system.user_services = UserServices::Manual;
@@ -525,7 +531,11 @@ mod tests {
         assert!(plan.storage_packages.contains(&"dosfstools"));
 
         config.disk.partitioning = Partitioning::DualBoot;
-        assert!(build_package_plan(&config).bootloader_packages.contains(&"os-prober"));
+        assert!(
+            build_package_plan(&config)
+                .bootloader_packages
+                .contains(&"os-prober")
+        );
 
         config.software.bootloader = Bootloader::Limine;
         assert_eq!(
