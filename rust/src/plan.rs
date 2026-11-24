@@ -226,19 +226,19 @@ fn user_services_detail(config: &InstallConfig) -> &'static str {
     match (config.system.init_system, config.system.user_services) {
         (_, UserServices::None) => "not requested",
         (InitSystem::Dinit, UserServices::Userspawn) => {
-            "use the Dinit userspawn integration; verify package availability before installation"
+            "install userspawn-dinit (which depends on userspawn); verify the live repository before installation"
         }
         (InitSystem::Dinit, UserServices::Turnstile) => {
-            "use the Dinit-specific Turnstile integration; verify package availability before installation"
+            "install turnstile with turnstile-dinit; verify the live repository and manually enable turnstiled"
         }
         (InitSystem::OpenRc, UserServices::Native) => {
             "use OpenRC native per-user services (OpenRC 0.62+); ensure XDG_RUNTIME_DIR and PAM session auto-start are configured"
         }
         (InitSystem::OpenRc, UserServices::Turnstile) => {
-            "use the OpenRC-specific Turnstile integration; verify package availability before installation"
+            "install turnstile with turnstile-openrc; verify the live repository and configure PAM activation"
         }
         (InitSystem::Runit, UserServices::Userspawn) => {
-            "use the runit userspawn integration; verify package availability before installation"
+            "install userspawn-runit; verify the live repository before installation"
         }
         (InitSystem::S6, UserServices::Manual) => {
             "manual user-managed setup; do not assume Turnstile or configure it automatically"
