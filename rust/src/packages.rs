@@ -64,10 +64,10 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         InitSystem::S6 => vec!["s6-base", "elogind-s6", "dbus-s6"],
     };
     let user_service_packages = match (config.system.init_system, config.system.user_services) {
-        (InitSystem::Dinit, UserServices::Userspawn) => vec!["userspawn-dinit"],
-        (InitSystem::Dinit, UserServices::Turnstile) => vec!["turnstile-dinit"],
-        (InitSystem::OpenRc, UserServices::Turnstile) => vec!["turnstile-openrc"],
-        (InitSystem::Runit, UserServices::Userspawn) => vec!["userspawn-runit"],
+        (InitSystem::Dinit, UserServices::Userspawn) => vec!["userspawn", "userspawn-dinit"],
+        (InitSystem::Dinit, UserServices::Turnstile) => vec!["turnstile", "turnstile-dinit"],
+        (InitSystem::OpenRc, UserServices::Turnstile) => vec!["turnstile", "turnstile-openrc"],
+        (InitSystem::Runit, UserServices::Userspawn) => vec!["userspawn", "userspawn-runit"],
         _ => Vec::new(),
     };
     let mut deferred = vec![
@@ -471,20 +471,20 @@ mod tests {
         config.system.user_services = UserServices::Turnstile;
         assert_eq!(
             build_package_plan(&config).user_service_packages,
-            ["turnstile-dinit"]
+            ["turnstile", "turnstile-dinit"]
         );
 
         config.system.init_system = InitSystem::OpenRc;
         assert_eq!(
             build_package_plan(&config).user_service_packages,
-            ["turnstile-openrc"]
+            ["turnstile", "turnstile-openrc"]
         );
         config.system.user_services = UserServices::Native;
         assert!(build_package_plan(&config).user_service_packages.is_empty());
 
         config.system.init_system = InitSystem::Runit;
         config.system.user_services = UserServices::Userspawn;
-        assert_eq!(build_package_plan(&config).user_service_packages, ["userspawn-runit"]);
+        assert_eq!(build_package_plan(&config).user_service_packages, ["userspawn", "userspawn-runit"]);
 
         config.system.init_system = InitSystem::S6;
         config.system.user_services = UserServices::Manual;
