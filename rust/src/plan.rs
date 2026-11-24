@@ -232,7 +232,7 @@ fn user_services_detail(config: &InstallConfig) -> &'static str {
             "use the Dinit-specific Turnstile integration; verify package availability before installation"
         }
         (InitSystem::OpenRc, UserServices::Native) => {
-            "use OpenRC native per-user service support; verify the installed OpenRC version and configuration"
+            "use OpenRC native per-user services (OpenRC 0.62+); ensure XDG_RUNTIME_DIR and PAM session auto-start are configured"
         }
         (InitSystem::OpenRc, UserServices::Turnstile) => {
             "use the OpenRC-specific Turnstile integration; verify package availability before installation"
