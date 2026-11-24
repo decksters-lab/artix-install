@@ -78,7 +78,11 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
                 detail: "Future module: verify device identity, capacity, partition table, live-media ancestry and mount state; require typed confirmation of the exact device path.".into(), risk: Risk::Review });
             if !storage_ready {
                 let mut reasons = storage_plan.blocked.clone();
-                reasons.extend(validation_issues.iter().cloned());
+                for issue in &validation_issues {
+                    if !reasons.contains(issue) {
+                        reasons.push(issue.clone());
+                    }
+                }
                 let reason = if reasons.is_empty() {
                     "The selected storage configuration is incomplete.".to_owned()
                 } else {
