@@ -186,6 +186,23 @@ impl App {
             return;
         }
 
+        let Some(target_disk) = self
+            .hardware
+            .disks
+            .iter()
+            .find(|disk| Some(&disk.path) == self.config.disk.target.as_ref())
+        else {
+            self.status = "The configured target disk is not present in the current hardware inventory.".into();
+            return;
+        };
+        if let Some(reason) = target_disk.selection_block_reason() {
+            self.status = format!(
+                "Cannot assign partitions on {}: {reason}.",
+                target_disk.path.display()
+            );
+            return;
+        }
+
         let Some(partition) = self
             .target_partitions()
             .get(self.selected_partition)
@@ -868,6 +885,15 @@ mod tests {
         app.assign_partition(PartitionRole::Efi);
         assert!(app.config.disk.efi_partition.is_none());
         assert!(app.status.contains("not verified as FAT32/vfat"));
+    }
+
+    #[test]
+    fn partition_manager_rejects_partitions_when_parent_disk_is_blocked() {
+        let mut app = manual_app();
+        app.hardware.disks[0].has_holders = true;
+        app.assign_partition(PartitionRole::Efi);
+        assert!(app.config.disk.efi_partition.is_none());
+        assert!(app.status.contains("active holders"));
     }
 
     #[test]
