@@ -186,7 +186,7 @@ mod tests {
         let output = format_plan(&config);
         assert!(output.contains("[BLOCKED] Partition and prepare storage"));
         assert!(output.contains("[BLOCKED] Set up encryption, filesystems and swap"));
-        assert!(output.contains("Manual UEFI mode requires disk.efi_partition."));
+        assert!(output.contains("manual UEFI partitioning requires disk.efi_partition"));
     }
 
     #[test]
