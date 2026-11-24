@@ -149,7 +149,9 @@ pub fn apply_automatic_partition_table(
         .output()
         .context("read back the written partition table")?;
     if !dump.status.success() {
-        bail!("partition table was written, but could not be read back; do not continue to formatting");
+        bail!(
+            "partition table was written, but could not be read back; do not continue to formatting"
+        );
     }
     let dump_text = String::from_utf8_lossy(&dump.stdout);
     verify_partition_table_dump(config, &dump_text)
@@ -158,7 +160,9 @@ pub fn apply_automatic_partition_table(
     // Confirm that the kernel and sysfs now expose the same number of child partitions.
     let refreshed_hardware = discovery::discover();
     let refreshed_disk = find_safe_target(&refreshed_hardware, selected)
-        .context("partition table was written, but fresh device discovery could not verify the target")?;
+        .context(
+            "partition table was written, but fresh device discovery could not verify the target",
+        )?;
     let expected_count = expected_partition_types(config).len();
     if refreshed_disk.partitions.len() != expected_count {
         bail!(
@@ -175,7 +179,9 @@ pub fn apply_automatic_partition_table(
             );
         }
         let partition_metadata = fs::metadata(&partition.path)
-            .with_context(|| format!("inspect newly discovered partition {}", partition.path.display()))?;
+            .with_context(|| {
+                format!("inspect newly discovered partition {}", partition.path.display())
+            })?;
         if !partition_metadata.file_type().is_block_device() {
             bail!(
                 "partition table was written, but {} is not a block device; do not continue",
@@ -230,24 +236,22 @@ fn verify_partition_table_dump(config: &InstallConfig, dump: &str) -> Result<()>
     }
 
     let mut actual = Vec::<(u64, u64, String)>::new();
-    for line in dump.lines().filter(|line| line.trim_start().starts_with("/dev/")) {
+    for line in dump
+        .lines()
+        .filter(|line| line.trim_start().starts_with("/dev/"))
+    {
         let (_, fields) = line
             .split_once(':')
             .context("malformed partition row in sfdisk dump")?;
-        let field_value = |name: &str| -> Result<&str> {
-            fields
-                .split(',')
-                .find_map(|field| {
-                    let (key, value) = field.trim().split_once('=')?;
-                    (key.trim() == name).then_some(value.trim())
-                })
-                .with_context(|| format!("partition row is missing {name}"))
-        };
-        let start = field_value("start")?.parse::<u64>()
+        let start = sfdisk_field(fields, "start")?
+            .parse::<u64>()
             .context("partition start is not an integer")?;
-        let size = field_value("size")?.parse::<u64>()
+        let size = sfdisk_field(fields, "size")?
+            .parse::<u64>()
             .context("partition size is not an integer")?;
-        let kind = field_value("type")?.trim_matches('"').to_ascii_uppercase();
+        let kind = sfdisk_field(fields, "type")?
+            .trim_matches('"')
+            .to_ascii_uppercase();
         actual.push((start, size, kind));
     }
 
@@ -263,13 +267,23 @@ fn verify_partition_table_dump(config: &InstallConfig, dump: &str) -> Result<()>
     let mut expected_start = 2048_u64;
     let mut index = 0;
     if config.system.firmware == FirmwareMode::Uefi {
-        verify_partition_entry(&actual[index], expected_start, 1024 * 1024 * 1024 / 512, expected_types[index])?;
+        verify_partition_entry(
+            &actual[index],
+            expected_start,
+            1024 * 1024 * 1024 / 512,
+            expected_types[index],
+        )?;
         expected_start += 1024 * 1024 * 1024 / 512;
         index += 1;
     }
     if config.disk.swap.mode == SwapMode::Partition {
         let swap_sectors = u64::from(config.disk.swap.size_gib) * 1024 * 1024 * 1024 / 512;
-        verify_partition_entry(&actual[index], expected_start, swap_sectors, expected_types[index])?;
+        verify_partition_entry(
+            &actual[index],
+            expected_start,
+            swap_sectors,
+            expected_types[index],
+        )?;
         expected_start += swap_sectors;
         index += 1;
     }
@@ -278,6 +292,16 @@ fn verify_partition_table_dump(config: &InstallConfig, dump: &str) -> Result<()>
         bail!("root partition has an unexpected start, size, or type");
     }
     Ok(())
+}
+
+fn sfdisk_field<'a>(fields: &'a str, name: &str) -> Result<&'a str> {
+    fields
+        .split(',')
+        .find_map(|field| {
+            let (key, value) = field.trim().split_once('=')?;
+            (key.trim() == name).then_some(value.trim())
+        })
+        .with_context(|| format!("partition row is missing {name}"))
 }
 
 fn verify_partition_entry(
