@@ -9,7 +9,7 @@ A pair of installers for Artix Linux. The original whiptail-driven Bash installe
 
 This is the original, fully featured installer and remains the recommended option for real installations. Its script and existing usage instructions are preserved.
 
-[Jump to Bash installation instructions](#requirements)
+[Jump to Bash installation instructions](#bash-installer-requirements-and-usage)
 
 ### 2. Rust installer — experimental
 
@@ -30,7 +30,9 @@ This installer is meant for experienced and new Artix users alike but you should
 
 Window managers and Wayland compositors (Hyprland, MangoWM, Niri, Wayfire, labwc, Sway, and so on) are **installed, not configured**. You get the compositor and what it needs to start, and nothing more: no bar, launcher, wallpaper, theme or keybind setup. At most the installer drops in the package's own stock config plus one line that starts audio, so the rest of the setup is yours to build the way you like it.
 
-## Requirements
+## Bash installer requirements and usage
+
+The following requirements and commands apply to the stable Bash installer only. The experimental Rust executable has separate build and run instructions below.
 
 - Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso. Use one with a graphical session if its easier for you. It doesn't matter which kind you choose.) note: with a graphical installer it makes it easy to copy the install script, or the folder containing the install script to another location like a second hdd or a usb drive that isn't running the iso then the script is always available to you locally.
 - Script Must be run as root either with su before all other commands or with sudo right before running ./artix-install.sh
@@ -165,7 +167,7 @@ Things flagged during review but intentionally left as-is:
 
 The Rust implementation lives in `rust/` and is still under development; it does not replace the Bash installer yet. It is built ahead of time for the live environment, so **users do not need Rust, Cargo, or a compiler installed on the Artix ISO**.
 
-The GitHub Actions workflow [Build standalone Linux binaries](.github/workflows/standalone-binaries.yml) builds x86_64 GNU and musl executables, smoke-tests them, and packages each with a SHA-256 checksum. Run the workflow manually from the Actions tab to produce downloadable workflow artifacts, or push a version tag beginning with `v` to publish both archives as GitHub Release assets.
+The GitHub Actions workflow [Build standalone Linux binaries](.github/workflows/standalone-binaries.yml) builds x86_64 GNU and musl executables, smoke-tests them, and packages each with a SHA-256 checksum. The workflow runs on pushes to this feature branch and can also be started manually from the Actions tab to produce downloadable workflow artifacts. Push a version tag beginning with `v` to publish both archives as GitHub Release assets.
 
 The musl build is intended to be statically linked and is checked for an ELF interpreter in CI. It still needs to be tested on the actual Artix live ISO before being treated as the recommended download. The GNU build is provided as a compatibility fallback.
 
