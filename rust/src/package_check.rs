@@ -91,7 +91,6 @@ impl PackageCheckReport {
     }
 }
 
-
 fn is_missing_error(stderr: &str, package: &str) -> bool {
     let message = stderr.to_ascii_lowercase();
     message.contains("target not found")
@@ -118,8 +117,7 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
     {
         let external_kernel = (config.software.kernels.contains(&Kernel::LinuxLqx)
             && name.starts_with("linux-lqx"))
-            || (config.software.kernels.contains(&Kernel::LinuxCachyos)
-                && name == "linux-cachyos");
+            || (config.software.kernels.contains(&Kernel::LinuxCachyos) && name == "linux-cachyos");
         if !external_kernel {
             packages
                 .entry(name.to_owned())
@@ -129,9 +127,7 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
 
     for recipe in &plan.desktop_recipes {
         for name in &recipe.packages {
-            packages
-                .entry((*name).to_owned())
-                .or_insert(recipe.source);
+            packages.entry((*name).to_owned()).or_insert(recipe.source);
         }
     }
 
@@ -145,7 +141,8 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
                 name,
                 source,
                 availability: Availability::Deferred,
-                detail: "This recipe requires an external build or an explicit repository choice.".into(),
+                detail: "This recipe requires an external build or an explicit repository choice."
+                    .into(),
             });
             continue;
         }
@@ -167,8 +164,8 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
             });
         } else {
             let stderr = String::from_utf8_lossy(&result.stderr);
-            let missing = (is_group && result.stdout.is_empty())
-                || is_missing_error(&stderr, &name);
+            let missing =
+                (is_group && result.stdout.is_empty()) || is_missing_error(&stderr, &name);
             checks.push(PackageCheck {
                 name,
                 source,
@@ -213,10 +210,7 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        fs,
-        os::unix::fs::PermissionsExt,
-    };
+    use std::{fs, os::unix::fs::PermissionsExt};
 
     fn fake_pacman(name: &str) -> std::path::PathBuf {
         let directory = std::env::temp_dir().join(format!(
@@ -236,13 +230,9 @@ mod tests {
         path
     }
 
-
     #[test]
     fn distinguishes_missing_packages_from_missing_sync_databases() {
-        assert!(is_missing_error(
-            "error: target not found: foo",
-            "foo"
-        ));
+        assert!(is_missing_error("error: target not found: foo", "foo"));
         assert!(is_missing_error(
             "error: package 'foo' was not found",
             "foo"
@@ -260,9 +250,11 @@ mod tests {
         config.software.kernels = vec![Kernel::Linux];
         let pacman = fake_pacman("base-check");
         let report = check(&config, &pacman).unwrap();
-        assert!(report.checks.iter().any(|item| {
-            item.name == "base" && item.availability == Availability::Available
-        }));
+        assert!(
+            report.checks.iter().any(|item| {
+                item.name == "base" && item.availability == Availability::Available
+            })
+        );
         assert!(report.checks.iter().any(|item| {
             item.name == "base-devel" && item.availability == Availability::Missing
         }));
