@@ -102,12 +102,17 @@ pub fn apply_automatic_partition_table(
         .stderr(Stdio::inherit())
         .spawn()
         .context("start sfdisk; ensure util-linux is installed")?;
-    child
+    let mut stdin = child
         .stdin
         .take()
-        .context("open sfdisk standard input")?
-        .write_all(script.as_bytes())
-        .context("send partition layout to sfdisk")?;
+        .context("open sfdisk standard input")?;
+    if let Err(error) = stdin.write_all(script.as_bytes()) {
+        let _ = child.kill();
+        drop(stdin);
+        let _ = child.wait();
+        return Err(error).context("send partition layout to sfdisk; process was stopped");
+    }
+    drop(stdin);
     let status = child.wait().context("wait for sfdisk")?;
     if !status.success() {
         bail!("sfdisk failed with {status}; inspect the disk before retrying");
@@ -268,7 +273,7 @@ fn new_uuid() -> Result<String> {
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
     {
-        bail!("uuidgen returned an invalid GPT disk GUID");
+        bail!("kernel UUID generator returned an invalid GPT disk GUID");
     }
     Ok(value)
 }
@@ -327,6 +332,19 @@ mod tests {
         let mut config = InstallConfig::default();
         config.disk.partitioning = Partitioning::Manual;
         assert!(build_sfdisk_script(&config).is_err());
+    }
+
+    #[test]
+    fn bios_swap_partition_uses_mbr_swap_type_before_bootable_root() {
+        let mut config = InstallConfig::default();
+        config.system.firmware = FirmwareMode::Bios;
+        config.disk.swap.mode = SwapMode::Partition;
+        config.disk.swap.size_gib = 6;
+        let script = build_sfdisk_script(&config).unwrap();
+        assert_eq!(
+            script,
+            "label: dos\\nsize=+6G, type=82\\nsize=+, type=83, bootable\\n"
+        );
     }
 
     #[test]
