@@ -1,8 +1,5 @@
 name: Rust CI
 
-permissions:
-  contents: write
-
 on:
   push:
     paths:
@@ -25,24 +22,7 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      # Temporary formatting pass: publish the rustfmt output so the source can be
-      # committed back to the feature branch, then restore a strict check-only gate.
-      - run: cargo fmt --all
-      - name: Commit rustfmt output to the feature branch
-        if: github.event_name == 'push'
-        run: |
-          if ! git diff --quiet -- src; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src
-            git commit -m "Format Rust sources with rustfmt"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rustfmt-source
-          path: rust/src/**/*.rs
-          if-no-files-found: error
+      - run: cargo fmt --all -- --check
       - run: cargo check --all-targets
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all-targets
