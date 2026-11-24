@@ -185,7 +185,10 @@ pub fn evaluate(
             Some(_) => checks.push(PreflightCheck {
                 name: "Target disk",
                 status: CheckStatus::Pass,
-                detail: format!("{} is present and passed current read-only selection checks.", target.display()),
+                detail: format!(
+                    "{} is present and passed current read-only selection checks.",
+                    target.display()
+                ),
             }),
         },
     }
@@ -270,7 +273,9 @@ fn parse_os_release(contents: &str) -> std::collections::HashMap<String, String>
         .filter_map(|line| {
             let (key, value) = line.split_once('=')?;
             if key.is_empty()
-                || !key.bytes().all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+                || !key.bytes().all(|byte| {
+                    byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_'
+                })
             {
                 return None;
             }
