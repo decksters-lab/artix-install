@@ -643,7 +643,9 @@ fn parse_mountinfo_verified(contents: &str) -> (HashMap<String, Vec<String>>, bo
     for line in contents.lines() {
         let fields: Vec<&str> = line.split_whitespace().collect();
         let separator = fields.iter().position(|field| *field == "-");
-        let valid_device = fields.get(2).is_some_and(|device| is_valid_device_number(device));
+        let valid_device = fields
+            .get(2)
+            .is_some_and(|device| is_valid_device_number(device));
         if fields.len() < 10
             || separator.is_none_or(|index| index < 6 || index + 3 >= fields.len())
             || !valid_device
