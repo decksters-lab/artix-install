@@ -183,10 +183,13 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
 
     for (name, source) in [
         ("linux-lqx", PackageSource::LiveRepositoryChoice),
+        ("linux-lqx-headers", PackageSource::LiveRepositoryChoice),
         ("linux-cachyos", PackageSource::LiveRepositoryChoice),
     ] {
         let selected = match name {
-            "linux-lqx" => config.software.kernels.contains(&Kernel::LinuxLqx),
+            "linux-lqx" | "linux-lqx-headers" => {
+                config.software.kernels.contains(&Kernel::LinuxLqx)
+            }
             _ => config.software.kernels.contains(&Kernel::LinuxCachyos),
         };
         if selected {
