@@ -3,6 +3,8 @@ name: Build standalone Linux binaries
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "feat/rust-artix-setup-prototype"
     tags:
       - "v*"
 
