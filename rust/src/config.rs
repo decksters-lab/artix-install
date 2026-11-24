@@ -402,6 +402,36 @@ impl InstallConfig {
             devices.push(mount.device.clone());
             mountpoints.push(mount.mountpoint.clone());
         }
+
+        // The planner creates these mountpoints itself. Allowing an additional
+        // partition to target one of them would produce two competing mounts.
+        for mount in &self.disk.additional_mounts {
+            let point = mount.mountpoint.as_str();
+            if self.system.firmware == FirmwareMode::Uefi && point == "/boot" {
+                issues.push(
+                    "additional mountpoint '/boot' conflicts with the planned EFI mount".into(),
+                );
+            }
+            if self.disk.root_filesystem == Filesystem::Btrfs
+                && self.disk.btrfs.layout != BtrfsLayout::Flat
+            {
+                let built_in = matches!(
+                    point,
+                    "/home" | "/var/log" | "/var/cache"
+                ) || (self.disk.btrfs.layout == BtrfsLayout::Snapshots
+                    && point == "/.snapshots")
+                    || (matches!(
+                        self.disk.swap.mode,
+                        SwapMode::Swapfile | SwapMode::Both
+                    ) && point == "/swap");
+                if built_in {
+                    issues.push(format!(
+                        "additional mountpoint '{point}' conflicts with a Btrfs subvolume mount created by the selected layout"
+                    ));
+                }
+            }
+        }
+
         if self.software.kernels.is_empty() || !self.software.kernels.contains(&Kernel::Linux) {
             issues.push(
                 "software.kernels must include 'linux' as the guaranteed fallback kernel".into(),
@@ -656,6 +686,49 @@ mod tests {
         );
         config.system.firmware = FirmwareMode::Uefi;
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn additional_mount_cannot_replace_uefi_boot_mount() {
+        let mut config = InstallConfig::default();
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.root_partition = Some("/dev/sda2".into());
+        config.disk.efi_partition = Some("/dev/sda1".into());
+        config.disk.additional_mounts.push(MountConfig {
+            device: "/dev/sda3".into(),
+            mountpoint: "/boot".into(),
+            filesystem: Filesystem::Ext4,
+            format: false,
+        });
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("conflicts with the planned EFI mount"))
+        );
+    }
+
+    #[test]
+    fn additional_mount_cannot_duplicate_managed_btrfs_subvolume_mount() {
+        let mut config = InstallConfig::default();
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.root_partition = Some("/dev/sda2".into());
+        config.disk.efi_partition = Some("/dev/sda1".into());
+        config.disk.root_filesystem = Filesystem::Btrfs;
+        config.disk.additional_mounts.push(MountConfig {
+            device: "/dev/sda3".into(),
+            mountpoint: "/home".into(),
+            filesystem: Filesystem::Ext4,
+            format: false,
+        });
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("conflicts with a Btrfs subvolume mount"))
+        );
     }
 
     #[test]
