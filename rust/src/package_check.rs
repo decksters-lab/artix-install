@@ -251,10 +251,7 @@ mod tests {
             repository_target("cosmic-session", PackageSource::ArtixGalaxy),
             "galaxy/cosmic-session"
         );
-        assert_eq!(
-            repository_target("grub", PackageSource::Artix),
-            "grub"
-        );
+        assert_eq!(repository_target("grub", PackageSource::Artix), "grub");
     }
 
     #[test]
@@ -296,7 +293,12 @@ mod tests {
         let pacman = fake_pacman("user-services");
         let report = check(&config, &pacman).unwrap();
         assert!(report.checks.iter().any(|item| item.name == "turnstile"));
-        assert!(report.checks.iter().any(|item| item.name == "turnstile-dinit"));
+        assert!(
+            report
+                .checks
+                .iter()
+                .any(|item| item.name == "turnstile-dinit")
+        );
         fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 
@@ -308,8 +310,18 @@ mod tests {
         config.software.bootloader = Bootloader::Limine;
         let pacman = fake_pacman("storage-bootloader");
         let report = check(&config, &pacman).unwrap();
-        for expected in ["btrfs-progs", "cryptsetup", "dosfstools", "limine", "efibootmgr", "limine-mkinitcpio-hook"] {
-            assert!(report.checks.iter().any(|item| item.name == expected), "missing check for {expected}");
+        for expected in [
+            "btrfs-progs",
+            "cryptsetup",
+            "dosfstools",
+            "limine",
+            "efibootmgr",
+            "limine-mkinitcpio-hook",
+        ] {
+            assert!(
+                report.checks.iter().any(|item| item.name == expected),
+                "missing check for {expected}"
+            );
         }
         fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
