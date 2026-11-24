@@ -39,6 +39,8 @@ pub struct PackagePlan {
     pub kernel_notes: Vec<String>,
     pub init_packages: Vec<&'static str>,
     pub network_packages: Vec<&'static str>,
+    pub xorg_packages: Vec<&'static str>,
+    pub audio_packages: Vec<&'static str>,
     pub privilege_packages: Vec<&'static str>,
     pub desktop_recipes: Vec<DesktopRecipe>,
     pub deferred: Vec<String>,
@@ -84,6 +86,57 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         NetworkStack::Iwd => vec!["iwd"],
         NetworkStack::NetworkManager => vec!["networkmanager"],
     };
+    let needs_xorg = config.software.desktop_environments.iter().any(|desktop| {
+        !matches!(
+            desktop,
+            Desktop::Cosmic
+                | Desktop::Cosmalia
+                | Desktop::Hyprland
+                | Desktop::MangoWm
+                | Desktop::Umbriel
+                | Desktop::Niri
+                | Desktop::Wayfire
+                | Desktop::Labwc
+                | Desktop::Sway
+                | Desktop::SwayFx
+        )
+    });
+    let xorg_packages = if needs_xorg {
+        vec![
+            "xorg-server",
+            "xorg-server-common",
+            "xf86-input-libinput",
+            "xorg-xinit",
+        ]
+    } else {
+        Vec::new()
+    };
+    let needs_audio = config.software.desktop_environments.iter().any(|desktop| {
+        matches!(
+            desktop,
+            Desktop::Plasma
+                | Desktop::Xfce
+                | Desktop::Cinnamon
+                | Desktop::Mate
+                | Desktop::Lxqt
+                | Desktop::Moksha
+                | Desktop::Cosmic
+                | Desktop::Cosmalia
+                | Desktop::Hyprland
+                | Desktop::MangoWm
+                | Desktop::Umbriel
+                | Desktop::Niri
+                | Desktop::Wayfire
+                | Desktop::Labwc
+                | Desktop::Sway
+                | Desktop::SwayFx
+        )
+    });
+    let audio_packages = if needs_audio {
+        vec!["pipewire", "pipewire-pulse", "pipewire-alsa", "wireplumber", "rtkit"]
+    } else {
+        Vec::new()
+    };
     let privilege_packages = match config.system.privilege_escalation {
         PrivilegeEscalation::Doas => vec!["doas"],
         PrivilegeEscalation::Sudo => vec!["sudo"],
@@ -105,6 +158,8 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         kernel_notes,
         init_packages,
         network_packages,
+        xorg_packages,
+        audio_packages,
         privilege_packages,
         desktop_recipes,
         deferred,
@@ -213,6 +268,23 @@ mod tests {
         let plan = build_package_plan(&config);
         assert_eq!(plan.network_packages, ["iwd"]);
         assert_eq!(plan.privilege_packages, ["sudo"]);
+    }
+
+    #[test]
+    fn wayland_only_cosmalia_skips_xorg_but_gets_audio_stack() {
+        let mut config = InstallConfig::default();
+        config.software.desktop_environments.push(Desktop::Cosmalia);
+        let plan = build_package_plan(&config);
+        assert!(plan.xorg_packages.is_empty());
+        assert!(plan.audio_packages.contains(&"pipewire"));
+        assert!(plan.audio_packages.contains(&"rtkit"));
+    }
+
+    #[test]
+    fn cli_only_plan_does_not_add_desktop_audio_or_xorg() {
+        let plan = build_package_plan(&InstallConfig::default());
+        assert!(plan.xorg_packages.is_empty());
+        assert!(plan.audio_packages.is_empty());
     }
 
     #[test]
