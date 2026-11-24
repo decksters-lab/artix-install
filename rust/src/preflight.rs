@@ -57,7 +57,8 @@ impl PreflightReport {
         } else {
             output.push_str("Preflight found blocking issues. Resolve them before installation work can proceed.\n");
         }
-        output.push_str("This report is read-only; it does not install packages or change disks.\n");
+        output
+            .push_str("This report is read-only; it does not install packages or change disks.\n");
         output
     }
 }
