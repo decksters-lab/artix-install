@@ -2,7 +2,8 @@
 //! This module deliberately performs no repository queries or package operations.
 
 use crate::config::{
-    CpuVendor, Desktop, GpuChoice, InitSystem, InstallConfig, Kernel, NetworkStack,\n    PrivilegeEscalation,
+    CpuVendor, Desktop, GpuChoice, InitSystem, InstallConfig, Kernel, NetworkStack,
+    PrivilegeEscalation,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
