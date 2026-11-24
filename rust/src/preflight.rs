@@ -73,14 +73,14 @@ pub fn evaluate(
 
     let is_artix = os_release.is_some_and(is_artix_release);
     checks.push(PreflightCheck {
-        name: "Artix live environment",
+        name: "Artix Linux",
         status: if is_artix {
             CheckStatus::Pass
         } else {
             CheckStatus::Fail
         },
         detail: if is_artix {
-            "The operating system identifies as Artix Linux.".into()
+            "The operating system identifies as Artix Linux; this check does not independently verify that it was booted from live media.".into()
         } else {
             "This does not identify as Artix Linux; boot the Artix live ISO before continuing.".into()
         },
@@ -379,7 +379,6 @@ mod tests {
         path
     }
 
-
     #[test]
     fn stable_device_symlink_matches_discovered_kernel_path() {
         let directory = std::env::temp_dir().join(format!(
@@ -466,7 +465,6 @@ mod tests {
         assert!(!report.is_ready());
         fs::remove_dir_all(directory).unwrap();
     }
-
 
     #[test]
     fn unavailable_firmware_metadata_is_not_a_bios_pass() {
