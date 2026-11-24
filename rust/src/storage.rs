@@ -552,17 +552,17 @@ mod tests {
     #[test]
     fn readback_verification_accepts_the_expected_uefi_layout() {
         let config = InstallConfig::default();
-        let dump = "label: gpt\\n/dev/vda1 : start= 2048, size= 2097152, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\\n/dev/vda2 : start= 2099200, size= 91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n";
+        let dump = "label: gpt\n/dev/vda1 : start= 2048, size= 2097152, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\n/dev/vda2 : start= 2099200, size= 91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\n";
         assert!(verify_partition_table_dump(&config, dump).is_ok());
     }
 
     #[test]
     fn readback_verification_rejects_wrong_partition_type_and_extra_partition() {
         let config = InstallConfig::default();
-        let wrong_type = "label: gpt\\n/dev/vda1 : start= 2048, size= 2097152, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n/dev/vda2 : start= 2099200, size= 91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n";
+        let wrong_type = "label: gpt\n/dev/vda1 : start= 2048, size= 2097152, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\n/dev/vda2 : start= 2099200, size= 91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\n";
         assert!(verify_partition_table_dump(&config, wrong_type).is_err());
         let extra = format!(
-            "{wrong_type}/dev/vda3 : start= 93952000, size= 100, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\\n"
+            "{wrong_type}/dev/vda3 : start= 93952000, size= 100, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\n"
         );
         assert!(verify_partition_table_dump(&config, &extra).is_err());
     }
@@ -573,7 +573,7 @@ mod tests {
         config.system.firmware = FirmwareMode::Bios;
         config.disk.swap.mode = SwapMode::Partition;
         config.disk.swap.size_gib = 4;
-        let dump = "label: dos\\n/dev/vda1 : start= 2048, size= 8388608, type=82\\n/dev/vda2 : start= 8390656, size= 1000000, type=83\\n";
+        let dump = "label: dos\n/dev/vda1 : start= 2048, size= 8388608, type=82\n/dev/vda2 : start= 8390656, size= 1000000, type=83\n";
         assert!(verify_partition_table_dump(&config, dump).is_ok());
     }
 
