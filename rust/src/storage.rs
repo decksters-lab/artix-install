@@ -71,6 +71,7 @@ pub fn apply_automatic_partition_table(
         bail!("{} is not a block device", selected.display());
     }
 
+    ensure_partition_tools()?;
     let script = build_sfdisk_script(config)?;
 
     // Re-discover after all other preparation and immediately before the write.
@@ -135,6 +136,30 @@ pub fn apply_automatic_partition_table(
         "Partition table written and verified on {}. No filesystem was formatted, no encryption was initialized, and no filesystem was mounted. Review the new partition inventory before proceeding.",
         selected.display()
     ))
+}
+
+fn ensure_partition_tools() -> Result<()> {
+    for tool in ["sfdisk", "partprobe", "udevadm"] {
+        let output = Command::new(tool)
+            .arg("--version")
+            .output()
+            .with_context(|| format!("{tool} is required for partition-table execution"))?;
+        if !output.status.success() {
+            bail!("{tool} is installed but its version check failed");
+        }
+    }
+    let help = Command::new("sfdisk")
+        .arg("--help")
+        .output()
+        .context("inspect sfdisk options before writing")?;
+    let help_text = String::from_utf8_lossy(&help.stdout);
+    if !help.status.success()
+        || !help_text.contains("--wipe")
+        || !help_text.contains("--wipe-partitions")
+    {
+        bail!("installed sfdisk lacks the required explicit signature-wiping options; refusing to write");
+    }
+    Ok(())
 }
 
 fn validate_confirmation(selected: &Path, typed_confirmation: &str) -> Result<()> {
