@@ -74,7 +74,11 @@ pub fn evaluate(
     let is_artix = os_release.is_some_and(is_artix_release);
     checks.push(PreflightCheck {
         name: "Artix live environment",
-        status: if is_artix { CheckStatus::Pass } else { CheckStatus::Fail },
+        status: if is_artix {
+            CheckStatus::Pass
+        } else {
+            CheckStatus::Fail
+        },
         detail: if is_artix {
             "The operating system identifies as Artix Linux.".into()
         } else {
@@ -85,7 +89,11 @@ pub fn evaluate(
     let is_root = effective_uid == Some(0);
     checks.push(PreflightCheck {
         name: "Root privileges",
-        status: if is_root { CheckStatus::Pass } else { CheckStatus::Fail },
+        status: if is_root {
+            CheckStatus::Pass
+        } else {
+            CheckStatus::Fail
+        },
         detail: if is_root {
             "The effective user ID is 0.".into()
         } else {
@@ -96,7 +104,11 @@ pub fn evaluate(
     let pacman = find_executable("pacman", search_path);
     checks.push(PreflightCheck {
         name: "Package manager",
-        status: if pacman.is_some() { CheckStatus::Pass } else { CheckStatus::Fail },
+        status: if pacman.is_some() {
+            CheckStatus::Pass
+        } else {
+            CheckStatus::Fail
+        },
         detail: pacman.map_or_else(
             || "pacman was not found in PATH.".into(),
             |path| format!("Found {}.", path.display()),
@@ -127,7 +139,11 @@ pub fn evaluate(
     };
     checks.push(PreflightCheck {
         name: "Firmware mode",
-        status: if firmware_matches { CheckStatus::Pass } else { CheckStatus::Fail },
+        status: if firmware_matches {
+            CheckStatus::Pass
+        } else {
+            CheckStatus::Fail
+        },
         detail: if firmware_matches {
             format!("Detected firmware is compatible with configured {} mode.", config.system.firmware)
         } else {
@@ -188,7 +204,11 @@ pub fn evaluate(
         .collect::<Vec<_>>();
     checks.push(PreflightCheck {
         name: "Storage utilities",
-        status: if missing.is_empty() { CheckStatus::Pass } else { CheckStatus::Warning },
+        status: if missing.is_empty() {
+            CheckStatus::Pass
+        } else {
+            CheckStatus::Warning
+        },
         detail: if missing.is_empty() {
             format!("Found all currently planned utilities: {}.", required_tools.join(", "))
         } else {
@@ -294,10 +314,20 @@ mod tests {
     #[test]
     fn missing_artix_root_and_pacman_are_blockers() {
         let config = InstallConfig::default();
-        let report = evaluate(&config, &HardwareSnapshot::default(), None, Some(1000), OsStr::new(""));
+        let report = evaluate(
+            &config,
+            &HardwareSnapshot::default(),
+            None,
+            Some(1000),
+            OsStr::new(""),
+        );
         assert!(!report.is_ready());
-        assert!(report.checks.iter().any(|check| check.name == "Root privileges" && check.status == CheckStatus::Fail));
-        assert!(report.checks.iter().any(|check| check.name == "Package manager" && check.status == CheckStatus::Fail));
+        assert!(report.checks.iter().any(|check| {
+            check.name == "Root privileges" && check.status == CheckStatus::Fail
+        }));
+        assert!(report.checks.iter().any(|check| {
+            check.name == "Package manager" && check.status == CheckStatus::Fail
+        }));
     }
 
     #[test]
@@ -330,7 +360,9 @@ mod tests {
             Some(0),
             directory.as_os_str(),
         );
-        assert!(report.checks.iter().any(|check| check.name == "Firmware mode" && check.status == CheckStatus::Fail));
+        assert!(report.checks.iter().any(|check| {
+            check.name == "Firmware mode" && check.status == CheckStatus::Fail
+        }));
         fs::remove_dir_all(directory).unwrap();
     }
 }
