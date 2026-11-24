@@ -335,9 +335,9 @@ mod tests {
     };
     use std::{fs, os::unix::fs::PermissionsExt};
 
-    fn executable_dir() -> PathBuf {
+    fn executable_dir(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "artix-setup-preflight-{}",
+            "artix-setup-preflight-{}-{name}",
             std::process::id()
         ));
         fs::create_dir_all(&path).unwrap();
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn reports_missing_target_as_warning_not_a_false_disk_selection() {
-        let directory = executable_dir();
+        let directory = executable_dir("missing-target");
         let config = InstallConfig::default();
         let report = evaluate(
             &config,
@@ -396,9 +396,32 @@ mod tests {
         fs::remove_dir_all(directory).unwrap();
     }
 
+
+    #[test]
+    fn selected_target_must_exist_in_the_current_hardware_snapshot() {
+        let directory = executable_dir("unknown-target");
+        let mut config = InstallConfig::default();
+        config.disk.target = Some("/dev/sda".into());
+        let report = evaluate(
+            &config,
+            &HardwareSnapshot {
+                firmware: "UEFI".into(),
+                ..HardwareSnapshot::default()
+            },
+            Some("ID=artix\\n"),
+            Some(0),
+            directory.as_os_str(),
+        );
+        assert!(report.checks.iter().any(|check| {
+            check.name == "Target disk" && check.status == CheckStatus::Fail
+        }));
+        assert!(!report.is_ready());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
     #[test]
     fn firmware_mismatch_blocks_preflight() {
-        let directory = executable_dir();
+        let directory = executable_dir("firmware-mismatch");
         let mut config = InstallConfig::default();
         config.system.firmware = FirmwareMode::Bios;
         config.disk.partitioning = Partitioning::Automatic;
