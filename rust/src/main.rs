@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod discovery;
 mod packages;
+mod package_check;
 mod partition;
 mod plan;
 mod preflight;
@@ -35,6 +36,9 @@ struct Args {
     /// Check the live environment and selected configuration without changing the host.
     #[arg(long)]
     preflight: bool,
+    /// Check planned packages against currently enabled pacman sync databases; does not refresh them.
+    #[arg(long)]
+    check_packages: bool,
     /// Write the default configuration to FILE and exit.
     #[arg(long, value_name = "FILE")]
     write_default: Option<PathBuf>,
@@ -79,6 +83,14 @@ fn run() -> Result<()> {
         print!("{}", report.render());
         if !report.is_ready() {
             bail!("live environment preflight failed");
+        }
+        return Ok(());
+    }
+    if args.check_packages {
+        let report = package_check::check(&config, std::path::Path::new("pacman"))?;
+        print!("{}", report.render());
+        if report.has_problems() {
+            bail!("one or more packages are missing or could not be checked");
         }
         return Ok(());
     }
