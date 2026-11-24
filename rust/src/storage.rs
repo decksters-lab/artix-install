@@ -375,6 +375,58 @@ mod tests {
     }
 
     #[test]
+    fn generated_gpt_layout_is_accepted_by_sfdisk_on_a_sparse_image() {
+        if Command::new("sfdisk").arg("--version").output().is_err() {
+            return;
+        }
+        let image = std::env::temp_dir().join(format!(
+            "artix-setup-gpt-image-{}.img",
+            std::process::id()
+        ));
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&image)
+            .unwrap();
+        file.set_len(20 * GIB).unwrap();
+        drop(file);
+
+        let script = build_sfdisk_script(&InstallConfig::default()).unwrap();
+        let mut child = Command::new("sfdisk")
+            .args(["--wipe", "always", "--wipe-partitions", "always", "--"])
+            .arg(&image)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(script.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "sfdisk rejected generated GPT script: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let dump = Command::new("sfdisk")
+            .arg("--dump")
+            .arg(&image)
+            .output()
+            .unwrap();
+        assert!(dump.status.success());
+        let dump = String::from_utf8_lossy(&dump.stdout);
+        assert!(dump.contains("label: gpt"));
+        assert!(dump.contains("C12A7328-F81F-11D2-BA4B-00A0C93EC93B"));
+        assert!(dump.contains("0FC63DAF-8483-4772-8E79-3D69D8477DE4"));
+        let _ = fs::remove_file(image);
+    }
+
+    #[test]
     fn explicit_swap_settings_are_serialized_without_shell_interpolation() {
         let mut config = InstallConfig::default();
         config.disk.swap = SwapConfig {
