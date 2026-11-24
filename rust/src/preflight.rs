@@ -413,6 +413,8 @@ mod tests {
         let mut config = InstallConfig::default();
         let tools = required_tools(&config);
         assert!(tools.contains(&"sfdisk"));
+        assert!(tools.contains(&"partprobe"));
+        assert!(tools.contains(&"udevadm"));
         assert!(tools.contains(&"mkfs.ext4"));
         assert!(tools.contains(&"mkfs.fat"));
         assert!(tools.contains(&"mkswap"));
