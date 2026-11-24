@@ -1,11 +1,7 @@
 //! Read-only checks against the currently enabled pacman sync databases.
 //! This never refreshes databases or installs packages.
 
-use std::{
-    collections::BTreeMap,
-    path::Path,
-    process::Command,
-};
+use std::{collections::BTreeMap, path::Path, process::Command};
 
 use anyhow::{Context, Result};
 
