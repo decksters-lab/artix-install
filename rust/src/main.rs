@@ -6,8 +6,8 @@ mod packages;
 mod partition;
 mod plan;
 mod preflight;
-mod tui;
 mod storage;
+mod tui;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
 
