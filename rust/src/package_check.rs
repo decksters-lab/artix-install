@@ -270,6 +270,9 @@ mod tests {
         assert!(report.checks.iter().any(|item| {
             item.name == "linux-lqx" && item.availability == Availability::Deferred
         }));
+        assert!(report.checks.iter().any(|item| {
+            item.name == "linux-lqx-headers" && item.availability == Availability::Deferred
+        }));
         fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 }
