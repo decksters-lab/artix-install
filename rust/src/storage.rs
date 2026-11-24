@@ -218,8 +218,7 @@ fn validate_capacity(config: &InstallConfig, size_bytes: u64) -> Result<()> {
     } else {
         0
     };
-    let minimum =
-        efi_bytes + swap_bytes + MIN_ROOT_GIB * GIB + PARTITION_ALIGNMENT_MARGIN_BYTES;
+    let minimum = efi_bytes + swap_bytes + MIN_ROOT_GIB * GIB + PARTITION_ALIGNMENT_MARGIN_BYTES;
     if size_bytes < minimum {
         bail!(
             "target is too small: needs at least {} GiB for the planned EFI, swap and minimum root partitions",
@@ -360,9 +359,7 @@ mod tests {
         let config = InstallConfig::default();
         assert!(validate_capacity(&config, 8 * GIB).is_err());
         assert!(validate_capacity(&config, 9 * GIB).is_err());
-        assert!(
-            validate_capacity(&config, 9 * GIB + PARTITION_ALIGNMENT_MARGIN_BYTES).is_ok()
-        );
+        assert!(validate_capacity(&config, 9 * GIB + PARTITION_ALIGNMENT_MARGIN_BYTES).is_ok());
     }
 
     #[test]
