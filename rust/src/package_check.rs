@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, path::Path, process::Command};
 use anyhow::{Context, Result};
 
 use crate::{
-    config::{Bootloader, Filesystem, InstallConfig, Kernel, UserServices},
+    config::{InstallConfig, Kernel},
     packages::{self, PackageSource},
 };
 
@@ -221,6 +221,7 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{Bootloader, Filesystem, UserServices};
     use std::{fs, os::unix::fs::PermissionsExt};
 
     fn fake_pacman(name: &str) -> std::path::PathBuf {
