@@ -65,8 +65,8 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     };
     let user_service_packages = match (config.system.init_system, config.system.user_services) {
         (InitSystem::Dinit, UserServices::Userspawn) => vec!["userspawn-dinit"],
-        (InitSystem::Dinit, UserServices::Turnstile) => vec!["turnstile", "turnstile-dinit"],
-        (InitSystem::OpenRc, UserServices::Turnstile) => vec!["turnstile", "turnstile-openrc"],
+        (InitSystem::Dinit, UserServices::Turnstile) => vec!["turnstile-dinit"],
+        (InitSystem::OpenRc, UserServices::Turnstile) => vec!["turnstile-openrc"],
         (InitSystem::Runit, UserServices::Userspawn) => vec!["userspawn-runit"],
         _ => Vec::new(),
     };
@@ -471,13 +471,13 @@ mod tests {
         config.system.user_services = UserServices::Turnstile;
         assert_eq!(
             build_package_plan(&config).user_service_packages,
-            ["turnstile", "turnstile-dinit"]
+            ["turnstile-dinit"]
         );
 
         config.system.init_system = InitSystem::OpenRc;
         assert_eq!(
             build_package_plan(&config).user_service_packages,
-            ["turnstile", "turnstile-openrc"]
+            ["turnstile-openrc"]
         );
         config.system.user_services = UserServices::Native;
         assert!(build_package_plan(&config).user_service_packages.is_empty());
