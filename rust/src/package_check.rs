@@ -142,12 +142,15 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
             continue;
         }
 
+        let is_group = matches!(name.as_str(), "base" | "base-devel");
+        let query = if is_group { "-Sg" } else { "-Si" };
         let result = Command::new(pacman)
-            .arg("-Si")
+            .arg(query)
             .arg(&name)
             .output()
-            .with_context(|| format!("run {} -Si {}", pacman.display(), name))?;
-        if result.status.success() {
+            .with_context(|| format!("run {} {query} {name}", pacman.display()))?;
+        let found_group = !is_group || !result.stdout.is_empty();
+        if result.status.success() && found_group {
             checks.push(PackageCheck {
                 name,
                 source,
