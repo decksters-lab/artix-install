@@ -31,10 +31,10 @@ jobs:
       - name: Commit rustfmt output to the feature branch
         if: github.event_name == 'push'
         run: |
-          if ! git diff --quiet -- rust/src; then
+          if ! git diff --quiet -- src; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add rust/src
+            git add src
             git commit -m "Format Rust sources with rustfmt"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
