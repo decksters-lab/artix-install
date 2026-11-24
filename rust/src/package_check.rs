@@ -98,6 +98,7 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
     for name in plan
         .base_packages
         .iter()
+        .copied()
         .chain(plan.kernel_packages.iter().map(String::as_str))
         .chain(plan.microcode_packages.iter().copied())
         .chain(plan.gpu_packages.iter().copied())
@@ -205,9 +206,9 @@ mod tests {
         os::unix::fs::PermissionsExt,
     };
 
-    fn fake_pacman() -> std::path::PathBuf {
+    fn fake_pacman(name: &str) -> std::path::PathBuf {
         let directory = std::env::temp_dir().join(format!(
-            "artix-setup-pacman-check-{}",
+            "artix-setup-pacman-check-{}-{name}",
             std::process::id()
         ));
         fs::create_dir_all(&directory).unwrap();
@@ -228,7 +229,7 @@ mod tests {
         let mut config = InstallConfig::default();
         config.software.desktop_environments.clear();
         config.software.kernels = vec![Kernel::Linux];
-        let pacman = fake_pacman();
+        let pacman = fake_pacman("base-check");
         let report = check(&config, &pacman).unwrap();
         assert!(report.checks.iter().any(|item| {
             item.name == "base" && item.availability == Availability::Available
@@ -244,7 +245,7 @@ mod tests {
     fn external_kernel_repositories_are_deferred_not_misreported_missing() {
         let mut config = InstallConfig::default();
         config.software.kernels = vec![Kernel::LinuxLqx];
-        let pacman = fake_pacman();
+        let pacman = fake_pacman("external-kernel");
         let report = check(&config, &pacman).unwrap();
         assert!(report.checks.iter().any(|item| {
             item.name == "linux-lqx" && item.availability == Availability::Deferred
