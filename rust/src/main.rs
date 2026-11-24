@@ -75,6 +75,7 @@ fn run() -> Result<()> {
         println!("Wrote {}", path.display());
         return Ok(());
     }
+    let has_explicit_config = args.config.is_some();
     let config = match args.config {
         Some(path) => {
             let source = fs::read_to_string(&path)
@@ -94,7 +95,7 @@ fn run() -> Result<()> {
         return Ok(());
     }
     if args.apply_partition_table {
-        if args.config.is_none() {
+        if !has_explicit_config {
             bail!("--apply-partition-table requires an explicit --config file");
         }
         let confirmation = args
