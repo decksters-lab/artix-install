@@ -220,7 +220,7 @@ mod tests {
         let path = directory.join("pacman");
         fs::write(
             &path,
-            "#!/bin/sh\nif [ \"$2\" = \"base\" ]; then echo \"base filesystem\"; exit 0; fi\necho \"error: package '$2' was not found\" >&2\nexit 1\n",
+            "#!/bin/sh\nif [ \"$1\" = \"-Sg\" ] && [ \"$2\" = \"base\" ]; then echo \"base filesystem\"; exit 0; fi\necho \"error: package '$2' was not found\" >&2\nexit 1\n",
         )
         .unwrap();
         let mut permissions = fs::metadata(&path).unwrap().permissions();
