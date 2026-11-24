@@ -426,17 +426,19 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
             continue;
         }
         let major_minor = read_text(&class_path.join("dev")).unwrap_or_default();
+        let valid_device_number = is_valid_device_number(&major_minor);
         let device_mounts = mountpoints.get(&major_minor).cloned().unwrap_or_default();
         let ro_value = read_text(&class_path.join("ro"));
-        let partition_read_only = ro_value.as_deref() == Some("1");
+        let read_only_verified = matches!(ro_value.as_deref(), Some("0" | "1"));
+        let partition_read_only = ro_value.as_deref() != Some("0");
         let size_sectors = read_text(&class_path.join("size"))
             .and_then(|value| value.parse::<u64>().ok())
             .unwrap_or(0);
         let size_verified = size_sectors > 0;
         let device_state_verified = mounts_verified
             && swaps_verified
-            && !major_minor.is_empty()
-            && ro_value.is_some()
+            && valid_device_number
+            && read_only_verified
             && size_verified
             && enumeration_verified;
         let udev = read_udev_properties(&major_minor);
@@ -641,12 +643,7 @@ fn parse_mountinfo_verified(contents: &str) -> (HashMap<String, Vec<String>>, bo
     for line in contents.lines() {
         let fields: Vec<&str> = line.split_whitespace().collect();
         let separator = fields.iter().position(|field| *field == "-");
-        let valid_device = fields.get(2).is_some_and(|device| {
-            let mut parts = device.split(':');
-            matches!((parts.next(), parts.next(), parts.next()),
-                (Some(major), Some(minor), None)
-                    if major.parse::<u32>().is_ok() && minor.parse::<u32>().is_ok())
-        });
+        let valid_device = fields.get(2).is_some_and(|device| is_valid_device_number(device));
         if fields.len() < 10
             || separator.is_none_or(|index| index < 6 || index + 3 >= fields.len())
             || !valid_device
@@ -659,6 +656,15 @@ fn parse_mountinfo_verified(contents: &str) -> (HashMap<String, Vec<String>>, bo
         result.entry(device).or_default().push(mountpoint);
     }
     (result, verified)
+}
+
+fn is_valid_device_number(value: &str) -> bool {
+    let mut parts = value.split(':');
+    matches!(
+        (parts.next(), parts.next(), parts.next()),
+        (Some(major), Some(minor), None)
+            if major.parse::<u32>().is_ok() && minor.parse::<u32>().is_ok()
+    )
 }
 
 fn decode_mount_field(value: &str) -> String {
@@ -698,6 +704,16 @@ fn parse_udev_properties(contents: &str) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn device_numbers_must_be_valid_major_minor_pairs() {
+        assert!(is_valid_device_number("259:1"));
+        assert!(is_valid_device_number("0:0"));
+        assert!(!is_valid_device_number(""));
+        assert!(!is_valid_device_number("259"));
+        assert!(!is_valid_device_number("x:1"));
+        assert!(!is_valid_device_number("259:1:2"));
+    }
 
     #[test]
     fn malformed_mountinfo_fails_closed_instead_of_ignoring_rows() {
