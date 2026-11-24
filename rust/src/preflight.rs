@@ -407,6 +407,44 @@ mod tests {
     }
 
     #[test]
+    fn required_tools_match_filesystems_partitioning_and_swap() {
+        use crate::config::{MountConfig, SwapMode};
+
+        let mut config = InstallConfig::default();
+        let tools = required_tools(&config);
+        assert!(tools.contains(&"sfdisk"));
+        assert!(tools.contains(&"mkfs.ext4"));
+        assert!(tools.contains(&"mkfs.fat"));
+        assert!(tools.contains(&"mkswap"));
+
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.swap.mode = SwapMode::None;
+        config.disk.additional_mounts.push(MountConfig {
+            device: "/dev/sda3".into(),
+            mountpoint: "/home".into(),
+            filesystem: Filesystem::Xfs,
+            format: true,
+        });
+        let tools = required_tools(&config);
+        assert!(!tools.contains(&"sfdisk"));
+        assert!(tools.contains(&"mkfs.xfs"));
+        assert!(!tools.contains(&"mkfs.fat"));
+        assert!(!tools.contains(&"mkswap"));
+
+        config.disk.additional_mounts[0].format = false;
+        let tools = required_tools(&config);
+        assert!(!tools.contains(&"mkfs.xfs"));
+    }
+
+    #[test]
+    fn mkfs_tool_names_are_exact_for_non_ext_filesystems() {
+        assert_eq!(mkfs_command(Filesystem::Vfat), "mkfs.fat");
+        assert_eq!(mkfs_command(Filesystem::Exfat), "mkfs.exfat");
+        assert_eq!(mkfs_command(Filesystem::Ntfs), "mkfs.ntfs");
+        assert_eq!(mkfs_command(Filesystem::Nilfs2), "mkfs.nilfs2");
+    }
+
+    #[test]
     fn stable_device_symlink_matches_discovered_kernel_path() {
         let directory =
             std::env::temp_dir().join(format!("artix-setup-device-link-{}", std::process::id()));
