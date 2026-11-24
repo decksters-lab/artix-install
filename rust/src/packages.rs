@@ -492,6 +492,56 @@ mod tests {
     }
 
     #[test]
+    fn storage_and_bootloader_packages_follow_the_install_profile() {
+        use crate::config::{EfiPolicy, Filesystem, FirmwareMode, MountConfig, Partitioning};
+
+        let mut config = InstallConfig::default();
+        let plan = build_package_plan(&config);
+        assert_eq!(plan.storage_packages, ["dosfstools"]);
+        assert_eq!(plan.bootloader_packages, ["grub", "efibootmgr"]);
+
+        config.disk.root_filesystem = Filesystem::Btrfs;
+        config.disk.encryption = true;
+        config.disk.additional_mounts.push(MountConfig {
+            device: "/dev/sda3".into(),
+            mountpoint: "/home".into(),
+            filesystem: Filesystem::Xfs,
+            format: true,
+        });
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.efi_policy = EfiPolicy::Preserve;
+        let plan = build_package_plan(&config);
+        assert!(plan.storage_packages.contains(&"btrfs-progs"));
+        assert!(plan.storage_packages.contains(&"xfsprogs"));
+        assert!(plan.storage_packages.contains(&"cryptsetup"));
+        assert!(plan.storage_packages.contains(&"dosfstools"));
+
+        config.disk.partitioning = Partitioning::DualBoot;
+        assert!(build_package_plan(&config).bootloader_packages.contains(&"os-prober"));
+
+        config.software.bootloader = Bootloader::Limine;
+        assert_eq!(
+            build_package_plan(&config).bootloader_packages,
+            ["limine", "efibootmgr", "limine-mkinitcpio-hook"]
+        );
+        config.software.bootloader = Bootloader::Refind;
+        assert_eq!(
+            build_package_plan(&config).bootloader_packages,
+            ["refind", "efibootmgr"]
+        );
+
+        config.system.firmware = FirmwareMode::Bios;
+        config.disk.partitioning = Partitioning::Automatic;
+        config.disk.additional_mounts.clear();
+        config.disk.root_filesystem = Filesystem::Ext4;
+        config.disk.encryption = false;
+        config.software.bootloader = Bootloader::Grub;
+        let plan = build_package_plan(&config);
+        assert!(plan.storage_packages.is_empty());
+        assert_eq!(plan.bootloader_packages, ["grub"]);
+    }
+
+    #[test]
     fn selected_kernel_packages_include_headers_and_repo_notes() {
         let mut config = InstallConfig::default();
         config.software.kernels = vec![Kernel::LinuxLts, Kernel::LinuxLqx, Kernel::LinuxCachyos];
