@@ -181,7 +181,11 @@ pub fn evaluate(
             status: CheckStatus::Warning,
             detail: "No target disk has been selected yet.".into(),
         }),
-        Some(target) => match hardware.disks.iter().find(|disk| disk.path == *target) {
+        Some(target) => match hardware
+            .disks
+            .iter()
+            .find(|disk| same_device_path(target, &disk.path))
+        {
             None => checks.push(PreflightCheck {
                 name: "Target disk",
                 status: CheckStatus::Fail,
@@ -310,6 +314,15 @@ fn parse_os_release(contents: &str) -> std::collections::HashMap<String, String>
         .collect()
 }
 
+
+fn same_device_path(configured: &Path, discovered: &Path) -> bool {
+    configured == discovered
+        || matches!(
+            (fs::canonicalize(configured), fs::canonicalize(discovered)),
+            (Ok(configured), Ok(discovered)) if configured == discovered
+        )
+}
+
 fn find_executable(command: &str, search_path: &OsStr) -> Option<PathBuf> {
     std::env::split_paths(search_path)
         .map(|directory| directory.join(command))
@@ -364,6 +377,22 @@ mod tests {
         permissions.set_mode(0o755);
         fs::set_permissions(&executable, permissions).unwrap();
         path
+    }
+
+
+    #[test]
+    fn stable_device_symlink_matches_discovered_kernel_path() {
+        let directory = std::env::temp_dir().join(format!(
+            "artix-setup-device-link-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory).unwrap();
+        let device = directory.join("sda");
+        let stable = directory.join("by-id-disk");
+        fs::write(&device, "").unwrap();
+        std::os::unix::fs::symlink(&device, &stable).unwrap();
+        assert!(same_device_path(&stable, &device));
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
