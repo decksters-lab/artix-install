@@ -382,7 +382,14 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
         let name = entry.file_name().to_string_lossy().into_owned();
         let class_path = entry.path();
         let is_partition = match fs::read_to_string(class_path.join("partition")) {
-            Ok(_) => true,
+            Ok(value) if value.trim().parse::<u32>().is_ok_and(|number| number > 0) => true,
+            Ok(_) => {
+                warnings.push(format!(
+                    "Partition identity for {name} is malformed; disk selection is disabled for safety."
+                ));
+                enumeration_verified = false;
+                continue;
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
             Err(error) => {
                 warnings.push(format!(
