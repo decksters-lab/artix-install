@@ -1,8 +1,28 @@
 # artix-install
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b205cfde-ecda-4768-b45a-7ac6ae2faec3" />
 
-A whiptail-driven installer for Artix Linux. Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
-(Feel free to fork this repo.. I wish I had done that with the original script. Luckily I found the script on my drive and adapted it from there. This is why my install instructions direct you to download the script rather than just piping it into bash. When you have a local copy nobody can delete a repo and take it away from you)
+A pair of installers for Artix Linux. The original whiptail-driven Bash installer is the established option; a separate Rust + Ratatui implementation is being developed alongside it.
+
+## Choose your installer
+
+### 1. Bash installer — stable, recommended
+
+This is the original, fully featured installer and remains the recommended option for real installations. Its script and existing usage instructions are preserved.
+
+[Jump to Bash installation instructions](#requirements)
+
+### 2. Rust installer — experimental
+
+The Rust implementation is a separate project under `rust/`. It is being developed toward feature parity and does **not** replace or modify the Bash installer.
+
+- Designed to run as a precompiled executable: **Rust and Cargo are not required on the Artix live ISO**.
+- GitHub Actions builds x86_64 GNU and musl binaries and attaches archives plus SHA-256 checksums to versioned GitHub Releases.
+- The musl build is intended to be statically linked; it still needs verification on the actual Artix live ISO.
+- **Not ready for installing a real system:** it currently provides configuration, hardware discovery, validation and installation-plan previews. It does not partition, format or install an operating system.
+
+When a tested release is available, download and extract the appropriate archive from [GitHub Releases](https://github.com/decksters-lab/artix-install/releases), then run `./artix-setup` from a terminal. Until then, use the Bash installer for actual installations.
+
+---
 
 ## Goal
 
