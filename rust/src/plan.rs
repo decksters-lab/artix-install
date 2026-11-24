@@ -124,7 +124,30 @@ pub fn format_plan(config: &InstallConfig) -> String {
     ));
     output.push_str("\nPARTITION LAYOUT PREVIEW\n------------------------\n");
     output.push_str(&partition::build_partition_plan(config).render());
-    output.push_str("\nNo disk operation is permitted by this prototype.\n");
+    output.push_str("\nPACKAGE PLAN PREVIEW\n--------------------\n");
+    let package_plan = crate::packages::build_package_plan(config);
+    output.push_str(&format!(
+        "Base packages: {}\\nInit packages: {}\\nNetwork: {}\\nPrivilege: {}\\n",
+        package_plan.base_packages.join(" "),
+        package_plan.init_packages.join(" "),
+        package_plan.network_packages.join(" "),
+        package_plan.privilege_packages.join(" ")
+    ));
+    for recipe in &package_plan.desktop_recipes {
+        output.push_str(&format!(
+            "{} [{}]: {}\\n",
+            recipe.desktop,
+            recipe.source,
+            recipe.packages.join(" ")
+        ));
+        for note in &recipe.notes {
+            output.push_str(&format!("    Note: {note}\\n"));
+        }
+    }
+    for note in &package_plan.deferred {
+        output.push_str(&format!("Package check: {note}\\n"));
+    }
+    output.push_str("\\nNo disk operation is permitted by this prototype.\\n");
     output
 }
 
