@@ -579,8 +579,21 @@ fn read_active_swap_names(warnings: &mut Vec<String>) -> (std::collections::Hash
             .push("Active swap list is unavailable; disk selection is disabled for safety.".into());
         return (std::collections::HashSet::new(), false);
     };
-    let (paths, mut verified) = parse_proc_swaps_verified(&contents);
-    let mut names = std::collections::HashSet::new();
+    let (paths, parsed_verified) = parse_proc_swaps_verified(&contents);
+    let (names, paths_verified) = resolve_active_swap_names(paths, warnings);
+    let verified = parsed_verified && paths_verified;
+    if !verified {
+        warnings.push("Active swap list contains malformed, incomplete or unresolved entries; disk selection is disabled for safety.".into());
+    }
+    (names, verified)
+}
+
+fn resolve_active_swap_names(
+    paths: impl IntoIterator<Item = PathBuf>,
+    warnings: &mut Vec<String>,
+) -> (HashSet<String>, bool) {
+    let mut names = HashSet::new();
+    let mut verified = true;
     for path in paths {
         match fs::canonicalize(&path) {
             Ok(resolved) => {
@@ -602,9 +615,6 @@ fn read_active_swap_names(warnings: &mut Vec<String>) -> (std::collections::Hash
                 verified = false;
             }
         }
-    }
-    if !verified {
-        warnings.push("Active swap list contains malformed, incomplete or unresolved entries; disk selection is disabled for safety.".into());
     }
     (names, verified)
 }
@@ -739,6 +749,18 @@ mod tests {
         );
         assert!(!verified);
         assert_eq!(mounts.get("8:1").unwrap(), &vec!["/mnt".to_owned()]);
+    }
+
+    #[test]
+    fn unresolved_active_swap_paths_fail_closed() {
+        let mut warnings = Vec::new();
+        let (names, verified) = resolve_active_swap_names(
+            [PathBuf::from("/definitely-not-a-real-artix-swap-device")],
+            &mut warnings,
+        );
+        assert!(!verified);
+        assert!(names.is_empty());
+        assert!(!warnings.is_empty());
     }
 
     #[test]
