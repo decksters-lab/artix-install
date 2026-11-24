@@ -547,7 +547,7 @@ mod tests {
     #[test]
     fn malformed_mountinfo_fails_closed_instead_of_ignoring_rows() {
         let (mounts, verified) = parse_mountinfo_verified(
-            "42 25 8:1 / /mnt rw,relatime - ext4 /dev/sda1 rw\\nmalformed row"
+            "42 25 8:1 / /mnt rw,relatime - ext4 /dev/sda1 rw\nmalformed row"
         );
         assert!(!verified);
         assert_eq!(mounts.get("8:1").unwrap(), &vec!["/mnt".to_owned()]);
@@ -556,7 +556,7 @@ mod tests {
     #[test]
     fn malformed_swap_rows_fail_closed_instead_of_being_skipped() {
         let (paths, verified) = parse_proc_swaps_verified(
-            "Filename Type Size Used Priority\\n/dev/sda3 partition 8388604 0 -2\\nmalformed"
+            "Filename Type Size Used Priority\n/dev/sda3 partition 8388604 0 -2\nmalformed"
         );
         assert!(!verified);
         assert_eq!(paths, vec![PathBuf::from("/dev/sda3")]);
