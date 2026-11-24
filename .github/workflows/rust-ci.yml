@@ -22,6 +22,14 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # Temporary formatting pass: publish the rustfmt output so the source can be
+      # committed back to the feature branch, then restore a strict check-only gate.
+      - run: cargo fmt --all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rustfmt-source
+          path: rust/src/**/*.rs
+          if-no-files-found: error
       - run: cargo check --all-targets
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --all-targets
