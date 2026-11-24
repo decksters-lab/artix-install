@@ -159,7 +159,8 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
             });
         } else {
             let stderr = String::from_utf8_lossy(&result.stderr);
-            let missing = stderr.to_ascii_lowercase().contains("not found");
+            let missing = (is_group && result.stdout.is_empty())
+                || stderr.to_ascii_lowercase().contains("not found");
             checks.push(PackageCheck {
                 name,
                 source,
