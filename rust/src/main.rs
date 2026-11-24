@@ -38,10 +38,21 @@ struct Args {
     #[arg(long)]
     preflight: bool,
     /// Destructively write an automatic partition table (requires --config and --confirm-target).
-    #[arg(long)]
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan",
+            "validate",
+            "hardware",
+            "preflight",
+            "check_packages",
+            "write_default"
+        ]
+    )]
     apply_partition_table: bool,
     /// Exact target path confirmation required by --apply-partition-table.
-    #[arg(long, value_name = "DEVICE")]
+    #[arg(long, value_name = "DEVICE", requires = "apply_partition_table")]
     confirm_target: Option<String>,
     /// Check planned packages against currently enabled pacman sync databases; does not refresh them.
     #[arg(long)]
