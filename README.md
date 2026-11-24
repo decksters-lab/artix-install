@@ -139,3 +139,22 @@ Things flagged during review but intentionally left as-is:
 - Removed **ZFS**. ZFS isn't part of the Linux kernel, so its modules have to be built against each kernel version (DKMS) and can lag behind the newest kernels. It also isn't in Artix's main repos (it lives in `[universe]` or the third-party archzfs repo), and a ZFS root needs an initramfs hook, boot parameters and import services that this installer never set up. Choosing it would format the disk and then leave a system that couldn't boot, so I took the option out rather than ship a broken one. If you want ZFS, follow the [Artix ZFS installation guide](https://wiki.artixlinux.org/Main/InstallationOnZFS)
 - Removed **XMonad** — along with it, a `git clone` of `github.com/feribsd/xmonad-dotfiles`, a repo whose owning account no longer exists and could be re-registered by anyone
 - Fixed a display-manager/autologin ordering bug where bare window managers combined with another desktop could incorrectly get tty1 autologin
+
+
+## Rust installer prototype (experimental)
+
+The Rust implementation lives in `rust/` and is still under development; it does not replace the Bash installer yet. It is built ahead of time for the live environment, so **users do not need Rust, Cargo, or a compiler installed on the Artix ISO**.
+
+The GitHub Actions workflow [Build standalone Linux binaries](.github/workflows/standalone-binaries.yml) builds x86_64 GNU and musl executables, smoke-tests them, and packages each with a SHA-256 checksum. Run the workflow manually from the Actions tab to produce downloadable workflow artifacts, or push a version tag beginning with `v` to publish both archives as GitHub Release assets.
+
+The musl build is intended to be statically linked and is checked for an ELF interpreter in CI. It still needs to be tested on the actual Artix live ISO before being treated as the recommended download. The GNU build is provided as a compatibility fallback.
+
+The executable is named `artix-setup`. Extract the archive and run it from a terminal:
+
+```sh
+tar -xzf artix-setup-x86_64-linux-musl.tar.gz
+cd artix-setup-musl
+./artix-setup
+```
+
+This prototype currently plans and validates configuration; it does not yet perform disk partitioning, formatting, installation, or system changes.
