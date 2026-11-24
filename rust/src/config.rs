@@ -378,12 +378,10 @@ impl InstallConfig {
         let mut mountpoints = Vec::<String>::new();
         for mount in &self.disk.additional_mounts {
             validate_device_path(&mount.device, "additional_mounts.device", &mut issues);
-            if !mount.mountpoint.starts_with('/')
-                || mount.mountpoint == "/"
-                || mount.mountpoint.contains("..")
-            {
+            let normalized_mountpoint = normalize_mountpoint(&mount.mountpoint);
+            if normalized_mountpoint.is_none() {
                 issues.push(format!(
-                    "mountpoint '{}' must be absolute, non-root and without '..'",
+                    "mountpoint '{}' must be a normalized absolute path other than '/' and without '.' or '..' components",
                     mount.mountpoint
                 ));
             }
@@ -393,14 +391,16 @@ impl InstallConfig {
                     mount.device.display()
                 ));
             }
-            if mountpoints.contains(&mount.mountpoint) {
-                issues.push(format!(
-                    "mountpoint '{}' appears more than once",
-                    mount.mountpoint
-                ));
+            if let Some(normalized) = normalized_mountpoint {
+                if mountpoints.contains(&normalized) {
+                    issues.push(format!(
+                        "mountpoint '{}' appears more than once",
+                        mount.mountpoint
+                    ));
+                }
+                mountpoints.push(normalized);
             }
             devices.push(mount.device.clone());
-            mountpoints.push(mount.mountpoint.clone());
         }
 
         // The planner creates these mountpoints itself. Allowing an additional
@@ -505,6 +505,29 @@ impl InstallConfig {
             Err(issues)
         }
     }
+}
+
+fn normalize_mountpoint(value: &str) -> Option<String> {
+    let mut parts = Vec::new();
+    for component in Path::new(value).components() {
+        match component {
+            std::path::Component::RootDir => {
+                if !parts.is_empty() {
+                    return None;
+                }
+            }
+            std::path::Component::Normal(part) => {
+                parts.push(part.to_str()?.to_owned());
+            }
+            std::path::Component::CurDir | std::path::Component::ParentDir => return None,
+            std::path::Component::Prefix(_) => return None,
+        }
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    let normalized = format!("/{}", parts.join("/"));
+    (normalized == value).then_some(normalized)
 }
 
 fn validate_device_path(path: &Path, field: &str, issues: &mut Vec<String>) {
@@ -686,6 +709,44 @@ mod tests {
         );
         config.system.firmware = FirmwareMode::Uefi;
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn additional_mountpoints_must_be_normalized_absolute_paths() {
+        for invalid in ["/home/", "/home/./data", "/home/../etc", "//home"] {
+            assert!(
+                normalize_mountpoint(invalid).is_none(),
+                "unexpectedly accepted {invalid}"
+            );
+        }
+        assert_eq!(
+            normalize_mountpoint("/home/data").as_deref(),
+            Some("/home/data")
+        );
+    }
+
+    #[test]
+    fn additional_mountpoints_detect_duplicate_paths_after_normalization() {
+        let mut config = InstallConfig::default();
+        config.disk.partitioning = Partitioning::Manual;
+        config.disk.root_partition = Some("/dev/sda2".into());
+        config.disk.efi_partition = Some("/dev/sda1".into());
+        config.disk.additional_mounts = vec![
+            MountConfig {
+                device: "/dev/sda3".into(),
+                mountpoint: "/home".into(),
+                filesystem: Filesystem::Ext4,
+                format: false,
+            },
+            MountConfig {
+                device: "/dev/sda4".into(),
+                mountpoint: "/home/".into(),
+                filesystem: Filesystem::Ext4,
+                format: false,
+            },
+        ];
+        let issues = config.validate().unwrap_err();
+        assert!(issues.iter().any(|issue| issue.contains("normalized absolute path")));
     }
 
     #[test]
