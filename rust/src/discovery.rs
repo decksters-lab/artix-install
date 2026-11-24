@@ -381,7 +381,17 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
         };
         let name = entry.file_name().to_string_lossy().into_owned();
         let class_path = entry.path();
-        let is_partition = class_path.join("partition").exists();
+        let is_partition = match fs::read_to_string(class_path.join("partition")) {
+            Ok(_) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+            Err(error) => {
+                warnings.push(format!(
+                    "Could not determine whether {name} is a whole disk or partition: {error}; disk selection is disabled for safety."
+                ));
+                enumeration_verified = false;
+                continue;
+            }
+        };
         if !is_partition && !is_physical_disk_candidate(&name, &class_path) {
             continue;
         }
