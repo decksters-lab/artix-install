@@ -107,6 +107,8 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
         .chain(plan.gpu_packages.iter().copied())
         .chain(plan.init_packages.iter().copied())
         .chain(plan.user_service_packages.iter().copied())
+        .chain(plan.storage_packages.iter().copied())
+        .chain(plan.bootloader_packages.iter().copied())
         .chain(plan.network_packages.iter().copied())
         .chain(plan.xorg_packages.iter().copied())
         .chain(plan.audio_packages.iter().copied())
