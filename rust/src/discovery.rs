@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -365,6 +365,21 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
             Err(_) => (false, false),
         };
         raw.push((name, parent_name, partition, holders, holders_verified, class_path));
+    }
+
+    let known_disk_names: HashSet<&str> = raw
+        .iter()
+        .filter_map(|(name, parent, _, _, _, _)| parent.is_none().then_some(name.as_str()))
+        .collect();
+    for (name, parent, _, _, _, _) in &raw {
+        if let Some(parent) = parent
+            && !known_disk_names.contains(parent.as_str())
+        {
+            warnings.push(format!(
+                "Partition {name} refers to parent {parent}, but that whole disk was not discovered; disk selection is disabled for safety."
+            ));
+            enumeration_verified = false;
+        }
     }
 
     let mut disks = Vec::new();
