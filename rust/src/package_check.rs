@@ -87,6 +87,14 @@ impl PackageCheckReport {
     }
 }
 
+fn repository_target(name: &str, source: PackageSource) -> String {
+    match source {
+        PackageSource::ArchExtra => format!("extra/{name}"),
+        PackageSource::ArtixGalaxy => format!("galaxy/{name}"),
+        _ => name.to_owned(),
+    }
+}
+
 fn is_missing_error(stderr: &str, package: &str) -> bool {
     let message = stderr.to_ascii_lowercase();
     message.contains("target not found")
@@ -148,11 +156,12 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
 
         let is_group = matches!(name.as_str(), "base" | "base-devel");
         let query = if is_group { "-Sg" } else { "-Si" };
+        let target = repository_target(&name, source);
         let result = Command::new(pacman)
             .arg(query)
-            .arg(&name)
+            .arg(&target)
             .output()
-            .with_context(|| format!("run {} {query} {name}", pacman.display()))?;
+            .with_context(|| format!("run {} {query} {target}", pacman.display()))?;
         let found_group = !is_group || !result.stdout.is_empty();
         if result.status.success() && found_group {
             checks.push(PackageCheck {
@@ -230,6 +239,22 @@ mod tests {
         permissions.set_mode(0o755);
         fs::set_permissions(&path, permissions).unwrap();
         path
+    }
+
+    #[test]
+    fn repository_specific_recipes_query_the_declared_repository() {
+        assert_eq!(
+            repository_target("qtile", PackageSource::ArchExtra),
+            "extra/qtile"
+        );
+        assert_eq!(
+            repository_target("cosmic-session", PackageSource::ArtixGalaxy),
+            "galaxy/cosmic-session"
+        );
+        assert_eq!(
+            repository_target("grub", PackageSource::Artix),
+            "grub"
+        );
     }
 
     #[test]
