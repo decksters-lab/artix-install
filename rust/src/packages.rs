@@ -59,7 +59,7 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     ];
     let mut kernel_packages = Vec::new();
     let mut kernel_notes = Vec::new();
-    for kernel in &config.software.kernels {
+    for (index, kernel) in config.software.kernels.iter().enumerate() {
         let package = match kernel {
             Kernel::Linux => "linux",
             Kernel::LinuxLts => "linux-lts",
@@ -71,8 +71,8 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         match kernel {
             Kernel::LinuxLqx => kernel_packages.push("linux-lqx-headers".to_owned()),
             Kernel::LinuxCachyos => kernel_notes.push("linux-cachyos requires CachyOS keyring/repository setup; its package bundles headers.".to_owned()),
-            Kernel::Linux => {},
-            _ => kernel_packages.push(format!("{package}-headers")),
+            _ if index > 0 => kernel_packages.push(format!("{package}-headers")),
+            _ => {}
         }
     }
     if !config.software.kernels.contains(&Kernel::Linux) {
@@ -253,7 +253,7 @@ mod tests {
         let mut config = InstallConfig::default();
         config.software.kernels = vec![Kernel::LinuxLts, Kernel::LinuxLqx, Kernel::LinuxCachyos];
         let plan = build_package_plan(&config);
-        assert!(plan.kernel_packages.contains(&"linux-lts-headers".to_owned()));
+        assert!(!plan.kernel_packages.contains(&"linux-lts-headers".to_owned()));
         assert!(plan.kernel_packages.contains(&"linux-lqx-headers".to_owned()));
         assert!(plan.kernel_packages.contains(&"linux-cachyos".to_owned()));
         assert!(plan.kernel_notes.iter().any(|note| note.contains("Liquorix")));
