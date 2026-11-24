@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    config::{Filesystem, InstallConfig, Partitioning},
+    config::{EfiPolicy, Filesystem, FirmwareMode, InstallConfig, Partitioning, SwapMode},
     discovery::HardwareSnapshot,
 };
 
@@ -217,42 +217,7 @@ pub fn evaluate(
         },
     }
 
-    let mut required_tools = vec![
-        "lsblk",
-        "blkid",
-        "wipefs",
-        "mount",
-        "umount",
-        "basestrap",
-        "fstabgen",
-        "artix-chroot",
-    ];
-    if config.disk.partitioning == Partitioning::Automatic {
-        required_tools.push(match config.system.firmware {
-            crate::config::FirmwareMode::Uefi => "sgdisk",
-            crate::config::FirmwareMode::Bios => "sfdisk",
-        });
-    }
-    required_tools.push(match config.disk.root_filesystem {
-        Filesystem::Btrfs => "mkfs.btrfs",
-        Filesystem::Ext4 => "mkfs.ext4",
-        Filesystem::Xfs => "mkfs.xfs",
-        Filesystem::F2fs => "mkfs.f2fs",
-        Filesystem::Jfs => "mkfs.jfs",
-        Filesystem::Nilfs2 => "mkfs.nilfs2",
-        Filesystem::Vfat | Filesystem::Exfat | Filesystem::Ntfs => "mkfs",
-    });
-    if matches!(
-        config.disk.swap.mode,
-        crate::config::SwapMode::Partition
-            | crate::config::SwapMode::Swapfile
-            | crate::config::SwapMode::Both
-    ) {
-        required_tools.push("mkswap");
-    }
-    if config.disk.encryption {
-        required_tools.push("cryptsetup");
-    }
+    let required_tools = required_tools(config);
     required_tools.sort_unstable();
     required_tools.dedup();
     let missing = required_tools
@@ -281,6 +246,69 @@ pub fn evaluate(
     });
 
     PreflightReport { checks }
+}
+
+fn mkfs_command(filesystem: Filesystem) -> &'static str {
+    match filesystem {
+        Filesystem::Btrfs => "mkfs.btrfs",
+        Filesystem::Ext4 => "mkfs.ext4",
+        Filesystem::Xfs => "mkfs.xfs",
+        Filesystem::F2fs => "mkfs.f2fs",
+        Filesystem::Jfs => "mkfs.jfs",
+        Filesystem::Nilfs2 => "mkfs.nilfs2",
+        Filesystem::Vfat => "mkfs.fat",
+        Filesystem::Exfat => "mkfs.exfat",
+        Filesystem::Ntfs => "mkfs.ntfs",
+    }
+}
+
+fn required_tools(config: &InstallConfig) -> Vec<&'static str> {
+    let mut tools = vec![
+        "lsblk",
+        "blkid",
+        "wipefs",
+        "mount",
+        "umount",
+        "basestrap",
+        "fstabgen",
+        "artix-chroot",
+    ];
+    if config.disk.partitioning == Partitioning::Automatic {
+        // The existing Bash installer writes both GPT and DOS layouts with sfdisk.
+        tools.push("sfdisk");
+    }
+
+    let mut filesystems = vec![config.disk.root_filesystem];
+    filesystems.extend(
+        config
+            .disk
+            .additional_mounts
+            .iter()
+            .filter(|mount| mount.format)
+            .map(|mount| mount.filesystem),
+    );
+    if config.system.firmware == FirmwareMode::Uefi
+        && (config.disk.partitioning == Partitioning::Automatic
+            || config.disk.efi_policy == EfiPolicy::Format)
+    {
+        filesystems.push(Filesystem::Vfat);
+    }
+    for filesystem in filesystems {
+        let command = mkfs_command(filesystem);
+        if !tools.contains(&command) {
+            tools.push(command);
+        }
+    }
+
+    if config.disk.swap.mode != SwapMode::None {
+        tools.push("mkswap");
+    }
+    if config.disk.encryption {
+        tools.push("cryptsetup");
+    }
+    tools.sort_unstable();
+    tools.dedup();
+    tools
 }
 
 fn is_artix_release(contents: &str) -> bool {
