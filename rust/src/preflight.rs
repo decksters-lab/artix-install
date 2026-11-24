@@ -145,9 +145,16 @@ pub fn evaluate(
             CheckStatus::Fail
         },
         detail: if firmware_matches {
-            format!("Detected firmware is compatible with configured {} mode.", config.system.firmware)
+            format!(
+                "Detected firmware is compatible with configured {} mode.",
+                config.system.firmware
+            )
         } else {
-            format!("Configured {} mode does not match detected {} firmware.", config.system.firmware, hardware.firmware)
+            format!(
+                "Configured {} mode does not match detected {} firmware.",
+                config.system.firmware,
+                hardware.firmware
+            )
         },
     });
 
@@ -161,12 +168,19 @@ pub fn evaluate(
             None => checks.push(PreflightCheck {
                 name: "Target disk",
                 status: CheckStatus::Fail,
-                detail: format!("{} is not present in the current hardware snapshot; refresh discovery and select a detected disk.", target.display()),
+                detail: format!(
+                    "{} is not present in the current hardware snapshot; refresh discovery and select a detected disk.",
+                    target.display()
+                ),
             }),
             Some(disk) if !disk.can_be_selected() => checks.push(PreflightCheck {
                 name: "Target disk",
                 status: CheckStatus::Fail,
-                detail: format!("{} is blocked: {}.", target.display(), disk.selection_block_reason().unwrap_or("device safety checks failed")),
+                detail: format!(
+                    "{} is blocked: {}.",
+                    target.display(),
+                    disk.selection_block_reason().unwrap_or("device safety checks failed")
+                ),
             }),
             Some(_) => checks.push(PreflightCheck {
                 name: "Target disk",
@@ -176,7 +190,16 @@ pub fn evaluate(
         },
     }
 
-    let mut required_tools = vec!["lsblk", "blkid", "mount", "umount", "chroot"];
+    let mut required_tools = vec![
+        "lsblk",
+        "blkid",
+        "wipefs",
+        "mount",
+        "umount",
+        "basestrap",
+        "fstabgen",
+        "artix-chroot",
+    ];
     if config.disk.partitioning == Partitioning::Automatic {
         required_tools.push(match config.system.firmware {
             crate::config::FirmwareMode::Uefi => "sgdisk",
@@ -192,6 +215,14 @@ pub fn evaluate(
         Filesystem::Nilfs2 => "mkfs.nilfs2",
         Filesystem::Vfat | Filesystem::Exfat | Filesystem::Ntfs => "mkfs",
     });
+    if matches!(
+        config.disk.swap.mode,
+        crate::config::SwapMode::Partition
+            | crate::config::SwapMode::Swapfile
+            | crate::config::SwapMode::Both
+    ) {
+        required_tools.push("mkswap");
+    }
     if config.disk.encryption {
         required_tools.push("cryptsetup");
     }
@@ -210,9 +241,15 @@ pub fn evaluate(
             CheckStatus::Warning
         },
         detail: if missing.is_empty() {
-            format!("Found all currently planned utilities: {}.", required_tools.join(", "))
+            format!(
+                "Found all currently planned utilities: {}.",
+                required_tools.join(", ")
+            )
         } else {
-            format!("Not currently found (may need to be installed in the live session before a future installer executor can use them): {}.", missing.join(", "))
+            format!(
+                "Not currently found (may need to be installed in the live session before a future installer executor can use them): {}.",
+                missing.join(", ")
+            )
         },
     });
 
@@ -267,7 +304,10 @@ pub fn run(config: &InstallConfig, hardware: &HardwareSnapshot) -> PreflightRepo
         .ok()
         .and_then(|status| {
             status.lines().find_map(|line| {
-                let values = line.strip_prefix("Uid:")?.split_whitespace().collect::<Vec<_>>();
+                let values = line
+                    .strip_prefix("Uid:")?
+                    .split_whitespace()
+                    .collect::<Vec<_>>();
                 values.get(1)?.parse::<u32>().ok()
             })
         });
@@ -341,7 +381,11 @@ mod tests {
             Some(0),
             directory.as_os_str(),
         );
-        let target = report.checks.iter().find(|check| check.name == "Target disk").unwrap();
+        let target = report
+            .checks
+            .iter()
+            .find(|check| check.name == "Target disk")
+            .unwrap();
         assert_eq!(target.status, CheckStatus::Warning);
         assert!(report.is_ready());
         fs::remove_dir_all(directory).unwrap();
