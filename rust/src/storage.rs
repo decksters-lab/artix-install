@@ -15,6 +15,7 @@ use crate::{
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const MIN_ROOT_GIB: u64 = 8;
+const PARTITION_ALIGNMENT_MARGIN_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TargetIdentity {
@@ -217,11 +218,12 @@ fn validate_capacity(config: &InstallConfig, size_bytes: u64) -> Result<()> {
     } else {
         0
     };
-    let minimum = efi_bytes + swap_bytes + MIN_ROOT_GIB * GIB;
+    let minimum =
+        efi_bytes + swap_bytes + MIN_ROOT_GIB * GIB + PARTITION_ALIGNMENT_MARGIN_BYTES;
     if size_bytes < minimum {
         bail!(
             "target is too small: needs at least {} GiB for the planned EFI, swap and minimum root partitions",
-            minimum / GIB
+            minimum.div_ceil(GIB)
         );
     }
     Ok(())
@@ -357,7 +359,10 @@ mod tests {
     fn capacity_check_reserves_a_minimum_root() {
         let config = InstallConfig::default();
         assert!(validate_capacity(&config, 8 * GIB).is_err());
-        assert!(validate_capacity(&config, 9 * GIB).is_ok());
+        assert!(validate_capacity(&config, 9 * GIB).is_err());
+        assert!(
+            validate_capacity(&config, 9 * GIB + PARTITION_ALIGNMENT_MARGIN_BYTES).is_ok()
+        );
     }
 
     #[test]
@@ -379,10 +384,8 @@ mod tests {
         if Command::new("sfdisk").arg("--version").output().is_err() {
             return;
         }
-        let image = std::env::temp_dir().join(format!(
-            "artix-setup-gpt-image-{}.img",
-            std::process::id()
-        ));
+        let image =
+            std::env::temp_dir().join(format!("artix-setup-gpt-image-{}.img", std::process::id()));
         let file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
