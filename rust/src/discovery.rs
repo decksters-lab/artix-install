@@ -433,24 +433,49 @@ fn read_active_swap_names(
         warnings.push("Active swap list is unavailable; disk selection is disabled for safety.".into());
         return (std::collections::HashSet::new(), false);
     };
-    let names = parse_proc_swaps(&contents)
+    let (paths, verified) = parse_proc_swaps_verified(&contents);
+    if !verified {
+        warnings.push("Active swap list contains malformed or incomplete entries; disk selection is disabled for safety.".into());
+    }
+    let names = paths
         .into_iter()
         .filter_map(|path| {
             let resolved = fs::canonicalize(&path).unwrap_or(path);
             resolved.file_name().map(|name| name.to_string_lossy().into_owned())
         })
         .collect();
-    (names, true)
+    (names, verified)
 }
 
 fn parse_proc_swaps(contents: &str) -> Vec<PathBuf> {
-    contents
-        .lines()
-        .skip(1)
-        .filter_map(|line| line.split_whitespace().next())
-        .map(decode_mount_field)
-        .map(PathBuf::from)
-        .collect()
+    parse_proc_swaps_verified(contents).0
+}
+
+/// Validate the header and every row instead of silently ignoring malformed swap entries.
+fn parse_proc_swaps_verified(contents: &str) -> (Vec<PathBuf>, bool) {
+    let mut lines = contents.lines();
+    let header_valid = lines.next().is_some_and(|line| {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        fields.len() >= 5
+            && fields[0] == "Filename"
+            && fields[1] == "Type"
+            && fields[2] == "Size"
+            && fields[3] == "Used"
+            && fields[4] == "Priority"
+    });
+    let mut paths = Vec::new();
+    let mut verified = header_valid;
+    for line in lines {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() != 5 || !fields[2].parse::<u64>().is_ok()
+            || !fields[3].parse::<u64>().is_ok() || !fields[4].parse::<i32>().is_ok()
+        {
+            verified = false;
+            continue;
+        }
+        paths.push(PathBuf::from(decode_mount_field(fields[0])));
+    }
+    (paths, verified)
 }
 
 fn read_mountpoints(
@@ -460,20 +485,40 @@ fn read_mountpoints(
         warnings.push("Mount table is unavailable; disk selection is disabled for safety.".into());
         return (HashMap::new(), false);
     };
-    (parse_mountinfo(&contents), true)
+    let (mounts, verified) = parse_mountinfo_verified(&contents);
+    if !verified {
+        warnings.push("Mount table contains malformed or incomplete entries; disk selection is disabled for safety.".into());
+    }
+    (mounts, verified)
 }
 
 /// Return mounted paths keyed by the kernel major:minor device number.
 fn parse_mountinfo(contents: &str) -> HashMap<String, Vec<String>> {
+    parse_mountinfo_verified(contents).0
+}
+
+/// Parse every mountinfo row; one malformed row makes the snapshot unsafe to use.
+fn parse_mountinfo_verified(contents: &str) -> (HashMap<String, Vec<String>>, bool) {
     let mut result: HashMap<String, Vec<String>> = HashMap::new();
+    let mut verified = !contents.trim().is_empty();
     for line in contents.lines() {
         let fields: Vec<&str> = line.split_whitespace().collect();
-        if fields.len() < 6 { continue; }
+        let separator = fields.iter().position(|field| *field == "-");
+        let valid_device = fields.get(2).is_some_and(|device| {
+            let mut parts = device.split(':');
+            matches!((parts.next(), parts.next(), parts.next()),
+                (Some(major), Some(minor), None)
+                    if major.parse::<u32>().is_ok() && minor.parse::<u32>().is_ok())
+        });
+        if fields.len() < 10 || separator.is_none_or(|index| index < 6 || index + 3 >= fields.len()) || !valid_device {
+            verified = false;
+            continue;
+        }
         let device = fields[2].to_owned();
         let mountpoint = decode_mount_field(fields[4]);
         result.entry(device).or_default().push(mountpoint);
     }
-    result
+    (result, verified)
 }
 
 fn decode_mount_field(value: &str) -> String {
@@ -498,6 +543,30 @@ fn parse_udev_properties(contents: &str) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malformed_mountinfo_fails_closed_instead_of_ignoring_rows() {
+        let (mounts, verified) = parse_mountinfo_verified(
+            "42 25 8:1 / /mnt rw,relatime - ext4 /dev/sda1 rw\\nmalformed row"
+        );
+        assert!(!verified);
+        assert_eq!(mounts.get("8:1").unwrap(), &vec!["/mnt".to_owned()]);
+    }
+
+    #[test]
+    fn malformed_swap_rows_fail_closed_instead_of_being_skipped() {
+        let (paths, verified) = parse_proc_swaps_verified(
+            "Filename Type Size Used Priority\\n/dev/sda3 partition 8388604 0 -2\\nmalformed"
+        );
+        assert!(!verified);
+        assert_eq!(paths, vec![PathBuf::from("/dev/sda3")]);
+    }
+
+    #[test]
+    fn empty_mountinfo_is_not_considered_verified() {
+        let (_, verified) = parse_mountinfo_verified("");
+        assert!(!verified);
+    }
 
     #[test]
     fn udev_filesystem_properties_accept_environment_prefix() {
