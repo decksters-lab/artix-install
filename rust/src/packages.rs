@@ -2,7 +2,7 @@
 //! This module deliberately performs no repository queries or package operations.
 
 use crate::config::{
-    Bootloader, CpuVendor, Desktop, EfiPolicy, Filesystem, FirmwareMode, GpuChoice, InitSystem,
+    Bootloader, CpuVendor, Desktop, Filesystem, FirmwareMode, GpuChoice, InitSystem,
     InstallConfig, Kernel, NetworkStack, Partitioning, PrivilegeEscalation, UserServices,
 };
 
@@ -141,10 +141,10 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
             Filesystem::Exfat => Some("exfatprogs"),
             Filesystem::Ntfs => Some("ntfs-3g"),
         };
-        if let Some(package) = package {
-            if !storage_packages.contains(&package) {
-                storage_packages.push(package);
-            }
+        if let Some(package) = package
+            && !storage_packages.contains(&package)
+        {
+            storage_packages.push(package);
         }
     }
     let bootloader_packages = match config.software.bootloader {
