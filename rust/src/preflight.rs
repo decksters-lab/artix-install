@@ -429,7 +429,10 @@ mod tests {
         config.disk.partitioning = Partitioning::Automatic;
         let report = evaluate(
             &config,
-            &HardwareSnapshot { firmware: "UEFI".into(), ..HardwareSnapshot::default() },
+            &HardwareSnapshot {
+                firmware: "UEFI".into(),
+                ..HardwareSnapshot::default()
+            },
             Some("ID=artix\n"),
             Some(0),
             directory.as_os_str(),
