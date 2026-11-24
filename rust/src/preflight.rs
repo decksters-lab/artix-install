@@ -381,7 +381,10 @@ mod tests {
         let config = InstallConfig::default();
         let report = evaluate(
             &config,
-            &HardwareSnapshot { firmware: "UEFI".into(), ..HardwareSnapshot::default() },
+            &HardwareSnapshot {
+                firmware: "UEFI".into(),
+                ..HardwareSnapshot::default()
+            },
             Some("ID=artix\n"),
             Some(0),
             directory.as_os_str(),
@@ -395,7 +398,6 @@ mod tests {
         assert!(report.is_ready());
         fs::remove_dir_all(directory).unwrap();
     }
-
 
     #[test]
     fn selected_target_must_exist_in_the_current_hardware_snapshot() {
