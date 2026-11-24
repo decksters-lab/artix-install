@@ -423,6 +423,7 @@ fn read_block_devices(warnings: &mut Vec<String>) -> Vec<BlockDevice> {
         };
         if is_partition && parent_name.is_none() {
             warnings.push(format!("Could not resolve the parent disk for {name}; partition excluded from disk selection."));
+            enumeration_verified = false;
             continue;
         }
         let major_minor = read_text(&class_path.join("dev")).unwrap_or_default();
@@ -578,19 +579,33 @@ fn read_active_swap_names(warnings: &mut Vec<String>) -> (std::collections::Hash
             .push("Active swap list is unavailable; disk selection is disabled for safety.".into());
         return (std::collections::HashSet::new(), false);
     };
-    let (paths, verified) = parse_proc_swaps_verified(&contents);
-    if !verified {
-        warnings.push("Active swap list contains malformed or incomplete entries; disk selection is disabled for safety.".into());
+    let (paths, mut verified) = parse_proc_swaps_verified(&contents);
+    let mut names = std::collections::HashSet::new();
+    for path in paths {
+        match fs::canonicalize(&path) {
+            Ok(resolved) => {
+                if let Some(name) = resolved.file_name() {
+                    names.insert(name.to_string_lossy().into_owned());
+                } else {
+                    warnings.push(format!(
+                        "Could not identify active swap path {}; disk selection is disabled for safety.",
+                        path.display()
+                    ));
+                    verified = false;
+                }
+            }
+            Err(error) => {
+                warnings.push(format!(
+                    "Could not resolve active swap path {}: {error}; disk selection is disabled for safety.",
+                    path.display()
+                ));
+                verified = false;
+            }
+        }
     }
-    let names = paths
-        .into_iter()
-        .filter_map(|path| {
-            let resolved = fs::canonicalize(&path).unwrap_or(path);
-            resolved
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-        })
-        .collect();
+    if !verified {
+        warnings.push("Active swap list contains malformed, incomplete or unresolved entries; disk selection is disabled for safety.".into());
+    }
     (names, verified)
 }
 
