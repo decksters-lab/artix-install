@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod discovery;
 mod partition;
+mod packages;
 mod plan;
 mod tui;
 
