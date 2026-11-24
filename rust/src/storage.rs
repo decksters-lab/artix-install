@@ -2,7 +2,7 @@ use std::{
     fs,
     io::Write,
     os::unix::fs::FileTypeExt,
-    path::{Path, PathBuf},
+    path::Path,
     process::{Command, Stdio},
 };
 
@@ -44,7 +44,7 @@ pub fn apply_automatic_partition_table(
     config.validate().map_err(|issues| {
         anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
     })?;
-    if unsafe { libc_effective_uid() } != 0 {
+    if libc_effective_uid() != 0 {
         bail!("partition-table writing requires effective UID 0");
     }
     if config.disk.partitioning != Partitioning::Automatic {
@@ -229,14 +229,8 @@ pub fn build_sfdisk_script(config: &InstallConfig) -> Result<String> {
 }
 
 fn new_uuid() -> Result<String> {
-    let output = Command::new("uuidgen")
-        .output()
-        .context("generate a fresh GPT disk GUID with uuidgen")?;
-    if !output.status.success() {
-        bail!("uuidgen failed to generate a GPT disk GUID");
-    }
-    let value = String::from_utf8(output.stdout)
-        .context("uuidgen returned a non-UTF-8 identifier")?
+    let value = fs::read_to_string("/proc/sys/kernel/random/uuid")
+        .context("read the kernel UUID generator")?
         .trim()
         .to_owned();
     if value.len() != 36
