@@ -164,7 +164,15 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     let network_packages = match config.software.network {
         NetworkStack::Dhcpcd => vec!["dhcpcd"],
         NetworkStack::Iwd => vec!["iwd"],
-        NetworkStack::NetworkManager => vec!["networkmanager"],
+        NetworkStack::NetworkManager => vec![
+            "networkmanager",
+            match config.system.init_system {
+                InitSystem::Dinit => "networkmanager-dinit",
+                InitSystem::OpenRc => "networkmanager-openrc",
+                InitSystem::Runit => "networkmanager-runit",
+                InitSystem::S6 => "networkmanager-s6",
+            },
+        ],
     };
     let needs_xorg = config.software.desktop_environments.iter().any(|desktop| {
         !matches!(
