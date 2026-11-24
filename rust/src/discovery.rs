@@ -447,10 +447,6 @@ fn read_active_swap_names(
     (names, verified)
 }
 
-fn parse_proc_swaps(contents: &str) -> Vec<PathBuf> {
-    parse_proc_swaps_verified(contents).0
-}
-
 /// Validate the header and every row instead of silently ignoring malformed swap entries.
 fn parse_proc_swaps_verified(contents: &str) -> (Vec<PathBuf>, bool) {
     let mut lines = contents.lines();
@@ -493,10 +489,6 @@ fn read_mountpoints(
 }
 
 /// Return mounted paths keyed by the kernel major:minor device number.
-fn parse_mountinfo(contents: &str) -> HashMap<String, Vec<String>> {
-    parse_mountinfo_verified(contents).0
-}
-
 /// Parse every mountinfo row; one malformed row makes the snapshot unsafe to use.
 fn parse_mountinfo_verified(contents: &str) -> (HashMap<String, Vec<String>>, bool) {
     let mut result: HashMap<String, Vec<String>> = HashMap::new();
@@ -587,7 +579,8 @@ mod tests {
     #[test]
     fn mountinfo_parser_maps_major_minor_and_unescapes_mountpoint() {
         let input = "42 25 8:1 / /mnt/My\\040Drive rw,relatime - ext4 /dev/sda1 rw\n";
-        let mounts = parse_mountinfo(input);
+        let (mounts, verified) = parse_mountinfo_verified(input);
+        assert!(verified);
         assert_eq!(mounts.get("8:1").unwrap(), &vec!["/mnt/My Drive".to_owned()]);
     }
 
@@ -610,7 +603,9 @@ mod tests {
     #[test]
     fn proc_swaps_parser_finds_active_swap_paths() {
         let input = "Filename Type Size Used Priority\n/dev/sda3 partition 8388604 0 -2\n";
-        assert_eq!(parse_proc_swaps(input), vec![PathBuf::from("/dev/sda3")]);
+        let (paths, verified) = parse_proc_swaps_verified(input);
+        assert!(verified);
+        assert_eq!(paths, vec![PathBuf::from("/dev/sda3")]);
     }
 
     #[test]
