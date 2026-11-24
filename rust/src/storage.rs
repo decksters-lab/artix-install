@@ -9,7 +9,7 @@ use std::{
 use anyhow::{Context, Result, bail};
 
 use crate::{
-    config::{FirmwareMode, InstallConfig, Partitioning, SwapMode},
+    config::{Filesystem, FirmwareMode, InstallConfig, Partitioning, SwapMode},
     discovery::{self, BlockDevice, HardwareSnapshot},
 };
 
@@ -196,6 +196,161 @@ pub fn apply_automatic_partition_table(
         selected.display(),
         expected_count
     ))
+}
+
+/// Format only the root partition from a freshly verified automatic layout.
+pub fn format_automatic_root(
+    config: &InstallConfig,
+    typed_confirmation: &str,
+) -> Result<String> {
+    config.validate().map_err(|issues| {
+        anyhow::anyhow!(
+            "configuration validation failed:\\n- {}",
+            issues.join("\\n- ")
+        )
+    })?;
+    if libc_effective_uid() != 0 {
+        bail!("root filesystem formatting requires effective UID 0");
+    }
+    if config.disk.partitioning != Partitioning::Automatic {
+        bail!("root formatting currently supports automatic partition layouts only");
+    }
+    if config.disk.encryption {
+        bail!("encrypted root formatting is not implemented; refusing to format an unencrypted partition");
+    }
+    if config.disk.root_filesystem != Filesystem::Ext4 {
+        bail!("the first root formatter supports ext4 only; no formatting command was run");
+    }
+
+    let selected = config
+        .disk
+        .target
+        .as_deref()
+        .context("select a target disk before formatting root")?;
+    let hardware = discovery::discover();
+    let disk = find_safe_target(&hardware, selected)?;
+    let identity = TargetIdentity::from_disk(disk);
+    let table = read_partition_table(selected)?;
+    verify_partition_table_dump(config, &table)?;
+    let root_path = root_partition_path(&table)?;
+    validate_confirmation(&root_path, typed_confirmation)?;
+
+    let root_partition = disk
+        .partitions
+        .iter()
+        .find(|partition| same_device_path(&partition.path, &root_path))
+        .context("root partition from the partition table is not present in fresh device discovery")?;
+    validate_format_target(root_partition, &root_path)?;
+
+    let mkfs = Command::new("mkfs.ext4")
+        .arg("-V")
+        .output()
+        .context("mkfs.ext4 is required to format the configured ext4 root")?;
+    if !mkfs.status.success() {
+        bail!("mkfs.ext4 is installed but its version check failed");
+    }
+
+    // Repeat all device and table checks immediately before invoking the formatter.
+    let latest_hardware = discovery::discover();
+    let latest_disk = find_safe_target(&latest_hardware, selected)?;
+    if TargetIdentity::from_disk(latest_disk) != identity {
+        bail!("target disk identity changed before formatting; refusing to continue");
+    }
+    let latest_table = read_partition_table(selected)?;
+    verify_partition_table_dump(config, &latest_table)?;
+    let latest_root = root_partition_path(&latest_table)?;
+    if !same_device_path(&latest_root, &root_path) {
+        bail!("root partition path changed before formatting; refusing to continue");
+    }
+    let latest_partition = latest_disk
+        .partitions
+        .iter()
+        .find(|partition| same_device_path(&partition.path, &root_path))
+        .context("root partition disappeared from fresh discovery; refusing to format")?;
+    validate_format_target(latest_partition, &root_path)?;
+
+    let canonical_root = fs::canonicalize(&root_path)
+        .with_context(|| format!("resolve root partition {}", root_path.display()))?;
+    let metadata = fs::metadata(&canonical_root)
+        .with_context(|| format!("inspect root partition {}", canonical_root.display()))?;
+    if !metadata.file_type().is_block_device() {
+        bail!("root target is no longer a block device; refusing to format");
+    }
+
+    let status = Command::new("mkfs.ext4")
+        .args(["-F", "--"])
+        .arg(&canonical_root)
+        .status()
+        .context("start ext4 filesystem formatter")?;
+    if !status.success() {
+        bail!("mkfs.ext4 failed; inspect the partition before retrying");
+    }
+
+    let probe = Command::new("blkid")
+        .args(["-p", "-s", "TYPE", "-o", "value"])
+        .arg(&canonical_root)
+        .output()
+        .context("verify the newly formatted root filesystem with blkid")?;
+    if !probe.status.success() || String::from_utf8_lossy(&probe.stdout).trim() != "ext4" {
+        bail!("mkfs.ext4 returned success, but blkid could not confirm an ext4 filesystem; do not continue");
+    }
+
+    Ok(format!(
+        "Formatted {} as ext4 and verified the filesystem type. No encryption, swap activation, mounting, or installation was performed.",
+        root_path.display()
+    ))
+}
+
+fn read_partition_table(disk: &Path) -> Result<String> {
+    let output = Command::new("sfdisk")
+        .arg("--dump")
+        .arg(disk)
+        .output()
+        .context("read the selected disk partition table")?;
+    if !output.status.success() {
+        bail!("could not read the selected disk partition table; refusing to format");
+    }
+    String::from_utf8(output.stdout).context("sfdisk returned non-UTF-8 partition table data")
+}
+
+fn root_partition_path(dump: &str) -> Result<std::path::PathBuf> {
+    dump.lines()
+        .filter(|line| line.trim_start().starts_with("/dev/"))
+        .last()
+        .and_then(|line| line.split_once(':').map(|(path, _)| Path::new(path.trim())))
+        .map(Path::to_path_buf)
+        .context("partition table does not identify a root partition")
+}
+
+fn same_device_path(left: &Path, right: &Path) -> bool {
+    match (fs::canonicalize(left), fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
+    }
+}
+
+fn validate_format_target(
+    partition: &crate::discovery::BlockPartition,
+    expected_path: &Path,
+) -> Result<()> {
+    if !partition.safety_checks_complete
+        || partition.size_bytes == 0
+        || !partition.mounted_at.is_empty()
+        || partition.active_swap
+        || partition.read_only
+        || partition.has_holders
+    {
+        bail!(
+            "root partition {} is mounted, active swap, read-only, held, empty, or failed safety discovery",
+            expected_path.display()
+        );
+    }
+    let metadata = fs::metadata(expected_path)
+        .with_context(|| format!("inspect root partition {}", expected_path.display()))?;
+    if !metadata.file_type().is_block_device() {
+        bail!("{} is not a block device", expected_path.display());
+    }
+    Ok(())
 }
 
 fn expected_partition_types(config: &InstallConfig) -> Vec<&'static str> {
