@@ -7,6 +7,7 @@ mod partition;
 mod plan;
 mod preflight;
 mod tui;
+mod storage;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
 
@@ -36,6 +37,12 @@ struct Args {
     /// Check the live environment and selected configuration without changing the host.
     #[arg(long)]
     preflight: bool,
+    /// Destructively write an automatic partition table (requires --config and --confirm-target).
+    #[arg(long)]
+    apply_partition_table: bool,
+    /// Exact target path confirmation required by --apply-partition-table.
+    #[arg(long, value_name = "DEVICE")]
+    confirm_target: Option<String>,
     /// Check planned packages against currently enabled pacman sync databases; does not refresh them.
     #[arg(long)]
     check_packages: bool,
@@ -85,6 +92,21 @@ fn run() -> Result<()> {
             bail!("live environment preflight failed");
         }
         return Ok(());
+    }
+    if args.apply_partition_table {
+        if args.config.is_none() {
+            bail!("--apply-partition-table requires an explicit --config file");
+        }
+        let confirmation = args
+            .confirm_target
+            .as_deref()
+            .context("--apply-partition-table requires --confirm-target with the exact configured device path")?;
+        let result = storage::apply_automatic_partition_table(&config, confirmation)?;
+        println!("{result}");
+        return Ok(());
+    }
+    if args.confirm_target.is_some() {
+        bail!("--confirm-target is only valid with --apply-partition-table");
     }
     if args.check_packages {
         config.validate().map_err(|issues| {
