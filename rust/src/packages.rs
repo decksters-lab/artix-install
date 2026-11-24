@@ -2,7 +2,7 @@
 //! This module deliberately performs no repository queries or package operations.
 
 use crate::config::{
-    Desktop, InitSystem, InstallConfig, Kernel, NetworkStack, PrivilegeEscalation,
+    CpuVendor, Desktop, GpuChoice, InitSystem, InstallConfig, Kernel, NetworkStack,\n    PrivilegeEscalation,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +41,8 @@ pub struct PackagePlan {
     pub base_packages: Vec<&'static str>,
     pub kernel_packages: Vec<String>,
     pub kernel_notes: Vec<String>,
+    pub microcode_packages: Vec<&'static str>,
+    pub gpu_packages: Vec<&'static str>,
     pub init_packages: Vec<&'static str>,
     pub network_packages: Vec<&'static str>,
     pub xorg_packages: Vec<&'static str>,
@@ -85,6 +87,21 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     if config.software.kernels.contains(&Kernel::LinuxLqx) {
         kernel_notes
             .push("linux-lqx requires the Liquorix repository and signing-key setup.".to_owned());
+    }
+    let microcode_packages = match config.software.cpu_vendor {
+        CpuVendor::Intel => vec!["intel-ucode"],
+        CpuVendor::Amd => vec!["amd-ucode"],
+        CpuVendor::Other => Vec::new(),
+    };
+    let gpu_packages = match config.software.gpu {
+        GpuChoice::Intel => vec!["mesa", "vulkan-intel"],
+        GpuChoice::Amd => vec!["mesa", "vulkan-radeon"],
+        GpuChoice::Nvidia => vec!["mesa", "nvidia-dkms", "nvidia-utils"],
+        GpuChoice::Hybrid => vec!["mesa", "vulkan-intel", "nvidia-dkms", "nvidia-utils"],
+        GpuChoice::Vm => vec!["mesa"],
+    };
+    if matches!(config.software.gpu, GpuChoice::Nvidia | GpuChoice::Hybrid) {
+        deferred.push("NVIDIA DKMS needs matching headers for every kernel that will use the module; verify kernel/header availability and supported hardware before installation.".to_owned());
     }
     let network_packages = match config.software.network {
         NetworkStack::Dhcpcd => vec!["dhcpcd"],
@@ -171,6 +188,8 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         ],
         kernel_packages,
         kernel_notes,
+        microcode_packages,
+        gpu_packages,
         init_packages,
         network_packages,
         xorg_packages,
@@ -415,6 +434,18 @@ mod tests {
         let plan = build_package_plan(&config);
         assert_eq!(plan.network_packages, ["iwd"]);
         assert_eq!(plan.privilege_packages, ["sudo"]);
+    }
+
+    #[test]
+    fn cpu_microcode_and_gpu_packages_follow_hardware_choices() {
+        let mut config = InstallConfig::default();
+        config.software.cpu_vendor = CpuVendor::Intel;
+        config.software.gpu = GpuChoice::Hybrid;
+        let plan = build_package_plan(&config);
+        assert_eq!(plan.microcode_packages, ["intel-ucode"]);
+        assert!(plan.gpu_packages.contains(&"vulkan-intel"));
+        assert!(plan.gpu_packages.contains(&"nvidia-dkms"));
+        assert!(plan.deferred.iter().any(|note| note.contains("matching headers")));
     }
 
     #[test]
