@@ -275,7 +275,9 @@ fn verify_artix_live_environment() -> Result<()> {
             .unwrap_or(false)
     });
     if !is_artix {
-        bail!("this stage must run from an Artix Linux live environment; basestrap was not started");
+        bail!(
+            "this stage must run from an Artix Linux live environment; basestrap was not started"
+        );
     }
     Ok(())
 }
