@@ -659,7 +659,7 @@ impl App {
                 _ => {
                     "Multi-select desktops and window managers. Cosmalia is Dinit-only and is unavailable with the currently selected init system."
                 }
-            }
+            },
             7 => {
                 "Multi-select kernels. Standard linux remains selected as the fallback. Left/Right moves the cursor; Space toggles."
             }
@@ -695,10 +695,7 @@ impl App {
                     } else {
                         c.to_string()
                     };
-                    (
-                        name,
-                        self.config.software.desktop_environments.contains(c),
-                    )
+                    (name, self.config.software.desktop_environments.contains(c))
                 })
                 .collect(),
             7 => KERNEL_CHOICES
