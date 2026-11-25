@@ -894,6 +894,42 @@ mod tests {
     use crate::discovery::{BlockDevice, BlockPartition};
 
     #[test]
+    fn single_choice_cursor_waits_for_enter_before_applying() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.selected = 0;
+
+        app.enter_section();
+        assert_eq!(app.config.system.init_system, InitSystem::Dinit);
+
+        app.move_choice_cursor(1);
+        assert_eq!(app.config.system.init_system, InitSystem::Dinit);
+
+        app.confirm_section_choice();
+        assert_eq!(app.config.system.init_system, InitSystem::OpenRc);
+        assert!(!app.section_open);
+    }
+
+    #[test]
+    fn bios_bootloader_menu_only_offers_grub() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.config.system.firmware = FirmwareMode::Bios;
+        app.selected = 10;
+
+        let options = app.single_options();
+        assert_eq!(options, vec![("grub".to_owned(), true)]);
+    }
+
+    #[test]
+    fn dualboot_efi_menu_only_offers_preserve() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.config.disk.partitioning = Partitioning::DualBoot;
+        app.selected = 16;
+
+        let options = app.single_options();
+        assert_eq!(options, vec![("preserve".to_owned(), true)]);
+    }
+
+    #[test]
     fn cosmalia_is_clearly_marked_as_dinit_only() {
         let mut app = App::new(InstallConfig::default(), sample_hardware());
         app.selected = 6;
