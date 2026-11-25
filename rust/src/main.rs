@@ -174,7 +174,7 @@ fn run() -> Result<()> {
     if args.confirm_target.is_some() {
         bail!("--confirm-target is only valid with --apply-partition-table");
     }
-    if args.confirm_efi.is_some() {
+    if args.confirm_efi.is_some() && !args.prepare_efi {
         bail!("--confirm-efi is only valid with --prepare-efi");
     }
     if args.confirm_partition.is_some() {
