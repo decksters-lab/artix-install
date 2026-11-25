@@ -339,8 +339,7 @@ impl App {
                     ],
                     delta,
                 );
-                let supported_user_services =
-                    user_service_choices(self.config.system.init_system);
+                let supported_user_services = user_service_choices(self.config.system.init_system);
                 if !supported_user_services.contains(&self.config.system.user_services) {
                     self.config.system.user_services = supported_user_services[0];
                 }
@@ -991,7 +990,10 @@ mod tests {
 
     #[test]
     fn s6_offers_only_manual_user_services_and_selects_it_automatically() {
-        assert_eq!(user_service_choices(InitSystem::S6), &[UserServices::Manual]);
+        assert_eq!(
+            user_service_choices(InitSystem::S6),
+            &[UserServices::Manual]
+        );
 
         let mut app = App::new(InstallConfig::default(), sample_hardware());
         app.selected = 0;
