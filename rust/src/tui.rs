@@ -77,7 +77,10 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
             if app.show_disks {
                 match key.code {
                     KeyCode::Char('q') => break,
-                    KeyCode::Esc | KeyCode::Backspace | KeyCode::Char('d') => app.toggle_disks(),
+                    KeyCode::Left
+                    | KeyCode::Esc
+                    | KeyCode::Backspace
+                    | KeyCode::Char('d') => app.toggle_disks(),
                     KeyCode::Up | KeyCode::Char('k') => app.move_disk_selection(-1),
                     KeyCode::Down | KeyCode::Char('j') => app.move_disk_selection(1),
                     KeyCode::Enter => app.select_disk(),
@@ -690,7 +693,7 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(4),
-            Constraint::Min(10),
+            Constraint::Min(12),
             Constraint::Length(4),
         ])
         .split(frame.area());
@@ -704,20 +707,20 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                " HARDWARE",
+                " SETUP",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                "   /   READ-ONLY INVENTORY",
+                "   /   TARGET DISK",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(Span::styled(
-            "No partitioning or formatting is available in this version.",
+            "Read-only hardware inventory. Disk selection changes the plan only; no disk writes occur.",
             Style::default().fg(Color::Gray),
         )),
     ])
@@ -730,30 +733,23 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
 
     let body = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(38), Constraint::Min(30)])
+        .constraints([Constraint::Length(27), Constraint::Min(30)])
         .split(outer[1]);
-    let items: Vec<ListItem<'_>> = if app.hardware.disks.is_empty() {
-        vec![ListItem::new(" No physical disks detected")]
-    } else {
-        app.hardware
-            .disks
-            .iter()
-            .map(|disk| {
-                let marker = if disk.can_be_selected() { "○" } else { "×" };
-                let removable = if disk.removable { " USB" } else { "" };
-                ListItem::new(format!(
-                    " {marker} {}  {}{}",
-                    disk.name,
-                    format_bytes(disk.size_bytes),
-                    removable
-                ))
-            })
-            .collect()
-    };
-    let list = List::new(items)
+
+    let settings: Vec<ListItem<'_>> = (0..SETTING_COUNT)
+        .map(|index| {
+            let marker = if index == 1 && app.config.disk.target.is_none() {
+                "○"
+            } else {
+                "●"
+            };
+            ListItem::new(format!(" {marker} {:<19}", app.setting_label(index)))
+        })
+        .collect();
+    let settings_list = List::new(settings)
         .block(
             Block::default()
-                .title(" Block devices ")
+                .title(" Configuration ")
                 .borders(Borders::ALL),
         )
         .highlight_style(
@@ -763,160 +759,114 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▸ ");
-    let mut state = ratatui::widgets::ListState::default();
-    if !app.hardware.disks.is_empty() {
-        state.select(Some(app.selected_disk));
-    }
-    frame.render_stateful_widget(list, body[0], &mut state);
+    let mut settings_state = ratatui::widgets::ListState::default();
+    settings_state.select(Some(app.selected));
+    frame.render_stateful_widget(settings_list, body[0], &mut settings_state);
 
-    let detail_block = Block::default()
-        .title(" Device details ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Blue));
-    let mut lines = vec![
+    let right = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(6), Constraint::Min(6)])
+        .split(body[1]);
+
+    let disk_items: Vec<ListItem<'_>> = if app.hardware.disks.is_empty() {
+        vec![ListItem::new(" No physical disks detected")]
+    } else {
+        app.hardware
+            .disks
+            .iter()
+            .map(|disk| {
+                let marker = if disk.can_be_selected() { "( )" } else { "(x)" };
+                let removable = if disk.removable { "  USB" } else { "" };
+                ListItem::new(format!(
+                    " {marker} {}  {}{}",
+                    disk.name,
+                    format_bytes(disk.size_bytes),
+                    removable
+                ))
+            })
+            .collect()
+    };
+    let disk_list = List::new(disk_items)
+        .block(
+            Block::default()
+                .title(" Available disks — ↑/↓ select, Enter choose ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Blue)),
+        )
+        .highlight_style(
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▸ ");
+    let mut disk_state = ratatui::widgets::ListState::default();
+    if !app.hardware.disks.is_empty() {
+        disk_state.select(Some(app.selected_disk));
+    }
+    frame.render_stateful_widget(disk_list, right[0], &mut disk_state);
+
+    let mut details = vec![
         Line::from(Span::styled(
-            "LIVE SYSTEM",
+            "SELECTED DEVICE DETAILS",
             Style::default().add_modifier(Modifier::BOLD),
         )),
-        Line::from(format!("Firmware: {}", app.hardware.firmware)),
-        Line::from(format!(
-            "Memory: {}",
-            app.hardware
-                .memory_bytes
-                .map_or_else(|| "unknown".into(), format_bytes)
-        )),
-        Line::from(format!(
-            "CPU: {}",
-            app.hardware
-                .cpu_model
-                .as_deref()
-                .or(app.hardware.cpu_vendor.as_deref())
-                .unwrap_or("unknown")
-        )),
-        Line::from(format!(
-            "GPUs: {}",
-            if app.hardware.gpus.is_empty() {
-                "none detected".into()
-            } else {
-                app.hardware
-                    .gpus
-                    .iter()
-                    .map(|g| g.vendor.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        )),
-        Line::from(format!(
-            "Network: {}",
-            if app.hardware.network_interfaces.is_empty() {
-                "none detected".into()
-            } else {
-                app.hardware
-                    .network_interfaces
-                    .iter()
-                    .map(|n| n.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        )),
-        Line::from(""),
     ];
     if let Some(disk) = app.hardware.disks.get(app.selected_disk) {
-        lines.push(Line::from(Span::styled(
-            format!(
-                "{}  ({})",
-                disk.path.display(),
-                format_bytes(disk.size_bytes)
-            ),
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
+        details.push(Line::from(format!(
+            "{}  ({})",
+            disk.path.display(),
+            format_bytes(disk.size_bytes)
         )));
-        lines.push(Line::from(format!(
-            "Model: {}",
-            disk.model.as_deref().unwrap_or("unknown")
-        )));
-        lines.push(Line::from(format!(
-            "Vendor: {}",
+        details.push(Line::from(format!(
+            "Model: {}   Vendor: {}",
+            disk.model.as_deref().unwrap_or("unknown"),
             disk.vendor.as_deref().unwrap_or("unknown")
         )));
-        lines.push(Line::from(format!(
-            "Serial / WWID: {}",
-            disk.serial
-                .as_deref()
-                .or(disk.wwid.as_deref())
-                .unwrap_or("unknown")
+        details.push(Line::from(format!(
+            "Removable: {}   Read-only: {}   Active swap: {}",
+            disk.removable, disk.read_only, disk.active_swap
         )));
-        lines.push(Line::from(format!(
-            "Removable: {}   Read-only: {}",
-            disk.removable, disk.read_only
+        details.push(Line::from(format!(
+            "Partitions: {}   Holders: {}",
+            disk.partitions.len(),
+            disk.has_holders
         )));
-        lines.push(Line::from(format!(
-            "Active swap: {}   Holders: {}",
-            disk.active_swap, disk.has_holders
-        )));
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            format!("Partitions ({})", disk.partitions.len()),
-            Style::default().add_modifier(Modifier::BOLD),
-        )));
-        if disk.partitions.is_empty() {
-            lines.push(Line::from("  No partitions detected"));
-        }
-        for partition in &disk.partitions {
-            lines.push(Line::from(format!(
-                "  {}  {}",
-                partition.path.display(),
-                format_bytes(partition.size_bytes)
-            )));
-            lines.push(Line::from(format!(
-                "    FS: {}   Label: {}",
-                partition.filesystem.as_deref().unwrap_or("unknown"),
-                partition.label.as_deref().unwrap_or("none")
-            )));
-            lines.push(Line::from(format!(
-                "    Mounted: {}   Active swap: {}   Holders: {}",
-                if partition.mounted_at.is_empty() {
-                    "no".into()
-                } else {
-                    partition.mounted_at.join(", ")
-                },
-                partition.active_swap,
-                partition.has_holders
-            )));
-        }
-        lines.push(Line::from(""));
         if let Some(reason) = disk.selection_block_reason() {
-            lines.push(Line::from(Span::styled(
+            details.push(Line::from(Span::styled(
                 format!("NOT SELECTABLE: {reason}"),
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             )));
         } else {
-            lines.push(Line::from(Span::styled(
-                "Selectable for plan only.",
+            details.push(Line::from(Span::styled(
+                "Selectable for the plan only.",
                 Style::default()
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             )));
         }
     } else {
-        lines.push(Line::from("No physical block devices were found."));
+        details.push(Line::from("No physical block devices were found."));
     }
     if !app.hardware.warnings.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "Discovery warnings:",
+        details.push(Line::from(Span::styled(
+            format!(
+                "Discovery warnings: {}",
+                app.hardware.warnings.join("; ")
+            ),
             Style::default().fg(Color::Yellow),
         )));
-        for warning in &app.hardware.warnings {
-            lines.push(Line::from(format!("  {warning}")));
-        }
     }
     frame.render_widget(
-        Paragraph::new(lines)
-            .block(detail_block)
+        Paragraph::new(details)
+            .block(
+                Block::default()
+                    .title(" Device details ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Blue)),
+            )
             .wrap(Wrap { trim: true }),
-        body[1],
+        right[1],
     );
 
     let footer = vec![
@@ -925,8 +875,8 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
             Span::raw(" Select disk  "),
             keycap("Enter"),
             Span::raw(" Use in plan  "),
-            keycap("D/Esc"),
-            Span::raw(" Back  "),
+            keycap("←/Esc"),
+            Span::raw(" Back to configuration  "),
             keycap("Q"),
             Span::raw(" Quit"),
         ]),
