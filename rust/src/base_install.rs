@@ -323,26 +323,44 @@ fn ensure_pristine_target() -> Result<()> {
     let root_entries = fs::read_dir(TARGET_ROOT).context("read mounted target root")?;
     for entry in root_entries {
         let entry = entry.context("inspect mounted target root entry")?;
-        if entry.file_name() != "lost+found" {
+        let name = entry.file_name();
+        let metadata = fs::symlink_metadata(entry.path())
+            .with_context(|| format!("inspect target root entry {}", name.to_string_lossy()))?;
+        if !metadata.file_type().is_dir() {
             bail!(
-                "{} already contains '{}'; refusing to install over existing data",
-                TARGET_ROOT,
-                entry.file_name().to_string_lossy()
+                "target root entry '{}' is not a real directory; refusing basestrap",
+                name.to_string_lossy()
             );
         }
-        let metadata = fs::symlink_metadata(entry.path()).context("inspect lost+found")?;
-        if !metadata.file_type().is_dir() {
-            bail!("/mnt/lost+found is not a real directory; refusing to continue");
-        }
-        if fs::read_dir(entry.path())
-            .context("inspect lost+found contents")?
-            .next()
-            .is_some()
-        {
-            bail!("/mnt/lost+found is not empty; refusing to continue");
+        match name.to_str() {
+            Some("lost+found") => {
+                if fs::read_dir(entry.path())
+                    .context("inspect lost+found contents")?
+                    .next()
+                    .is_some()
+                {
+                    bail!("/mnt/lost+found is not empty; refusing to continue");
+                }
+            }
+            Some("boot") => {
+                if fs::read_dir(entry.path())
+                    .context("inspect mounted EFI contents")?
+                    .next()
+                    .is_some()
+                {
+                    bail!(
+                        "/mnt/boot (the EFI partition) is not empty; refusing to overwrite existing boot files"
+                    );
+                }
+            }
+            _ => bail!(
+                "{} already contains '{}'; refusing to install over existing data",
+                TARGET_ROOT,
+                name.to_string_lossy()
+            ),
         }
     }
-    for path in ["/mnt/etc", "/mnt/usr", "/mnt/var", "/mnt/boot/grub"] {
+    for path in ["/mnt/etc", "/mnt/usr", "/mnt/var"] {
         match fs::symlink_metadata(path) {
             Ok(_) => bail!(
                 "{path} already exists; refusing to overwrite a possible existing installation"
