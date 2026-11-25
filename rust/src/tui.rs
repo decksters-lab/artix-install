@@ -368,7 +368,11 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             } else {
                 " Navigate sections  "
             }),
-            keycap(if app.section_open { "Enter" } else { "→/Enter" }),
+            keycap(if app.section_open {
+                "Enter"
+            } else {
+                "→/Enter"
+            }),
             Span::raw(if app.section_open {
                 " Confirm / finish  "
             } else {
