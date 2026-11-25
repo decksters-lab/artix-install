@@ -565,8 +565,8 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
 pub fn generate_automatic_fstab(config: &InstallConfig) -> Result<String> {
     config.validate().map_err(|issues| {
         anyhow::anyhow!(
-            "configuration validation failed:\\n- {}",
-            issues.join("\\n- ")
+            "configuration validation failed:\n- {}",
+            issues.join("\n- ")
         )
     })?;
     if libc_effective_uid() != 0 {
@@ -619,8 +619,8 @@ pub fn generate_automatic_fstab(config: &InstallConfig) -> Result<String> {
             String::from_utf8_lossy(&generated.stderr).trim()
         );
     }
-    let contents = String::from_utf8(generated.stdout)
-        .context("fstabgen returned non-UTF-8 output")?;
+    let contents =
+        String::from_utf8(generated.stdout).context("fstabgen returned non-UTF-8 output")?;
     validate_generated_fstab(&contents)?;
 
     let temporary = etc.join(format!(".fstab.artix-setup-{}.tmp", std::process::id()));
@@ -673,7 +673,10 @@ fn validate_generated_fstab(contents: &str) -> Result<()> {
             bail!("fstabgen produced a malformed entry: {line}");
         }
         if !fields[0].starts_with("UUID=") {
-            bail!("fstabgen did not use a UUID source for mountpoint {}", fields[1]);
+            bail!(
+                "fstabgen did not use a UUID source for mountpoint {}",
+                fields[1]
+            );
         }
         match fields[1] {
             "/" => {
@@ -1256,12 +1259,22 @@ mod tests {
 
     #[test]
     fn generated_fstab_requires_uuid_root_and_efi_entries() {
-        let valid = "UUID=1111 / ext4 rw,relatime 0 1\\nUUID=2222 /boot vfat rw,umask=0077 0 2\\n";
+        let valid = "UUID=1111 / ext4 rw,relatime 0 1\nUUID=2222 /boot vfat rw,umask=0077 0 2\n";
         assert!(validate_generated_fstab(valid).is_ok());
-        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\\n").is_err());
-        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\\nUUID=2222 /boot ext4 defaults 0 2\\n").is_err());
-        assert!(validate_generated_fstab("/dev/vda2 / ext4 defaults 0 1\\nUUID=2222 /boot vfat defaults 0 2\\n").is_err());
-        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\\nUUID=2222 / ext4 defaults 0 2\\nUUID=3333 /boot vfat defaults 0 2\\n").is_err());
+        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\n").is_err());
+        assert!(
+            validate_generated_fstab(
+                "UUID=1111 / ext4 defaults 0 1\nUUID=2222 /boot ext4 defaults 0 2\n"
+            )
+            .is_err()
+        );
+        assert!(
+            validate_generated_fstab(
+                "/dev/vda2 / ext4 defaults 0 1\nUUID=2222 /boot vfat defaults 0 2\n"
+            )
+            .is_err()
+        );
+        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\nUUID=2222 / ext4 defaults 0 2\nUUID=3333 /boot vfat defaults 0 2\n").is_err());
     }
 
     #[test]
