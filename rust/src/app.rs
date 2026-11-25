@@ -692,7 +692,8 @@ impl App {
             self.single_options()
         };
         if options.is_empty() {
-            self.status = "This section has no selectable options. Use its dedicated screen instead.".into();
+            self.status =
+                "This section has no selectable options. Use its dedicated screen instead.".into();
             return;
         }
         self.multi_cursor = options
