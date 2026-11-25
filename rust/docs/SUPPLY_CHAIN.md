@@ -19,6 +19,8 @@ The Rust installer is experimental. These checks improve traceability; they are 
 
 The feature-branch workflow publishes a preview release only when a maintainer explicitly marks a commit message with `[publish-preview]`. The workflow builds and smoke-tests both x86_64 archives first, then creates the `v0.1.0-test3` preview tag at that exact commit. Ordinary branch pushes and pull-request builds do not overwrite a published release. This keeps the release tag, source commit, and packaged binaries aligned.
 
+The `v0.1.0-test3` archive is a preview for testing the configuration interface and implemented prototype stages only; it is not a complete installer and must not be used for a real system installation.
+
 ## Verify an archive checksum
 
 Download the archive and its matching `.sha256` file from the same GitHub Release, then run:
