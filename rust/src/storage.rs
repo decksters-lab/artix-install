@@ -507,8 +507,15 @@ pub fn mount_automatic_target(
 
     run_mount(&root_device, root_mount).context("mount the ext4 root filesystem at /mnt")?;
     let result = (|| -> Result<()> {
-        fs::create_dir_all(efi_mount)
-            .context("create /mnt/boot inside the mounted root filesystem")?;
+        match fs::symlink_metadata(efi_mount) {
+            Ok(metadata) if metadata.file_type().is_dir() => {}
+            Ok(_) => bail!("/mnt/boot exists but is not a real directory; refusing to mount over it"),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(efi_mount)
+                    .context("create /mnt/boot inside the mounted root filesystem")?;
+            }
+            Err(error) => return Err(error).context("inspect /mnt/boot before mounting EFI"),
+        }
         if mountpoint_is_used(efi_mount)? {
             bail!("/mnt/boot is already a mountpoint; refusing to cover it");
         }
@@ -593,9 +600,9 @@ fn ensure_mount_tools() -> Result<()> {
 }
 
 fn ensure_empty_mount_root(path: &Path) -> Result<()> {
-    let metadata =
-        fs::metadata(path).with_context(|| format!("inspect mount root {}", path.display()))?;
-    if !metadata.is_dir() {
+    let metadata = fs::symlink_metadata(path)
+        .with_context(|| format!("inspect mount root {}", path.display()))?;
+    if !metadata.file_type().is_dir() {
         bail!("{} exists but is not a directory", path.display());
     }
     if mountpoint_is_used(path)? {
