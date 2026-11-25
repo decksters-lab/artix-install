@@ -769,6 +769,22 @@ mod tests {
     use super::*;
     use crate::discovery::{BlockDevice, BlockPartition};
 
+    #[test]
+    fn cosmalia_is_clearly_marked_as_dinit_only() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.selected = 6;
+
+        app.config.system.init_system = InitSystem::OpenRc;
+        let options = app.multi_options();
+        assert!(options[15].0.contains("Dinit only — unavailable"));
+        assert!(app.setting_description(6).contains("unavailable"));
+        assert!(!app.setting_description(6).contains("cosmic-comp"));
+
+        app.config.system.init_system = InitSystem::Dinit;
+        assert_eq!(app.multi_options()[15].0, "Cosmalia");
+        assert!(app.setting_description(6).contains("cosmic-comp"));
+    }
+
     fn sample_hardware() -> HardwareSnapshot {
         HardwareSnapshot {
             firmware: "UEFI".into(),
