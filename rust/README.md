@@ -71,15 +71,9 @@ Btrfs layouts are configurable as flat, standard (`@`, `@home`, `@log`, `@cache`
 
 ## Safety model
 
-- No shell/process execution API is used in the Rust source.
-- No disk-writing workflow is implemented: no partitioning, formatting, LUKS setup, mounting, chroot or package installation.
-- `disk.target` defaults to unset. The prototype never selects the first disk automatically.
-- A selected target path is only configuration data; the planner does not inspect or modify it.
-- Dual-boot mode rejects an EFI format policy. EFI preservation is the default.
-- BIOS configurations require GRUB2; BIOS + F2FS is rejected until an explicit compatibility override is designed.
-- Passwords and LUKS passphrases are never serialized into TOML or logs.
+The storage executors are deliberately narrow and guarded. Automatic partitioning, root formatting, EFI preparation, mounting, and fstab generation each revalidate their target and stop on uncertainty. Existing EFI filesystems and existing fstab files are preserved. The currently implemented storage path supports only unencrypted automatic UEFI/ext4 installs; base-system installation and later setup stages are not implemented yet.
 
-Read [`docs/SAFETY_MODEL.md`](docs/SAFETY_MODEL.md) before implementing any executor.
+Read [`docs/SAFETY_MODEL.md`](docs/SAFETY_MODEL.md) for the exact guarantees, limitations, and remaining release requirements.
 
 ## Porting approach
 
