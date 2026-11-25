@@ -47,7 +47,8 @@ struct Args {
             "hardware",
             "preflight",
             "check_packages",
-            "write_default"
+            "write_default",
+            "format_root", "prepare_efi", "mount_target"
         ]
     )]
     apply_partition_table: bool,
@@ -65,7 +66,8 @@ struct Args {
             "preflight",
             "check_packages",
             "write_default",
-            "apply_partition_table"
+            "apply_partition_table",
+            "prepare_efi", "mount_target"
         ]
     )]
     format_root: bool,
@@ -78,13 +80,26 @@ struct Args {
         requires = "config",
         conflicts_with_all = [
             "plan", "validate", "hardware", "preflight", "check_packages",
-            "write_default", "apply_partition_table", "format_root"
+            "write_default", "apply_partition_table", "format_root", "mount_target"
         ]
     )]
     prepare_efi: bool,
     /// Exact EFI partition path confirmation required by --prepare-efi.
     #[arg(long, value_name = "PARTITION", requires = "prepare_efi")]
     confirm_efi: Option<String>,
+    /// Mount the verified automatic UEFI/ext4 target at /mnt (requires --confirm-mount).
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan", "validate", "hardware", "preflight", "check_packages",
+            "write_default", "apply_partition_table", "format_root", "prepare_efi"
+        ]
+    )]
+    mount_target: bool,
+    /// Exact configured disk path confirmation required by --mount-target.
+    #[arg(long, value_name = "DEVICE", requires = "mount_target")]
+    confirm_mount: Option<String>,
     /// Check planned packages against currently enabled pacman sync databases; does not refresh them.
     #[arg(long)]
     check_packages: bool,
@@ -180,6 +195,9 @@ fn run() -> Result<()> {
     if args.confirm_partition.is_some() {
         bail!("--confirm-partition is only valid with --format-root");
     }
+    if args.confirm_mount.is_some() && !args.mount_target {
+        bail!("--confirm-mount is only valid with --mount-target");
+    }
     if args.prepare_efi {
         if !has_explicit_config {
             bail!("--prepare-efi requires an explicit --config file");
@@ -195,6 +213,23 @@ fn run() -> Result<()> {
             bail!("live environment preflight failed; EFI partition was not changed");
         }
         let result = storage::prepare_automatic_efi(&config, confirmation)?;
+        println!("{result}");
+        return Ok(());
+    }
+    if args.mount_target {
+        if !has_explicit_config {
+            bail!("--mount-target requires an explicit --config file");
+        }
+        let confirmation = args.confirm_mount.as_deref().context(
+            "--mount-target requires --confirm-mount with the exact configured disk path",
+        )?;
+        let environment = discovery::discover();
+        let report = preflight::run(&config, &environment);
+        print!("{}", report.render());
+        if !report.is_ready() {
+            bail!("live environment preflight failed; target was not mounted");
+        }
+        let result = storage::mount_automatic_target(&config, confirmation)?;
         println!("{result}");
         return Ok(());
     }
