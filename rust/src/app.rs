@@ -322,6 +322,7 @@ impl App {
     }
 
     pub fn adjust(&mut self, delta: isize) {
+        let had_cosmalia_selected = self.config.software.desktop_environments.contains(&Desktop::Cosmalia);
         match self.selected {
             0 => {
                 self.config.system.init_system = cycle(
@@ -507,6 +508,15 @@ impl App {
             self.setting_label(self.selected),
             self.setting_value(self.selected)
         );
+        if self.selected == 0
+            && had_cosmalia_selected
+            && self.config.system.init_system != InitSystem::Dinit
+        {
+            self.status = format!(
+                "Warning: switching to {} removed Cosmalia (Dinit-only). No desktop/window manager is selected; choose one in Desktops / WMs.",
+                self.config.system.init_system
+            );
+        }
     }
 
     pub fn toggle_multi_selection(&mut self) {
@@ -944,6 +954,20 @@ mod tests {
                 .desktop_environments
                 .contains(&Desktop::Cosmalia)
         );
+    }
+
+    #[test]
+    fn switching_away_from_dinit_warns_when_cosmalia_was_the_selected_desktop() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.selected = 0;
+        app.config.software.desktop_environments = vec![Desktop::Cosmalia];
+
+        app.adjust(1);
+
+        assert_eq!(app.config.system.init_system, InitSystem::OpenRc);
+        assert!(app.config.software.desktop_environments.is_empty());
+        assert!(app.status.contains("Warning: switching to OpenRC"));
+        assert!(app.status.contains("No desktop/window manager is selected"));
     }
 
     #[test]
