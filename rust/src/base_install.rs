@@ -28,10 +28,16 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         bail!("basestrap requires effective UID 0");
     }
 
-    let selected = config.disk.target.as_deref()
+    let selected = config
+        .disk
+        .target
+        .as_deref()
         .context("select a target disk before installing the base system")?;
     if typed_confirmation != selected.to_string_lossy() {
-        bail!("confirmation mismatch: pass --confirm-install '{}' exactly", selected.display());
+        bail!(
+            "confirmation mismatch: pass --confirm-install '{}' exactly",
+            selected.display()
+        );
     }
     if config.disk.partitioning != Partitioning::Automatic
         || config.system.firmware != FirmwareMode::Uefi
@@ -39,7 +45,9 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         || config.disk.encryption
         || config.disk.swap.mode == SwapMode::Partition
     {
-        bail!("the first basestrap stage supports automatic, unencrypted UEFI/ext4 installs without a swap partition");
+        bail!(
+            "the first basestrap stage supports automatic, unencrypted UEFI/ext4 installs without a swap partition"
+        );
     }
 
     let disk = fs::canonicalize(selected)
@@ -50,34 +58,58 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         bail!("configured target {} is not a block device", disk.display());
     }
 
-    let table = Command::new("sfdisk").arg("--dump").arg(&disk).output()
+    let table = Command::new("sfdisk")
+        .arg("--dump")
+        .arg(&disk)
+        .output()
         .context("sfdisk is required to re-read the target partition table")?;
     if !table.status.success() {
         bail!("could not read the target partition table; basestrap was not started");
     }
-    let table_text = String::from_utf8(table.stdout)
-        .context("sfdisk returned non-UTF-8 partition table data")?;
-    let label = table_text.lines()
+    let table_text =
+        String::from_utf8(table.stdout).context("sfdisk returned non-UTF-8 partition table data")?;
+    let label = table_text
+        .lines()
         .find_map(|line| line.trim().strip_prefix("label:"))
         .map(str::trim);
     if label != Some("gpt") {
         bail!("expected a GPT target partition table; basestrap was not started");
     }
-    let partitions: Vec<PathBuf> = table_text.lines()
+    let partitions: Vec<PathBuf> = table_text
+        .lines()
         .filter(|line| line.trim_start().starts_with("/dev/"))
-        .filter_map(|line| line.split_once(':').map(|(path, _)| PathBuf::from(path.trim())))
+        .filter_map(|line| {
+            line.split_once(':')
+                .map(|(path, _)| PathBuf::from(path.trim()))
+        })
         .collect();
-    let expected_count = if config.disk.swap.mode == SwapMode::Partition { 3 } else { 2 };
+    let expected_count = if config.disk.swap.mode == SwapMode::Partition {
+        3
+    } else {
+        2
+    };
     if partitions.len() != expected_count || partitions.is_empty() {
-        bail!("target partition table has {} partitions; expected {}; basestrap was not started", partitions.len(), expected_count);
+        bail!(
+            "target partition table has {} partitions; expected {}; basestrap was not started",
+            partitions.len(),
+            expected_count
+        );
     }
     let efi = fs::canonicalize(&partitions[0]).context("resolve EFI partition from target table")?;
-    let root = fs::canonicalize(partitions.last().context("target table has no root partition")?)
-        .context("resolve root partition from target table")?;
+    let root = fs::canonicalize(
+        partitions
+            .last()
+            .context("target table has no root partition")?,
+    )
+    .context("resolve root partition from target table")?;
     for (device, description) in [(&efi, "EFI"), (&root, "root")] {
-        let metadata = fs::metadata(device).with_context(|| format!("inspect {description} partition {}", device.display()))?;
+        let metadata = fs::metadata(device)
+            .with_context(|| format!("inspect {description} partition {}", device.display()))?;
         if !metadata.file_type().is_block_device() {
-            bail!("{description} partition {} is not a block device", device.display());
+            bail!(
+                "{description} partition {} is not a block device",
+                device.display()
+            );
         }
     }
     verify_blkid_type(&efi, "vfat")?;
@@ -91,35 +123,60 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     for entry in root_entries {
         let entry = entry.context("inspect mounted target root entry")?;
         if entry.file_name() != "lost+found" {
-            bail!("{} already contains '{}'; refusing to install over existing data", TARGET_ROOT, entry.file_name().to_string_lossy());
+            bail!(
+                "{} already contains '{}'; refusing to install over existing data",
+                TARGET_ROOT,
+                entry.file_name().to_string_lossy()
+            );
         }
         let metadata = fs::symlink_metadata(entry.path()).context("inspect lost+found")?;
         if !metadata.file_type().is_dir() {
             bail!("/mnt/lost+found is not a real directory; refusing to continue");
         }
-        if fs::read_dir(entry.path()).context("inspect lost+found contents")?.next().is_some() {
+        if fs::read_dir(entry.path())
+            .context("inspect lost+found contents")?
+            .next()
+            .is_some()
+        {
             bail!("/mnt/lost+found is not empty; refusing to continue");
         }
     }
     for path in ["/mnt/etc", "/mnt/usr", "/mnt/var", "/mnt/boot/grub"] {
         match fs::symlink_metadata(path) {
-            Ok(_) => bail!("{path} already exists; refusing to overwrite a possible existing installation"),
+            Ok(_) => bail!(
+                "{path} already exists; refusing to overwrite a possible existing installation"
+            ),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => return Err(error).with_context(|| format!("inspect {path}")),
         }
     }
 
     let plan = packages::build_package_plan(config);
-    if plan.desktop_recipes.iter().any(|recipe| recipe.source != PackageSource::Artix) {
-        bail!("the selected desktop recipe needs a non-default repository or external build; resolve that source before basestrap");
+    if plan
+        .desktop_recipes
+        .iter()
+        .any(|recipe| recipe.source != PackageSource::Artix)
+    {
+        bail!(
+            "the selected desktop recipe needs a non-default repository or external build; resolve that source before basestrap"
+        );
     }
     if !plan.kernel_notes.is_empty() || plan.deferred.len() > 2 {
-        bail!("the selected package plan has unresolved external repository requirements; basestrap was not started");
+        bail!(
+            "the selected package plan has unresolved external repository requirements; basestrap was not started"
+        );
     }
     let package_report = package_check::check(config, Path::new("pacman"))
         .context("check the complete selected package plan before basestrap")?;
-    if package_report.checks.iter().any(|check| matches!(check.availability, Availability::Missing | Availability::CouldNotCheck)) {
-        bail!("one or more required packages are missing or could not be verified; run --check-packages and resolve the report before basestrap");
+    if package_report.checks.iter().any(|check| {
+        matches!(
+            check.availability,
+            Availability::Missing | Availability::CouldNotCheck
+        )
+    }) {
+        bail!(
+            "one or more required packages are missing or could not be verified; run --check-packages and resolve the report before basestrap"
+        );
     }
 
     let mut package_names = Vec::<String>::new();
@@ -128,20 +185,46 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
             package_names.push(name.to_owned());
         }
     };
-    for name in &plan.base_packages { add(name); }
-    for name in &plan.kernel_packages { add(name); }
-    for name in &plan.microcode_packages { add(name); }
-    for name in &plan.gpu_packages { add(name); }
-    for name in &plan.init_packages { add(name); }
-    for name in &plan.user_service_packages { add(name); }
-    for name in &plan.storage_packages { add(name); }
-    for name in &plan.bootloader_packages { add(name); }
-    for name in &plan.network_packages { add(name); }
-    for name in &plan.xorg_packages { add(name); }
-    for name in &plan.audio_packages { add(name); }
-    for name in &plan.privilege_packages { add(name); }
+    for name in &plan.base_packages {
+        add(name);
+    }
+    for name in &plan.kernel_packages {
+        add(name);
+    }
+    for name in &plan.microcode_packages {
+        add(name);
+    }
+    for name in &plan.gpu_packages {
+        add(name);
+    }
+    for name in &plan.init_packages {
+        add(name);
+    }
+    for name in &plan.user_service_packages {
+        add(name);
+    }
+    for name in &plan.storage_packages {
+        add(name);
+    }
+    for name in &plan.bootloader_packages {
+        add(name);
+    }
+    for name in &plan.network_packages {
+        add(name);
+    }
+    for name in &plan.xorg_packages {
+        add(name);
+    }
+    for name in &plan.audio_packages {
+        add(name);
+    }
+    for name in &plan.privilege_packages {
+        add(name);
+    }
     for recipe in &plan.desktop_recipes {
-        for name in &recipe.packages { add(name); }
+        for name in &recipe.packages {
+            add(name);
+        }
     }
     if package_names.is_empty() {
         bail!("package plan is empty; basestrap was not started");
@@ -163,9 +246,13 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     verify_blkid_type(&root, "ext4")?;
     for path in ["/mnt/etc", "/mnt/usr", "/mnt/var", "/mnt/boot/grub"] {
         match fs::symlink_metadata(path) {
-            Ok(_) => bail!("target contents changed during preflight ({path} now exists); basestrap was not started"),
+            Ok(_) => bail!(
+                "target contents changed during preflight ({path} now exists); basestrap was not started"
+            ),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error).with_context(|| format!("reinspect {path} before basestrap")),
+            Err(error) => {
+                return Err(error).with_context(|| format!("reinspect {path} before basestrap"));
+            }
         }
     }
 
@@ -173,12 +260,16 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     command.arg(TARGET_ROOT).args(&package_names);
     let status = command.status().context("start Artix basestrap")?;
     if !status.success() {
-        bail!("basestrap exited with {status}; inspect /mnt before retrying. No later configuration stage was run");
+        bail!(
+            "basestrap exited with {status}; inspect /mnt before retrying. No later configuration stage was run"
+        );
     }
 
     Ok(format!(
         "basestrap installed {} packages to {} on {}. The target mounts were verified before installation. No fstab, users, passwords, services, bootloader or chroot configuration has been changed.",
-        package_names.len(), TARGET_ROOT, selected.display()
+        package_names.len(),
+        TARGET_ROOT,
+        selected.display()
     ))
 }
 
@@ -186,17 +277,20 @@ fn verify_no_unexpected_target_mounts() -> Result<()> {
     let contents = fs::read_to_string("/proc/self/mountinfo")
         .context("read mount table to check for unexpected target mounts")?;
     for line in contents.lines() {
-        let (left, _) = match line.split_once(" - ") { Some(parts) => parts, None => continue };
+        let (left, _) = match line.split_once(" - ") {
+            Some(parts) => parts,
+            None => continue,
+        };
         let fields: Vec<_> = left.split_whitespace().collect();
-        if fields.len() < 5 { continue; }
+        if fields.len() < 5 {
+            continue;
+        }
         let mountpoint = fields[4]
             .replace("\\040", " ")
-            .replace("\\011", "\\t")
-            .replace("\\012", "\\n")
+            .replace("\\011", "\t")
+            .replace("\\012", "\n")
             .replace("\\134", "\\\\");
-        if mountpoint.starts_with("/mnt/")
-            && mountpoint != TARGET_BOOT
-        {
+        if mountpoint.starts_with("/mnt/") && mountpoint != TARGET_BOOT {
             bail!("unexpected nested mount {mountpoint} exists under /mnt; refusing basestrap");
         }
     }
@@ -209,9 +303,19 @@ fn verify_blkid_type(device: &Path, expected: &str) -> Result<()> {
         .arg(device)
         .output()
         .with_context(|| format!("inspect filesystem on {}", device.display()))?;
-    let actual = String::from_utf8_lossy(&result.stdout).trim().to_ascii_lowercase();
+    let actual = String::from_utf8_lossy(&result.stdout)
+        .trim()
+        .to_ascii_lowercase();
     if !result.status.success() || actual != expected {
-        bail!("expected {expected} filesystem on {}, found {}; refusing basestrap", device.display(), if actual.is_empty() { "unknown" } else { &actual });
+        bail!(
+            "expected {expected} filesystem on {}, found {}; refusing basestrap",
+            device.display(),
+            if actual.is_empty() {
+                "unknown"
+            } else {
+                &actual
+            }
+        );
     }
     Ok(())
 }
@@ -222,19 +326,43 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
     let expected = fs::canonicalize(expected_device)?;
     let wanted = mountpoint.to_string_lossy();
     for line in contents.lines() {
-        let (left, right) = match line.split_once(" - ") { Some(parts) => parts, None => continue };
+        let (left, right) = match line.split_once(" - ") {
+            Some(parts) => parts,
+            None => continue,
+        };
         let before: Vec<_> = left.split_whitespace().collect();
         let after: Vec<_> = right.split_whitespace().collect();
-        if before.len() < 5 || after.len() < 2 { continue; }
-        let mounted_at = before[4].replace("\\040", " ").replace("\\011", "\t").replace("\\012", "\n").replace("\\134", "\\");
+        if before.len() < 5 || after.len() < 2 {
+            continue;
+        }
+        let mounted_at = before[4]
+            .replace("\\040", " ")
+            .replace("\\011", "\t")
+            .replace("\\012", "\n")
+            .replace("\\134", "\\");
         if mounted_at == wanted {
-            let source = after[1].replace("\\040", " ").replace("\\011", "\t").replace("\\012", "\n").replace("\\134", "\\");
-            let actual = fs::canonicalize(&source).with_context(|| format!("resolve mounted source {source}"))?;
-            if actual == expected { return Ok(()); }
-            bail!("{} is mounted from {}, not selected device {}", mountpoint.display(), source, expected_device.display());
+            let source = after[1]
+                .replace("\\040", " ")
+                .replace("\\011", "\t")
+                .replace("\\012", "\n")
+                .replace("\\134", "\\");
+            let actual = fs::canonicalize(&source)
+                .with_context(|| format!("resolve mounted source {source}"))?;
+            if actual == expected {
+                return Ok(());
+            }
+            bail!(
+                "{} is mounted from {}, not selected device {}",
+                mountpoint.display(),
+                source,
+                expected_device.display()
+            );
         }
     }
-    bail!("{} is not a verified mountpoint; refusing basestrap", mountpoint.display())
+    bail!(
+        "{} is not a verified mountpoint; refusing basestrap",
+        mountpoint.display()
+    )
 }
 
 fn executable_on_path(program: &str) -> bool {
