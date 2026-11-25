@@ -240,6 +240,58 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         bail!("pacman is not installed or not on PATH; no packages were installed");
     }
 
+    // Re-read the partition table and block-device topology after package checks,
+    // immediately before the package manager is allowed to write to the target.
+    let latest_table = Command::new("sfdisk")
+        .arg("--dump")
+        .arg(&disk)
+        .output()
+        .context("re-read target partition table immediately before basestrap")?;
+    if !latest_table.status.success() {
+        bail!("target partition table could not be reverified; basestrap was not started");
+    }
+    let latest_text = String::from_utf8(latest_table.stdout)
+        .context("latest sfdisk output is not valid UTF-8")?;
+    let latest_paths: Vec<PathBuf> = latest_text
+        .lines()
+        .filter(|line| line.trim_start().starts_with("/dev/"))
+        .filter_map(|line| {
+            line.split_once(':')
+                .map(|(path, _)| PathBuf::from(path.trim()))
+        })
+        .collect();
+    if latest_text
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("label:"))
+        .map(str::trim)
+        != Some("gpt")
+        || latest_paths.len() != expected_count
+        || fs::canonicalize(latest_paths.first().context("latest table has no EFI partition")?)?
+            != efi
+        || fs::canonicalize(latest_paths.last().context("latest table has no root partition")?)?
+            != root
+    {
+        bail!("target partition table changed during preflight; basestrap was not started");
+    }
+    let latest_hardware = discovery::discover();
+    let latest_target = latest_hardware
+        .disks
+        .iter()
+        .find(|candidate| same_device_path(&candidate.path, &disk))
+        .context("target disk disappeared from final block-device discovery")?;
+    if !latest_target.safety_checks_complete
+        || latest_target.size_bytes == 0
+        || latest_target.read_only
+        || latest_target.has_holders
+        || latest_target.active_swap
+        || !latest_target.mounted_at.is_empty()
+        || latest_target.partitions.len() != expected_count
+    {
+        bail!("target disk failed final safety discovery; basestrap was not started");
+    }
+    verify_target_partition(latest_target, &efi, TARGET_BOOT)?;
+    verify_target_partition(latest_target, &root, TARGET_ROOT)?;
+
     // Recheck mounts, filesystem identities and the pristine target immediately
     // before the package manager is allowed to write to it.
     verify_mount_source(Path::new(TARGET_ROOT), &root)?;
