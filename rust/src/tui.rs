@@ -100,8 +100,12 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                 }
                 KeyCode::Char('d') if !app.section_open => app.toggle_disks(),
                 KeyCode::Char('m') if !app.section_open => app.toggle_storage(),
-                KeyCode::Up | KeyCode::Char('k') if app.section_open => app.adjust(-1),
-                KeyCode::Down | KeyCode::Char('j') if app.section_open => app.adjust(1),
+                KeyCode::Up | KeyCode::Char('k') if app.section_open => {
+                    app.move_choice_cursor(-1)
+                }
+                KeyCode::Down | KeyCode::Char('j') if app.section_open => {
+                    app.move_choice_cursor(1)
+                }
                 KeyCode::Up | KeyCode::Char('k') => app.move_selection(-1),
                 KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
                 KeyCode::Left | KeyCode::Char('h') if app.section_open => {
@@ -118,12 +122,11 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                     } else if app.selected == 1 {
                         app.toggle_disks();
                     } else {
-                        app.section_open = true;
-                        app.multi_cursor = 0;
+                        app.enter_section();
                     }
                 }
                 KeyCode::Enter if app.section_open => {
-                    app.section_open = false;
+                    app.confirm_section_choice();
                 }
                 KeyCode::Char(' ') if app.section_open && matches!(app.selected, 6 | 7) => {
                     app.toggle_multi_selection();
@@ -136,8 +139,8 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                         app.multi_cursor = 0;
                     }
                 }
-                KeyCode::Char(' ') if app.section_open && matches!(app.selected, 5 | 14 | 17) => {
-                    app.adjust(1)
+                KeyCode::Char(' ') if app.section_open && matches!(app.selected, 6 | 7) => {
+                    app.toggle_multi_selection();
                 }
                 KeyCode::Char('p') if !app.section_open => app.show_plan = !app.show_plan,
                 KeyCode::Char('?') if !app.section_open => app.show_help = !app.show_help,
@@ -278,10 +281,6 @@ fn render(frame: &mut Frame<'_>, app: &App) {
         };
         frame.render_widget(Paragraph::new(instruction), sections[0]);
 
-        let current_index = options
-            .iter()
-            .position(|(_, selected)| *selected)
-            .unwrap_or(0);
         let items: Vec<ListItem<'_>> = options
             .iter()
             .map(|(name, selected)| {
@@ -313,11 +312,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             )
             .highlight_symbol("▸ ");
         let mut list_state = ratatui::widgets::ListState::default();
-        let cursor = if multi {
-            app.multi_cursor.min(count.saturating_sub(1))
-        } else {
-            current_index
-        };
+        let cursor = app.multi_cursor.min(count.saturating_sub(1));
         if count > 0 {
             list_state.select(Some(cursor));
         }
