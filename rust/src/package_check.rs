@@ -310,9 +310,8 @@ mod tests {
                 item.name == "base" && item.availability == Availability::Available
             })
         );
-        assert!(report.checks.iter().any(|item| {
-            item.name == "base-devel" && item.availability == Availability::Missing
-        }));
+        assert!(!report.checks.iter().any(|item| item.name == "base-devel"));
+        assert!(report.checks.iter().any(|item| item.name == "autoconf"));
         assert!(report.has_problems());
     }
 
