@@ -663,7 +663,7 @@ impl App {
                 }
             },
             7 => {
-                "Multi-select kernels. Standard linux remains selected as the fallback. Left/Right moves the cursor; Space toggles."
+                "Multi-select kernels. Standard linux remains selected as the fallback. Up/Down moves the cursor; Space toggles."
             }
             8 => "Intel, AMD or Other / VM CPU choice for microcode selection.",
             9 => "Intel, AMD, NVIDIA, hybrid Intel+NVIDIA or VM/basic Mesa graphics choice.",
