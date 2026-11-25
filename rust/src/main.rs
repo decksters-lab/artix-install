@@ -145,10 +145,9 @@ fn run() -> Result<()> {
         if !has_explicit_config {
             bail!("--format-root requires an explicit --config file");
         }
-        let confirmation = args
-            .confirm_partition
-            .as_deref()
-            .context("--format-root requires --confirm-partition with the exact root partition path")?;
+        let confirmation = args.confirm_partition.as_deref().context(
+            "--format-root requires --confirm-partition with the exact root partition path",
+        )?;
         let environment = discovery::discover();
         let report = preflight::run(&config, &environment);
         print!("{}", report.render());
