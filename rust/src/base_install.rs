@@ -244,11 +244,11 @@ fn executable_on_path(program: &str) -> bool {
 }
 
 fn libc_geteuid() -> u32 {
-    // libc is not a direct dependency; read the effective UID from procfs instead.
+    // Read the effective UID from procfs without adding a libc dependency.
     fs::read_to_string("/proc/self/status")
         .ok()
         .and_then(|contents| contents.lines().find(|line| line.starts_with("Uid:")))
-        .and_then(|line| line.split_whitespace().nth(2))
+        .and_then(|line| line.split_whitespace().nth(1))
         .and_then(|value| value.parse().ok())
         .unwrap_or(u32::MAX)
 }
