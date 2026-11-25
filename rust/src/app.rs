@@ -833,7 +833,12 @@ impl App {
             6 => self
                 .available_desktop_choices()
                 .iter()
-                .map(|c| (c.to_string(), self.config.software.desktop_environments.contains(c)))
+                .map(|c| {
+                    (
+                        c.to_string(),
+                        self.config.software.desktop_environments.contains(c),
+                    )
+                })
                 .collect(),
             7 => KERNEL_CHOICES
                 .iter()
@@ -919,7 +924,10 @@ mod tests {
     fn changing_away_from_dinit_removes_cosmalia_selection() {
         let mut app = App::new(InstallConfig::default(), sample_hardware());
         app.selected = 0;
-        app.config.software.desktop_environments.push(Desktop::Cosmalia);
+        app.config
+            .software
+            .desktop_environments
+            .push(Desktop::Cosmalia);
 
         app.adjust(1);
 
