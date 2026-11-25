@@ -203,7 +203,7 @@ pub fn format_automatic_root(config: &InstallConfig, typed_confirmation: &str) -
     config.validate().map_err(|issues| {
         anyhow::anyhow!(
             "configuration validation failed:\n- {}",
-            issues.join("\\n- ")
+            issues.join("\n- ")
         )
     })?;
     if libc_effective_uid() != 0 {
