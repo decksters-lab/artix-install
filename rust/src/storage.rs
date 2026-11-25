@@ -603,8 +603,10 @@ pub fn generate_automatic_fstab(config: &InstallConfig) -> Result<String> {
         bail!("/mnt/etc is not a real directory; refusing to write fstab");
     }
     let fstab = etc.join("fstab");
-    if fs::symlink_metadata(&fstab).is_ok() {
-        bail!("/mnt/etc/fstab already exists; refusing to overwrite or append to it");
+    match fs::symlink_metadata(&fstab) {
+        Ok(_) => bail!("/mnt/etc/fstab already exists; refusing to overwrite or append to it"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).context("inspect /mnt/etc/fstab before writing"),
     }
 
     let generated = Command::new("fstabgen")
@@ -631,7 +633,11 @@ pub fn generate_automatic_fstab(config: &InstallConfig) -> Result<String> {
         file.write_all(contents.as_bytes())
             .context("write generated fstab")?;
         file.sync_all().context("flush generated fstab to disk")?;
-        fs::rename(&temporary, &fstab).context("atomically install generated /etc/fstab")?;
+        fs::hard_link(&temporary, &fstab)
+            .context("install generated /etc/fstab without replacing an existing file")?;
+        fs::remove_file(&temporary).context("remove temporary fstab link")?;
+        let directory = fs::File::open(etc).context("open /mnt/etc to sync directory metadata")?;
+        directory.sync_all().context("sync /mnt/etc directory metadata")?;
         Ok(())
     })() {
         let _ = fs::remove_file(&temporary);
