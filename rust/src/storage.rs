@@ -417,6 +417,228 @@ pub fn prepare_automatic_efi(config: &InstallConfig, typed_confirmation: &str) -
     })
 }
 
+
+/// Mount the verified automatic UEFI/ext4 layout at /mnt for the next install stage.
+/// This operation never formats devices and rolls back mounts it created on failure.
+pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) -> Result<String> {
+    config.validate().map_err(|issues| anyhow::anyhow!(
+        "configuration validation failed:\n- {}", issues.join("\n- ")
+    ))?;
+    if libc_effective_uid() != 0 {
+        bail!("mounting the installation target requires effective UID 0");
+    }
+    if config.disk.partitioning != Partitioning::Automatic
+        || config.system.firmware != FirmwareMode::Uefi
+        || config.disk.root_filesystem != Filesystem::Ext4
+        || config.disk.encryption
+    {
+        bail!("target mounting currently supports unencrypted automatic UEFI layouts with ext4 root only");
+    }
+    let selected = config.disk.target.as_deref()
+        .context("select a target disk before mounting")?;
+    validate_confirmation(selected, typed_confirmation)?;
+
+    let hardware = discovery::discover();
+    let disk = find_safe_target(&hardware, selected)?;
+    let identity = TargetIdentity::from_disk(disk);
+    let table = read_partition_table(selected)?;
+    verify_partition_table_dump(config, &table)?;
+    let efi_path = first_partition_path(&table)?;
+    let root_path = root_partition_path(&table)?;
+    let efi = disk.partitions.iter().find(|p| same_device_path(&p.path, &efi_path))
+        .context("EFI partition is missing from fresh discovery")?;
+    let root = disk.partitions.iter().find(|p| same_device_path(&p.path, &root_path))
+        .context("root partition is missing from fresh discovery")?;
+    validate_format_target(efi, &efi_path)?;
+    validate_format_target(root, &root_path)?;
+
+    verify_filesystem_type(&efi_path, "vfat")?;
+    verify_filesystem_type(&root_path, "ext4")?;
+    ensure_mount_tools()?;
+    ensure_empty_mount_root(Path::new("/mnt"))?;
+
+    // Recheck the disk, partition table, mount state and filesystem signatures immediately
+    // before making the first mount.
+    let latest = discovery::discover();
+    let latest_disk = find_safe_target(&latest, selected)?;
+    if TargetIdentity::from_disk(latest_disk) != identity {
+        bail!("target disk identity changed before mounting; refusing to continue");
+    }
+    let latest_table = read_partition_table(selected)?;
+    verify_partition_table_dump(config, &latest_table)?;
+    if !same_device_path(&first_partition_path(&latest_table)?, &efi_path)
+        || !same_device_path(&root_partition_path(&latest_table)?, &root_path)
+    {
+        bail!("partition paths changed before mounting; refusing to continue");
+    }
+    for path in [&efi_path, &root_path] {
+        let part = latest_disk.partitions.iter()
+            .find(|p| same_device_path(&p.path, path))
+            .context("a target partition disappeared from fresh discovery")?;
+        validate_format_target(part, path)?;
+    }
+    verify_filesystem_type(&efi_path, "vfat")?;
+    verify_filesystem_type(&root_path, "ext4")?;
+    ensure_empty_mount_root(Path::new("/mnt"))?;
+
+    let root_device = fs::canonicalize(&root_path)?;
+    let efi_device = fs::canonicalize(&efi_path)?;
+    let root_mount = Path::new("/mnt");
+    let efi_mount = Path::new("/mnt/boot");
+
+    run_mount(&root_device, root_mount)
+        .context("mount the ext4 root filesystem at /mnt")?;
+    let result = (|| -> Result<()> {
+        fs::create_dir_all(efi_mount)
+            .context("create /mnt/boot inside the mounted root filesystem")?;
+        if mountpoint_is_used(efi_mount)? {
+            bail!("/mnt/boot is already a mountpoint; refusing to cover it");
+        }
+        run_mount(&efi_device, efi_mount)
+            .context("mount the EFI filesystem at /mnt/boot")?;
+        verify_mount_source(root_mount, &root_device)?;
+        verify_mount_source(efi_mount, &efi_device)?;
+        Ok(())
+    })();
+
+    if let Err(error) = result {
+        let mut rollback_errors = Vec::new();
+        if mountpoint_is_used(efi_mount).unwrap_or(false) {
+            if let Err(e) = run_umount(efi_mount) {
+                rollback_errors.push(format!("unmount /mnt/boot: {e:#}"));
+            }
+        }
+        if mountpoint_is_used(root_mount).unwrap_or(false) {
+            if let Err(e) = run_umount(root_mount) {
+                rollback_errors.push(format!("unmount /mnt: {e:#}"));
+            }
+        }
+        if rollback_errors.is_empty() {
+            return Err(error).context("mount operation failed; mounts created by this operation were rolled back");
+        }
+        bail!("{error:#}; rollback was incomplete: {}", rollback_errors.join("; "));
+    }
+
+    Ok(format!(
+        "Mounted verified ext4 root {} at /mnt and FAT EFI {} at /mnt/boot. No filesystems were formatted and no installation has started.",
+        root_path.display(), efi_path.display()
+    ))
+}
+
+fn first_partition_path(dump: &str) -> Result<std::path::PathBuf> {
+    dump.lines()
+        .find(|line| line.trim_start().starts_with("/dev/"))
+        .and_then(|line| line.split_once(':').map(|(path, _)| Path::new(path.trim())))
+        .map(Path::to_path_buf)
+        .context("partition table does not identify an EFI partition")
+}
+
+fn verify_filesystem_type(device: &Path, expected: &str) -> Result<()> {
+    let probe = Command::new("blkid")
+        .args(["-p", "-s", "TYPE", "-o", "value"])
+        .arg(device)
+        .output()
+        .with_context(|| format!("inspect filesystem on {}", device.display()))?;
+    let actual = String::from_utf8_lossy(&probe.stdout).trim().to_ascii_lowercase();
+    if !probe.status.success() || actual != expected {
+        bail!(
+            "expected {expected} filesystem on {}, found {}; refusing to mount",
+            device.display(), if actual.is_empty() { "unknown" } else { &actual }
+        );
+    }
+    Ok(())
+}
+
+fn ensure_mount_tools() -> Result<()> {
+    for tool in ["mount", "umount"] {
+        let output = Command::new(tool).arg("--version").output()
+            .with_context(|| format!("{tool} is required to mount the installation target"))?;
+        if !output.status.success() {
+            bail!("{tool} is installed but its version check failed");
+        }
+    }
+    Ok(())
+}
+
+fn ensure_empty_mount_root(path: &Path) -> Result<()> {
+    let metadata = fs::metadata(path)
+        .with_context(|| format!("inspect mount root {}", path.display()))?;
+    if !metadata.is_dir() {
+        bail!("{} exists but is not a directory", path.display());
+    }
+    if mountpoint_is_used(path)? {
+        bail!("{} is already a mountpoint; refusing to mount over it", path.display());
+    }
+    if fs::read_dir(path)
+        .with_context(|| format!("inspect contents of {}", path.display()))?
+        .next().is_some()
+    {
+        bail!("{} is not empty; move its contents or choose a different mount target", path.display());
+    }
+    Ok(())
+}
+
+fn mountinfo_entries(contents: &str) -> Vec<(String, String)> {
+    contents.lines().filter_map(|line| {
+        let (left, right) = line.split_once(" - ")?;
+        let before: Vec<_> = left.split_whitespace().collect();
+        let after: Vec<_> = right.split_whitespace().collect();
+        if before.len() < 5 || after.len() < 2 {
+            return None;
+        }
+        Some((unescape_mountinfo(before[4]), unescape_mountinfo(after[1])))
+    }).collect()
+}
+
+fn unescape_mountinfo(value: &str) -> String {
+    value.replace("\\040", " ").replace("\\011", "\t")
+        .replace("\\012", "\n").replace("\\134", "\\")
+}
+
+fn mountpoint_is_used(path: &Path) -> Result<bool> {
+    let contents = fs::read_to_string("/proc/self/mountinfo")
+        .context("read /proc/self/mountinfo to verify mount state")?;
+    let wanted = path.to_string_lossy();
+    Ok(mountinfo_entries(&contents).iter().any(|(mountpoint, _)| mountpoint == wanted))
+}
+
+fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> {
+    let contents = fs::read_to_string("/proc/self/mountinfo")
+        .context("read mount table to verify mounted source")?;
+    let wanted_mount = mountpoint.to_string_lossy();
+    let expected = fs::canonicalize(expected_device)
+        .with_context(|| format!("resolve expected mounted device {}", expected_device.display()))?;
+    for (mounted_at, source) in mountinfo_entries(&contents) {
+        if mounted_at == wanted_mount {
+            let actual = fs::canonicalize(&source)
+                .with_context(|| format!("resolve mounted source {source}"))?;
+            if actual == expected {
+                return Ok(());
+            }
+            bail!("{} is mounted from {}, not the selected device {}", mountpoint.display(), source, expected_device.display());
+        }
+    }
+    bail!("{} does not appear in the kernel mount table after mount", mountpoint.display())
+}
+
+fn run_mount(device: &Path, mountpoint: &Path) -> Result<()> {
+    let status = Command::new("mount").arg("--").arg(device).arg(mountpoint).status()
+        .with_context(|| format!("run mount for {}", mountpoint.display()))?;
+    if !status.success() {
+        bail!("mount failed for {} with {status}", mountpoint.display());
+    }
+    Ok(())
+}
+
+fn run_umount(mountpoint: &Path) -> Result<()> {
+    let status = Command::new("umount").arg("--").arg(mountpoint).status()
+        .with_context(|| format!("run umount for {}", mountpoint.display()))?;
+    if !status.success() {
+        bail!("umount failed for {} with {status}", mountpoint.display());
+    }
+    Ok(())
+}
+
 fn validate_root_format_config(config: &InstallConfig) -> Result<()> {
     if config.disk.partitioning != Partitioning::Automatic {
         bail!("root formatting currently supports automatic partition layouts only");
@@ -762,6 +984,24 @@ fn libc_effective_uid() -> u32 {
 mod tests {
     use super::*;
     use crate::config::{Filesystem, SwapConfig};
+
+
+    #[test]
+    fn mountinfo_parser_extracts_mountpoint_and_source_and_unescapes_spaces() {
+        let sample = "36 25 8:2 / /mnt/my\\040root rw,relatime - ext4 /dev/vda2 rw\n";
+        assert_eq!(
+            mountinfo_entries(sample),
+            vec![("/mnt/my root".to_string(), "/dev/vda2".to_string())]
+        );
+    }
+
+    #[test]
+    fn first_partition_path_selects_efi_and_root_path_selects_last_partition() {
+        let dump = "label: gpt\n/dev/vda1 : start=2048, size=2097152, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\n/dev/vda2 : start=2099200, size=91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\n";
+        assert_eq!(first_partition_path(dump).unwrap(), Path::new("/dev/vda1"));
+        assert_eq!(root_partition_path(dump).unwrap(), Path::new("/dev/vda2"));
+        assert!(first_partition_path("label: gpt\n").is_err());
+    }
 
     #[test]
     fn root_format_config_allows_only_unencrypted_automatic_ext4() {
