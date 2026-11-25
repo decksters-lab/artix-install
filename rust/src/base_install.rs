@@ -113,7 +113,7 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     if plan.desktop_recipes.iter().any(|recipe| recipe.source != PackageSource::Artix) {
         bail!("the selected desktop recipe needs a non-default repository or external build; resolve that source before basestrap");
     }
-    if plan.deferred.iter().any(|note| note.contains("external repository") || note.contains("Liquorix") || note.contains("CachyOS")) {
+    if !plan.kernel_notes.is_empty() || plan.deferred.len() > 2 {
         bail!("the selected package plan has unresolved external repository requirements; basestrap was not started");
     }
     let package_report = package_check::check(config, Path::new("pacman"))
@@ -158,10 +158,15 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     // before the package manager is allowed to write to it.
     verify_mount_source(Path::new(TARGET_ROOT), &root)?;
     verify_mount_source(Path::new(TARGET_BOOT), &efi)?;
+    verify_no_unexpected_target_mounts()?;
     verify_blkid_type(&efi, "vfat")?;
     verify_blkid_type(&root, "ext4")?;
-    if fs::symlink_metadata("/mnt/etc").is_ok() || fs::symlink_metadata("/mnt/usr").is_ok() {
-        bail!("target contents changed during preflight; basestrap was not started");
+    for path in ["/mnt/etc", "/mnt/usr", "/mnt/var", "/mnt/boot/grub"] {
+        match fs::symlink_metadata(path) {
+            Ok(_) => bail!("target contents changed during preflight ({path} now exists); basestrap was not started"),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).with_context(|| format!("reinspect {path} before basestrap")),
+        }
     }
 
     let mut command = Command::new("basestrap");
@@ -175,6 +180,27 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         "basestrap installed {} packages to {} on {}. The target mounts were verified before installation. No fstab, users, passwords, services, bootloader or chroot configuration has been changed.",
         package_names.len(), TARGET_ROOT, selected.display()
     ))
+}
+
+fn verify_no_unexpected_target_mounts() -> Result<()> {
+    let contents = fs::read_to_string("/proc/self/mountinfo")
+        .context("read mount table to check for unexpected target mounts")?;
+    for line in contents.lines() {
+        let (left, _) = match line.split_once(" - ") { Some(parts) => parts, None => continue };
+        let fields: Vec<_> = left.split_whitespace().collect();
+        if fields.len() < 5 { continue; }
+        let mountpoint = fields[4]
+            .replace("\\040", " ")
+            .replace("\\011", "\\t")
+            .replace("\\012", "\\n")
+            .replace("\\134", "\\\\");
+        if mountpoint.starts_with("/mnt/")
+            && mountpoint != TARGET_BOOT
+        {
+            bail!("unexpected nested mount {mountpoint} exists under /mnt; refusing basestrap");
+        }
+    }
+    Ok(())
 }
 
 fn verify_blkid_type(device: &Path, expected: &str) -> Result<()> {
