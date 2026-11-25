@@ -219,7 +219,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
     let list = List::new(items)
         .block(
             Block::default()
-                .title(" Configuration ")
+                .title(" Installation settings ")
                 .borders(Borders::ALL),
         )
         .highlight_style(
@@ -740,7 +740,7 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
     let settings_list = List::new(settings)
         .block(
             Block::default()
-                .title(" Configuration ")
+                .title(" Installation settings ")
                 .borders(Borders::ALL),
         )
         .highlight_style(
