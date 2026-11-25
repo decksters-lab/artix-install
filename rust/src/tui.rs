@@ -907,7 +907,6 @@ fn help_text() -> String {
     [
         "ARTIX SETUP — KEYBOARD HELP",
         "",
-        "Up / Down    Move through settings",
         "Up / Down    Move through settings; inside a section, move through choices",
         "Right / Enter Open a settings section",
         "Left / Esc   Return to the settings list",
