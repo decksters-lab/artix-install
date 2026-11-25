@@ -138,7 +138,7 @@ string_enum!(Bootloader { Grub => "grub", Limine => "limine", Refind => "refind"
 string_enum!(NetworkStack {
     Dhcpcd => "dhcpcd", Iwd => "iwd", NetworkManager => "network-manager"
 });
-string_enum!(PrivilegeEscalation { Doas => "doas", Sudo => "sudo" });
+string_enum!(PrivilegeEscalation { Doas => "doas", Sudo => "sudo", Both => "both" });
 string_enum!(UserServices {
     None => "none", Native => "native", Userspawn => "userspawn",
     Turnstile => "turnstile", Manual => "manual"
