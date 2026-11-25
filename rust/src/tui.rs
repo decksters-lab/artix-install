@@ -112,7 +112,11 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                 KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
                 KeyCode::Left | KeyCode::Char('h') if app.section_open => {
                     app.section_open = false;
-                    app.status = format!("{}: {}", app.setting_label(app.selected), app.setting_value(app.selected));
+                    app.status = format!(
+                        "{}: {}",
+                        app.setting_label(app.selected),
+                        app.setting_value(app.selected)
+                    );
                 }
                 KeyCode::Right | KeyCode::Char('l') => {
                     if app.section_open {
@@ -138,7 +142,9 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                         app.multi_cursor = 0;
                     }
                 }
-                KeyCode::Char(' ') if app.section_open && matches!(app.selected, 5 | 14 | 17) => app.adjust(1),
+                KeyCode::Char(' ') if app.section_open && matches!(app.selected, 5 | 14 | 17) => {
+                    app.adjust(1)
+                }
                 KeyCode::Char('p') if !app.section_open => app.show_plan = !app.show_plan,
                 KeyCode::Char('?') if !app.section_open => app.show_help = !app.show_help,
                 KeyCode::Char('s') if !app.section_open => {
@@ -254,12 +260,21 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             .wrap(Wrap { trim: true })
     } else if app.section_open {
         let multi = matches!(app.selected, 6 | 7);
-        let options = if multi { app.multi_options() } else { app.single_options() };
+        let options = if multi {
+            app.multi_options()
+        } else {
+            app.single_options()
+        };
         let count = options.len();
         let panel = block.inner(body[1]);
         let sections = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Length(2), Constraint::Min(3), Constraint::Length(2), Constraint::Min(2)])
+            .constraints([
+                Constraint::Length(2),
+                Constraint::Min(3),
+                Constraint::Length(2),
+                Constraint::Min(2),
+            ])
             .split(panel);
 
         let instruction = if multi {
