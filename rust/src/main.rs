@@ -20,7 +20,7 @@ use config::InstallConfig;
 #[command(
     name = "artix-setup",
     version,
-    about = "A configuration-driven Artix Linux installer prototype"
+    about = "An interactive Artix Linux system installer"
 )]
 struct Args {
     /// Load an installation profile from a TOML file.
