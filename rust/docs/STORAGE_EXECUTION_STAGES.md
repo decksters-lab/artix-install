@@ -2,27 +2,38 @@
 
 This document defines the staged storage workflow for the Rust installer. The command-line operations are developer/test interfaces; the eventual guided installer should orchestrate them behind one reviewed installation plan.
 
-## Supported test path today
+## Supported test path
 
 1. Read-only hardware discovery and preflight.
 2. Automatic GPT/MBR partition-table creation.
 3. Read-back verification with sfdisk, partprobe, udevadm, and fresh discovery.
 4. Automatic ext4 root formatting with exact partition confirmation and blkid verification.
 
-These stages have been exercised on a disposable Artix live-ISO VM. They do not yet constitute a complete installation.
+Stages 1–4 have been exercised on a disposable Artix live-ISO VM. They do not yet constitute a complete installation.
 
-## Next implementation stage: prepare target filesystems
+## Implemented target preparation and mounting
 
-Initial scope is intentionally limited to the tested, unencrypted, automatic UEFI layout:
+The first mount executor is intentionally limited to the unencrypted, automatic UEFI layout with ext4 root:
 
-- EFI System Partition: newly created by this installer's automatic partition-table writer; format as FAT32 only after proving that the current partition table matches the configured layout and the partition is unused.
-- Root: existing ext4 filesystem created by the tested root formatter.
-- Mount root at /mnt and EFI at /mnt/boot.
-- Verify both mounts by querying the kernel's mount table and comparing canonical source devices.
-- On any failure after mounting root, attempt rollback by unmounting in reverse order. If rollback fails, report the exact mount still present and block subsequent installation stages.
-- Do not activate swap, open encryption mappings, format additional mounts, or install packages in this stage.
+- Verify that the on-disk partition table exactly matches the configured layout.
+- Resolve the EFI and root partitions from the verified partition table and fresh block-device discovery.
+- Refuse mounted, active-swap, read-only, held, missing, or incompletely inspected partitions.
+- Verify EFI is vfat and root is ext4 with blkid. This stage never formats either partition.
+- Require /mnt to be a real, empty, unmounted directory.
+- Mount root at /mnt, then mount EFI at /mnt/boot.
+- Reject a symlink or non-directory at /mnt/boot.
+- Verify both mounts against /proc/self/mountinfo and compare canonical source devices.
+- On failure, attempt rollback in reverse order. If mount state cannot be read, still attempt unmount; report incomplete rollback rather than claiming success.
 
-The first implementation must refuse manual and dual-boot layouts, encrypted configurations, unsupported root filesystems, active/mounted/read-only/held devices, unexpected partition counts or types, and a non-empty or already-mounted target mountpoint.
+Developer/test command (not the intended end-user workflow):
+
+```sh
+sudo ./artix-setup --config vm-test.toml --mount-target --confirm-mount /dev/vda
+```
+
+This mount executor has passed formatting, compilation, Clippy, and unit-test CI. It has not yet been exercised against the disposable Artix VM; do not treat it as VM-verified until that test is complete.
+
+Manual and dual-boot layouts, encrypted configurations, non-ext4 root filesystems, additional mounts, swap activation, and package installation are outside this stage.
 
 ## fstab stage
 
