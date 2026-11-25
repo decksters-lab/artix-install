@@ -257,7 +257,11 @@ mod tests {
     fn doas_selection_uses_the_artix_package_name() {
         let mut config = InstallConfig::default();
         config.system.privilege_escalation = crate::config::PrivilegeEscalation::Doas;
-        assert!(build_package_plan(&config).privilege_packages.contains(&"opendoas"));
+        assert!(
+            build_package_plan(&config)
+                .privilege_packages
+                .contains(&"opendoas")
+        );
     }
 
     #[test]
