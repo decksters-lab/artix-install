@@ -516,9 +516,14 @@ impl App {
             && had_cosmalia_selected
             && self.config.system.init_system != InitSystem::Dinit
         {
+            let init_label = match self.config.system.init_system {
+                InitSystem::Dinit => "Dinit",
+                InitSystem::OpenRc => "OpenRC",
+                InitSystem::Runit => "runit",
+                InitSystem::S6 => "s6",
+            };
             self.status = format!(
-                "Warning: switching to {} removed Cosmalia (Dinit-only). No desktop/window manager is selected; choose one in Desktops / WMs.",
-                self.config.system.init_system
+                "Warning: switching to {init_label} removed Cosmalia (Dinit-only). No desktop/window manager is selected; choose one in Desktops / WMs."
             );
         }
     }
