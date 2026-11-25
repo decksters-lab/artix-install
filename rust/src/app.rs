@@ -942,7 +942,7 @@ mod tests {
         assert!(!app.setting_description(6).contains("cosmic-comp"));
 
         app.config.system.init_system = InitSystem::Dinit;
-        assert_eq!(app.multi_options()[15].0, "Cosmalia");
+        assert_eq!(app.multi_options()[15].0, "cosmalia");
         assert!(app.setting_description(6).contains("cosmic-comp"));
     }
 
