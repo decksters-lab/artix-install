@@ -201,9 +201,11 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         }
     }
     for name in &plan.optional_service_packages {
-        if package_report.checks.iter().any(|check| {
-            check.name.as_str() == *name && check.availability == Availability::Available
-        }) {
+        if package_report
+            .checks
+            .iter()
+            .any(|check| check.name == *name && check.availability == Availability::Available)
+        {
             add(name);
         }
     }
