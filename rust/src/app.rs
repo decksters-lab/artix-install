@@ -995,6 +995,7 @@ mod tests {
 
         let mut app = App::new(InstallConfig::default(), sample_hardware());
         app.selected = 0;
+        app.enter_section();
         app.move_choice_cursor(3);
         app.confirm_section_choice();
 
