@@ -664,6 +664,7 @@ mod tests {
     fn base_development_tools_do_not_override_privilege_choice() {
         let mut config = InstallConfig::default();
         config.system.privilege_escalation = PrivilegeEscalation::Doas;
+        config.software.desktop_environments.push(Desktop::Cosmalia);
         let plan = build_package_plan(&config);
         assert!(!plan.base_packages.contains(&"base-devel"));
         assert!(plan.base_packages.contains(&"debugedit"));
