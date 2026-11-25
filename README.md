@@ -20,7 +20,7 @@ The Rust implementation is a separate project under `rust/`. It is being develop
 - The musl build is statically linked and has been launched and smoke-tested on an Artix live ISO without Rust or Cargo.
 - It now has separately guarded storage and base-install stages, but it is **not a complete installer** and is not ready for real installations. See the Rust prototype status and safety notes below.
 
-When a tested release is available, download and extract the appropriate archive from [GitHub Releases](https://github.com/decksters-lab/artix-install/releases), then run `./artix-setup` from a terminal. Until then, use the Bash installer for actual installations.
+When a tested release is available, download and extract the appropriate archive from [GitHub Releases](https://github.com/decksters-lab/artix-install/releases), then run `./agsi` from a terminal. Until then, use the Bash installer for actual installations.
 
 ---
 
@@ -173,12 +173,12 @@ The musl build is intended to be statically linked and is checked for an ELF int
 
 For source-build instructions, checksum guidance, and verification of GitHub's signed build-provenance attestations, see [SUPPLY_CHAIN.md](rust/docs/SUPPLY_CHAIN.md). A committed Cargo.lock, locked builds, reproducible-build checks, and an Artix package recipe are still outstanding.
 
-The executable is named `artix-setup`. Extract the archive and run it from a terminal:
+The executable is named `agsi`. Extract the archive and run it from a terminal:
 
 ```sh
-tar -xzf artix-setup-x86_64-linux-musl.tar.gz
-cd artix-setup-musl
-./artix-setup
+tar -xzf agsi-x86_64-linux-musl.tar.gz
+cd agsi-musl
+./agsi
 ```
 
 This prototype currently supports guarded automatic partition-table writing, unencrypted ext4 root formatting, EFI preparation, mounting, fstab generation, and a separately confirmed Artix basestrap stage for automatic UEFI/ext4 targets. It does not yet configure the installed system, users, bootloader, services, or reboot, so it is not a complete installer. Do not use it for an actual installation yet.
