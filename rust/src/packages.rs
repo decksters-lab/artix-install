@@ -263,7 +263,7 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         Vec::new()
     };
     let privilege_packages = match config.system.privilege_escalation {
-        PrivilegeEscalation::Doas => vec!["doas"],
+        PrivilegeEscalation::Doas => vec!["opendoas"],
         PrivilegeEscalation::Sudo => vec!["sudo"],
     };
     let desktop_recipes = config
