@@ -338,6 +338,12 @@ impl App {
                 {
                     self.config.system.user_services = UserServices::None;
                 }
+                if self.config.system.init_system != InitSystem::Dinit {
+                    self.config
+                        .software
+                        .desktop_environments
+                        .retain(|desktop| *desktop != Desktop::Cosmalia);
+                }
             }
             1 => {
                 self.status = "Disk selection is read-only in this milestone. No device is chosen implicitly.".into();
@@ -505,7 +511,9 @@ impl App {
     pub fn toggle_multi_selection(&mut self) {
         match self.selected {
             6 => {
-                let choice = DESKTOP_CHOICES[self.multi_cursor];
+                let Some(choice) = self.available_desktop_choices().get(self.multi_cursor).copied() else {
+                    return;
+                };
                 if choice == Desktop::Cosmalia
                     && self.config.system.init_system != InitSystem::Dinit
                     && !self.config.software.desktop_environments.contains(&choice)
@@ -659,9 +667,7 @@ impl App {
                 InitSystem::Dinit => {
                     "Multi-select desktops and window managers. Cosmalia is a Dinit-only session; its launcher runs cosmic-comp --no-xwayland with Noctalia as the shell."
                 }
-                _ => {
-                    "Multi-select desktops and window managers. Cosmalia is Dinit-only and is unavailable with the currently selected init system."
-                }
+                _ => "Multi-select desktops and window managers supported by the selected init system.",
             },
             7 => {
                 "Multi-select kernels. Standard linux remains selected as the fallback. Up/Down moves the cursor; Space toggles."
@@ -811,20 +817,23 @@ impl App {
             .collect()
     }
 
+    fn available_desktop_choices(&self) -> Vec<Desktop> {
+        DESKTOP_CHOICES
+            .iter()
+            .copied()
+            .filter(|desktop| {
+                *desktop != Desktop::Cosmalia
+                    || self.config.system.init_system == InitSystem::Dinit
+            })
+            .collect()
+    }
+
     pub fn multi_options(&self) -> Vec<(String, bool)> {
         match self.selected {
-            6 => DESKTOP_CHOICES
+            6 => self
+                .available_desktop_choices()
                 .iter()
-                .map(|c| {
-                    let name = if *c == Desktop::Cosmalia
-                        && self.config.system.init_system != InitSystem::Dinit
-                    {
-                        format!("{c} (Dinit only — unavailable)")
-                    } else {
-                        c.to_string()
-                    };
-                    (name, self.config.software.desktop_environments.contains(c))
-                })
+                .map(|c| (c.to_string(), self.config.software.desktop_environments.contains(c)))
                 .collect(),
             7 => KERNEL_CHOICES
                 .iter()
@@ -895,27 +904,42 @@ mod tests {
     use crate::discovery::{BlockDevice, BlockPartition};
 
     #[test]
-    fn unavailable_cosmalia_can_still_be_unselected_after_changing_init() {
+    fn cosmalia_is_hidden_when_init_is_not_dinit() {
         let mut app = App::new(InstallConfig::default(), sample_hardware());
         app.selected = 6;
         app.config.system.init_system = InitSystem::OpenRc;
-        app.config
-            .software
-            .desktop_environments
-            .push(Desktop::Cosmalia);
-        app.multi_cursor = DESKTOP_CHOICES
-            .iter()
-            .position(|choice| *choice == Desktop::Cosmalia)
-            .unwrap();
 
-        app.toggle_multi_selection();
+        let options = app.multi_options();
+        assert_eq!(options.len(), DESKTOP_CHOICES.len() - 1);
+        assert!(!options.iter().any(|(name, _)| name == "cosmalia"));
+        assert!(app.setting_description(6).contains("selected init system"));
+    }
 
+    #[test]
+    fn changing_away_from_dinit_removes_cosmalia_selection() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.selected = 0;
+        app.config.software.desktop_environments.push(Desktop::Cosmalia);
+
+        app.adjust(1);
+
+        assert_eq!(app.config.system.init_system, InitSystem::OpenRc);
         assert!(
             !app.config
                 .software
                 .desktop_environments
                 .contains(&Desktop::Cosmalia)
         );
+    }
+
+    #[test]
+    fn cosmalia_is_available_when_init_is_dinit() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.selected = 6;
+
+        let options = app.multi_options();
+        assert_eq!(options.len(), DESKTOP_CHOICES.len());
+        assert!(options.iter().any(|(name, _)| name == "cosmalia"));
     }
 
     #[test]
