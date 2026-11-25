@@ -51,7 +51,7 @@ jobs:
 
       - name: Smoke-test executable
         run: |
-          BIN="rust/target/${{ matrix.target }}/release/artix-setup"
+          BIN="rust/target/${{ matrix.target }}/release/agsi"
           "$BIN" --version
           "$BIN" --hardware
           "$BIN" --plan
@@ -67,37 +67,37 @@ jobs:
         run: |
           set -eu
           LABEL="${{ matrix.label }}"
-          BIN="rust/target/${{ matrix.target }}/release/artix-setup"
-          mkdir -p "dist/artix-setup-${LABEL}"
-          install -m 0755 "$BIN" "dist/artix-setup-${LABEL}/artix-setup"
-          cat > "dist/artix-setup-${LABEL}/README.txt" <<EOF
-          Artix Setup standalone Linux executable
+          BIN="rust/target/${{ matrix.target }}/release/agsi"
+          mkdir -p "dist/agsi-${LABEL}"
+          install -m 0755 "$BIN" "dist/agsi-${LABEL}/agsi"
+          cat > "dist/agsi-${LABEL}/README.txt" <<EOF
+          AGSI (Artix Granular System Installer) standalone Linux executable
           Architecture: x86_64
           Build target: ${{ matrix.target }}
 
           Run from a terminal with:
-            ./artix-setup
+            ./agsi
 
           This archive contains a prebuilt executable. Rust and Cargo are
           not required on the target Artix live environment.
           EOF
-          tar -C dist -czf "dist/artix-setup-x86_64-linux-${LABEL}.tar.gz" "artix-setup-${LABEL}"
+          tar -C dist -czf "dist/agsi-x86_64-linux-${LABEL}.tar.gz" "artix-setup-${LABEL}"
           cd dist
-          sha256sum "artix-setup-x86_64-linux-${LABEL}.tar.gz" > "artix-setup-x86_64-linux-${LABEL}.tar.gz.sha256"
+          sha256sum "agsi-x86_64-linux-${LABEL}.tar.gz" > "agsi-x86_64-linux-${LABEL}.tar.gz.sha256"
 
       - name: Attest packaged archive provenance
         if: github.event_name != 'pull_request'
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: dist/artix-setup-x86_64-linux-${{ matrix.label }}.tar.gz
+          subject-path: dist/agsi-x86_64-linux-${{ matrix.label }}.tar.gz
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artix-setup-x86_64-linux-${{ matrix.label }}
+          name: agsi-x86_64-linux-${{ matrix.label }}
           path: |
-            dist/artix-setup-x86_64-linux-${{ matrix.label }}.tar.gz
-            dist/artix-setup-x86_64-linux-${{ matrix.label }}.tar.gz.sha256
+            dist/agsi-x86_64-linux-${{ matrix.label }}.tar.gz
+            dist/agsi-x86_64-linux-${{ matrix.label }}.tar.gz.sha256
           if-no-files-found: error
 
   release:
@@ -112,7 +112,7 @@ jobs:
       - name: Download both build artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: artix-setup-x86_64-linux-*
+          pattern: agsi-x86_64-linux-*
           path: dist
           merge-multiple: true
 
