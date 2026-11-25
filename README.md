@@ -11,7 +11,7 @@ This is the original, fully featured installer and remains the recommended optio
 
 [Jump to Bash installation instructions](#bash-installer-requirements-and-usage)
 
-### 2. Rust installer — experimental
+### 2. Artix Granular System Installer — experimental
 
 The Rust implementation is a separate project under `rust/`. It is being developed toward feature parity and does **not** replace or modify the Bash installer.
 
