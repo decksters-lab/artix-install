@@ -508,6 +508,7 @@ impl App {
                 let choice = DESKTOP_CHOICES[self.multi_cursor];
                 if choice == Desktop::Cosmalia
                     && self.config.system.init_system != InitSystem::Dinit
+                    && !self.config.software.desktop_environments.contains(&choice)
                 {
                     self.status = "Cosmalia is only available with dinit.".into();
                     return;
@@ -892,6 +893,30 @@ fn cycle<T: Copy + PartialEq>(current: T, options: &[T], delta: isize) -> T {
 mod tests {
     use super::*;
     use crate::discovery::{BlockDevice, BlockPartition};
+
+    #[test]
+    fn unavailable_cosmalia_can_still_be_unselected_after_changing_init() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.selected = 6;
+        app.config.system.init_system = InitSystem::OpenRc;
+        app.config
+            .software
+            .desktop_environments
+            .push(Desktop::Cosmalia);
+        app.multi_cursor = DESKTOP_CHOICES
+            .iter()
+            .position(|choice| *choice == Desktop::Cosmalia)
+            .unwrap();
+
+        app.toggle_multi_selection();
+
+        assert!(
+            !app.config
+                .software
+                .desktop_environments
+                .contains(&Desktop::Cosmalia)
+        );
+    }
 
     #[test]
     fn single_choice_cursor_waits_for_enter_before_applying() {
