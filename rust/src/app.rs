@@ -726,9 +726,7 @@ impl App {
             self.section_open = false;
             return;
         }
-        let current = options
-            .iter()
-            .position(|(_, selected)| *selected);
+        let current = options.iter().position(|(_, selected)| *selected);
         let target = self.multi_cursor.min(options.len() - 1);
         let delta = current.map_or(0, |current| {
             (target + options.len() - current) % options.len()
