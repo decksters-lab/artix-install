@@ -1,7 +1,6 @@
 //! Guarded Artix base-system installation through basestrap.
 //! This stage is deliberately limited to the tested automatic UEFI/ext4 layout.
 use std::{
-    collections::BTreeSet,
     env, fs,
     os::unix::fs::FileTypeExt,
     path::{Path, PathBuf},
@@ -25,7 +24,7 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     config.validate().map_err(|issues| {
         anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
     })?;
-    if unsafe { libc_geteuid() } != 0 {
+    if libc_geteuid() != 0 {
         bail!("basestrap requires effective UID 0");
     }
 
