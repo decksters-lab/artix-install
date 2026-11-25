@@ -77,10 +77,9 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
             if app.show_disks {
                 match key.code {
                     KeyCode::Char('q') => break,
-                    KeyCode::Left
-                    | KeyCode::Esc
-                    | KeyCode::Backspace
-                    | KeyCode::Char('d') => app.toggle_disks(),
+                    KeyCode::Left | KeyCode::Esc | KeyCode::Backspace | KeyCode::Char('d') => {
+                        app.toggle_disks()
+                    }
                     KeyCode::Up | KeyCode::Char('k') => app.move_disk_selection(-1),
                     KeyCode::Down | KeyCode::Char('j') => app.move_disk_selection(1),
                     KeyCode::Enter => app.select_disk(),
@@ -812,12 +811,10 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
     }
     frame.render_stateful_widget(disk_list, right[0], &mut disk_state);
 
-    let mut details = vec![
-        Line::from(Span::styled(
-            "SELECTED DEVICE DETAILS",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-    ];
+    let mut details = vec![Line::from(Span::styled(
+        "SELECTED DEVICE DETAILS",
+        Style::default().add_modifier(Modifier::BOLD),
+    ))];
     if let Some(disk) = app.hardware.disks.get(app.selected_disk) {
         details.push(Line::from(format!(
             "{}  ({})",
@@ -856,10 +853,7 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
     }
     if !app.hardware.warnings.is_empty() {
         details.push(Line::from(Span::styled(
-            format!(
-                "Discovery warnings: {}",
-                app.hardware.warnings.join("; ")
-            ),
+            format!("Discovery warnings: {}", app.hardware.warnings.join("; ")),
             Style::default().fg(Color::Yellow),
         )));
     }
