@@ -637,7 +637,9 @@ pub fn generate_automatic_fstab(config: &InstallConfig) -> Result<String> {
             .context("install generated /etc/fstab without replacing an existing file")?;
         fs::remove_file(&temporary).context("remove temporary fstab link")?;
         let directory = fs::File::open(etc).context("open /mnt/etc to sync directory metadata")?;
-        directory.sync_all().context("sync /mnt/etc directory metadata")?;
+        directory
+            .sync_all()
+            .context("sync /mnt/etc directory metadata")?;
         Ok(())
     })() {
         let _ = fs::remove_file(&temporary);
