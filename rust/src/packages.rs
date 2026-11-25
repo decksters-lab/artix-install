@@ -285,6 +285,7 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
             "automake",
             "binutils",
             "bison",
+            "debugedit",
             "esysusers",
             "etmpfiles",
             "fakeroot",
@@ -458,7 +459,6 @@ fn recipe(desktop: Desktop, config: &InstallConfig, deferred: &mut Vec<String>) 
             Cosmalia => (
                 vec![
                     "git",
-                    "base-devel",
                     "cosmic-comp",
                     "noctalia",
                     "cosmic-settings",
@@ -666,7 +666,10 @@ mod tests {
         config.system.privilege_escalation = PrivilegeEscalation::Doas;
         let plan = build_package_plan(&config);
         assert!(!plan.base_packages.contains(&"base-devel"));
+        assert!(plan.base_packages.contains(&"debugedit"));
         assert!(!plan.base_packages.contains(&"sudo"));
+        assert!(plan.desktop_recipes.iter().filter(|recipe| recipe.desktop == Desktop::Cosmalia)
+            .all(|recipe| !recipe.packages.contains(&"base-devel")));
         assert_eq!(plan.privilege_packages, ["opendoas"]);
 
         config.system.privilege_escalation = PrivilegeEscalation::Sudo;
