@@ -124,7 +124,7 @@ jobs:
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG_NAME="${GITHUB_REF_NAME}"
           else
-            TAG_NAME="v0.1.0-test4"
+            TAG_NAME="v0.1.0-test5"
           fi
-          gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --target "${GITHUB_SHA}" --title "Artix Setup v0.1.0-test4 (test)" --notes "Pre-release test build from commit ${GITHUB_SHA}. Not a production release."
+          gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --target "${GITHUB_SHA}" --title "Artix Setup v0.1.0-test5 (test)" --notes "Pre-release test build from commit ${GITHUB_SHA}. Not a production release."
           gh release upload "$TAG_NAME" dist/* --clobber
