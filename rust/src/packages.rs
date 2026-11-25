@@ -276,9 +276,36 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
         .collect();
 
     PackagePlan {
+        // Install the Artix base-devel toolchain explicitly instead of the
+        // base-devel group: that group depends on sudo, which would silently
+        // defeat a user's doas-only selection.
         base_packages: vec![
             "base",
-            "base-devel",
+            "autoconf",
+            "automake",
+            "binutils",
+            "bison",
+            "esysusers",
+            "etmpfiles",
+            "fakeroot",
+            "file",
+            "findutils",
+            "flex",
+            "gawk",
+            "gcc",
+            "gettext",
+            "grep",
+            "groff",
+            "gzip",
+            "libtool",
+            "m4",
+            "make",
+            "pacman",
+            "patch",
+            "pkgconf",
+            "sed",
+            "texinfo",
+            "which",
             "linux-firmware",
             "ttf-dejavu",
             "ttf-liberation",
@@ -631,6 +658,22 @@ mod tests {
         config.system.privilege_escalation = PrivilegeEscalation::Both;
         let plan = build_package_plan(&config);
         assert_eq!(plan.privilege_packages, ["opendoas", "sudo"]);
+    }
+
+    #[test]
+    fn base_development_tools_do_not_override_privilege_choice() {
+        let mut config = InstallConfig::default();
+        config.system.privilege_escalation = PrivilegeEscalation::Doas;
+        let plan = build_package_plan(&config);
+        assert!(!plan.base_packages.contains(&"base-devel"));
+        assert!(!plan.base_packages.contains(&"sudo"));
+        assert_eq!(plan.privilege_packages, ["opendoas"]);
+
+        config.system.privilege_escalation = PrivilegeEscalation::Sudo;
+        assert_eq!(
+            build_package_plan(&config).privilege_packages,
+            ["sudo"]
+        );
     }
 
     #[test]
