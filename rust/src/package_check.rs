@@ -162,16 +162,16 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
             continue;
         }
 
-        let is_group = matches!(name.as_str(), "base" | "base-devel");
-        let query = if is_group { "-Sg" } else { "-Si" };
+        // Artix publishes base and base-devel as installable meta-packages;
+        // -Sg only searches group metadata and incorrectly reports them missing.
+        let query = "-Si";
         let target = repository_target(&name, source);
         let result = Command::new(pacman)
             .arg(query)
             .arg(&target)
             .output()
             .with_context(|| format!("run {} {query} {target}", pacman.display()))?;
-        let found_group = !is_group || !result.stdout.is_empty();
-        if result.status.success() && found_group {
+        if result.status.success() {
             checks.push(PackageCheck {
                 name,
                 source,
@@ -180,8 +180,7 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
             });
         } else {
             let stderr = String::from_utf8_lossy(&result.stderr);
-            let missing =
-                (is_group && result.stdout.is_empty()) || is_missing_error(&stderr, &name);
+            let missing = is_missing_error(&stderr, &name);
             checks.push(PackageCheck {
                 name,
                 source,
@@ -245,13 +244,20 @@ mod tests {
         let path = directory.join("pacman");
         fs::write(
             &path,
-            "#!/bin/sh\nif [ \"$1\" = \"-Sg\" ] && [ \"$2\" = \"base\" ]; then echo \"base filesystem\"; exit 0; fi\necho \"error: package '$2' was not found\" >&2\nexit 1\n",
+            "#!/bin/sh\nif [ \"$1\" = \"-Si\" ] && [ \"$2\" = \"base\" ]; then echo \"Name : base\"; exit 0; fi\necho \"error: package '$2' was not found\" >&2\nexit 1\n",
         )
         .unwrap();
         let mut permissions = fs::metadata(&path).unwrap().permissions();
         permissions.set_mode(0o755);
         fs::set_permissions(&path, permissions).unwrap();
         path
+    }
+
+    #[test]
+    fn doas_selection_uses_the_artix_package_name() {
+        let mut config = InstallConfig::default();
+        config.system.privilege_escalation = crate::config::PrivilegeEscalation::Doas;
+        assert!(build_package_plan(&config).privilege_packages.contains(&"opendoas"));
     }
 
     #[test]
