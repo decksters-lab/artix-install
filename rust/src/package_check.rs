@@ -43,7 +43,7 @@ impl PackageCheckReport {
 
     pub fn render(&self) -> String {
         let mut output = String::from(
-            "ARTIX SETUP — READ-ONLY PACKAGE AVAILABILITY CHECK\n===================================================\n\n",
+            "ARTIX GRANULAR SYSTEM INSTALLER — READ-ONLY PACKAGE AVAILABILITY CHECK\n===================================================\n\n",
         );
         for check in &self.checks {
             let status = match check.availability {
@@ -175,7 +175,7 @@ where
             continue;
         }
 
-        // Artix publishes base and base-devel as installable meta-packages;
+        // Artix publishes base as an installable meta-package;
         // -Sg only searches group metadata and incorrectly reports them missing.
         let target = repository_target(&name, source);
         let result = query(&target)?;
