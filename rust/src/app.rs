@@ -455,7 +455,11 @@ impl App {
             11 => {
                 self.config.system.privilege_escalation = cycle(
                     self.config.system.privilege_escalation,
-                    &[PrivilegeEscalation::Doas, PrivilegeEscalation::Sudo],
+                    &[
+                        PrivilegeEscalation::Doas,
+                        PrivilegeEscalation::Sudo,
+                        PrivilegeEscalation::Both,
+                    ],
                     delta,
                 )
             }
@@ -700,7 +704,7 @@ impl App {
             8 => "Intel, AMD or Other / VM CPU choice for microcode selection.",
             9 => "Intel, AMD, NVIDIA, hybrid Intel+NVIDIA or VM/basic Mesa graphics choice.",
             10 => "UEFI supports GRUB2, Limine or rEFInd. BIOS is locked to GRUB2.",
-            11 => "Choose doas or sudo.",
+            11 => "Choose doas, sudo, or both. Selecting both installs both tools; the final system setup will configure each safely.",
             12 => {
                 "Init-specific user services: Dinit userspawn-dinit or Turnstile; OpenRC native (0.62+, PAM/XDG_RUNTIME_DIR) or Turnstile; runit userspawn-runit; s6 manual."
             }
@@ -803,7 +807,7 @@ impl App {
                 .into_iter()
                 .map(str::to_owned)
                 .collect(),
-            11 => vec!["doas", "sudo"]
+            11 => vec!["doas", "sudo", "both"]
                 .into_iter()
                 .map(str::to_owned)
                 .collect(),
