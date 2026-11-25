@@ -265,6 +265,7 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     let privilege_packages = match config.system.privilege_escalation {
         PrivilegeEscalation::Doas => vec!["opendoas"],
         PrivilegeEscalation::Sudo => vec!["sudo"],
+        PrivilegeEscalation::Both => vec!["opendoas", "sudo"],
     };
     let desktop_recipes = config
         .software
@@ -626,6 +627,10 @@ mod tests {
         let plan = build_package_plan(&config);
         assert_eq!(plan.network_packages, ["iwd"]);
         assert_eq!(plan.privilege_packages, ["sudo"]);
+
+        config.system.privilege_escalation = PrivilegeEscalation::Both;
+        let plan = build_package_plan(&config);
+        assert_eq!(plan.privilege_packages, ["opendoas", "sudo"]);
     }
 
     #[test]
