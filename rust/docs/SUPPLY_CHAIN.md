@@ -17,9 +17,11 @@ The Rust installer is experimental. These checks improve traceability; they are 
 
 ## Preview release publication
 
-The feature-branch workflow publishes a preview release only when a maintainer explicitly marks a commit message with `[publish-preview]`. The workflow builds and smoke-tests both x86_64 archives first, then creates the `v0.1.0-test3` preview tag at that exact commit. Ordinary branch pushes and pull-request builds do not overwrite a published release. This keeps the release tag, source commit, and packaged binaries aligned.
+The feature-branch workflow publishes a preview release only when a maintainer explicitly marks a commit message with `[publish-preview]`. The workflow builds and smoke-tests both x86_64 archives first, then creates the `v0.1.0-test4` preview tag at that exact commit. Ordinary branch pushes and pull-request builds do not overwrite a published release. This keeps the release tag, source commit, and packaged binaries aligned.
 
-The `v0.1.0-test3` archive is a preview for testing the configuration interface and implemented prototype stages only; it is not a complete installer and must not be used for a real system installation.
+The `v0.1.0-test4` archive is a preview for testing the configuration interface and implemented prototype stages only; it is not a complete installer and must not be used for a real system installation.
+
+The target-disk screen retains the configuration sidebar and shows the disk selector plus selected-device details in the right pane. Left/Esc returns to the settings list. Cosmalia is omitted from desktop choices unless Dinit is selected, and changing to another init system removes an existing Cosmalia selection.
 
 ## Verify an archive checksum
 
