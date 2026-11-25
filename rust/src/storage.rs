@@ -1081,6 +1081,7 @@ mod tests {
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&base);
+        fs::create_dir(&base).unwrap();
         let empty = base.join("empty");
         ensure_empty_mount_root(&empty).unwrap();
         assert!(empty.is_dir());
