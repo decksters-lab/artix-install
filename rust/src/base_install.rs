@@ -324,6 +324,14 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
     let contents = fs::read_to_string("/proc/self/mountinfo")
         .context("read kernel mount table to verify basestrap target")?;
     let expected = fs::canonicalize(expected_device)?;
+    let device_name = expected
+        .file_name()
+        .context("verified partition path has no device name")?
+        .to_str()
+        .context("verified partition device name is not UTF-8")?;
+    let sysfs_device = fs::read_to_string(format!("/sys/class/block/{device_name}/dev"))
+        .with_context(|| format!("read sysfs device number for {device_name}"))?;
+    let expected_devno = sysfs_device.trim();
     let wanted = mountpoint.to_string_lossy();
     for line in contents.lines() {
         let (left, right) = match line.split_once(" - ") {
@@ -341,6 +349,14 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
             .replace("\\012", "\n")
             .replace("\\134", "\\");
         if mounted_at == wanted {
+            if before[2] != expected_devno {
+                bail!(
+                    "{} is mounted from device number {}, not expected device number {}",
+                    mountpoint.display(),
+                    before[2],
+                    expected_devno
+                );
+            }
             let source = after[1]
                 .replace("\\040", " ")
                 .replace("\\011", "\t")
