@@ -670,10 +670,7 @@ mod tests {
         assert_eq!(plan.privilege_packages, ["opendoas"]);
 
         config.system.privilege_escalation = PrivilegeEscalation::Sudo;
-        assert_eq!(
-            build_package_plan(&config).privilege_packages,
-            ["sudo"]
-        );
+        assert_eq!(build_package_plan(&config).privilege_packages, ["sudo"]);
     }
 
     #[test]
