@@ -687,30 +687,69 @@ impl App {
 
     pub fn single_options(&self) -> Vec<(String, bool)> {
         let values: Vec<String> = match self.selected {
-            0 => vec!["dinit", "openrc", "runit", "s6"].into_iter().map(str::to_owned).collect(),
-            2 => vec!["automatic", "manual", "dualboot"].into_iter().map(str::to_owned).collect(),
-            3 => vec!["ext4", "btrfs", "xfs", "f2fs", "jfs", "nilfs2"].into_iter().map(str::to_owned).collect(),
-            4 => vec!["none", "zram", "partition", "swapfile", "both"].into_iter().map(str::to_owned).collect(),
+            0 => vec!["dinit", "openrc", "runit", "s6"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            2 => vec!["automatic", "manual", "dualboot"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            3 => vec!["ext4", "btrfs", "xfs", "f2fs", "jfs", "nilfs2"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            4 => vec!["none", "zram", "partition", "swapfile", "both"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
             5 | 14 | 17 => vec!["Off".into(), "On".into()],
-            8 => vec!["intel", "amd", "other"].into_iter().map(str::to_owned).collect(),
-            9 => vec!["intel", "amd", "nvidia", "hybrid", "vm"].into_iter().map(str::to_owned).collect(),
-            10 => vec!["grub", "limine", "refind"].into_iter().map(str::to_owned).collect(),
-            11 => vec!["doas", "sudo"].into_iter().map(str::to_owned).collect(),
-            12 => user_service_choices(self.config.system.init_system).iter().map(ToString::to_string).collect(),
-            13 => vec!["dhcpcd", "iwd", "network-manager"].into_iter().map(str::to_owned).collect(),
-            15 => vec!["uefi", "bios"].into_iter().map(str::to_owned).collect(),
-            16 => vec!["preserve", "format"].into_iter().map(str::to_owned).collect(),
+            8 => vec!["intel", "amd", "other"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            9 => vec!["intel", "amd", "nvidia", "hybrid", "vm"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            10 => vec!["grub", "limine", "refind"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            11 => vec!["doas", "sudo"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            12 => user_service_choices(self.config.system.init_system)
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            13 => vec!["dhcpcd", "iwd", "network-manager"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            15 => vec!["uefi", "bios"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            16 => vec!["preserve", "format"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
             _ => Vec::new(),
         };
         let current = self.setting_value(self.selected).to_lowercase();
-        values.into_iter().map(|value| {
-            let selected = if matches!(self.selected, 5 | 14 | 17) {
-                (value == "On") == (current == "enabled")
-            } else {
-                current.starts_with(&value)
-            };
-            (value, selected)
-        }).collect()
+        values
+            .into_iter()
+            .map(|value| {
+                let selected = if matches!(self.selected, 5 | 14 | 17) {
+                    (value == "On") == (current == "enabled")
+                } else {
+                    current.starts_with(&value)
+                };
+                (value, selected)
+            })
+            .collect()
     }
 
     pub fn multi_options(&self) -> Vec<(String, bool)> {
