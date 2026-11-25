@@ -524,15 +524,15 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
 
     if let Err(error) = result {
         let mut rollback_errors = Vec::new();
-        if mountpoint_is_used(efi_mount).unwrap_or(false) {
-            if let Err(e) = run_umount(efi_mount) {
-                rollback_errors.push(format!("unmount /mnt/boot: {e:#}"));
-            }
+        if mountpoint_is_used(efi_mount).unwrap_or(false)
+            && let Err(e) = run_umount(efi_mount)
+        {
+            rollback_errors.push(format!("unmount /mnt/boot: {e:#}"));
         }
-        if mountpoint_is_used(root_mount).unwrap_or(false) {
-            if let Err(e) = run_umount(root_mount) {
-                rollback_errors.push(format!("unmount /mnt: {e:#}"));
-            }
+        if mountpoint_is_used(root_mount).unwrap_or(false)
+            && let Err(e) = run_umount(root_mount)
+        {
+            rollback_errors.push(format!("unmount /mnt: {e:#}"));
         }
         if rollback_errors.is_empty() {
             return Err(error).context(
