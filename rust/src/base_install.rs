@@ -22,7 +22,10 @@ const TARGET_BOOT: &str = "/mnt/boot";
 /// The caller must supply the exact configured whole-disk path as a second confirmation.
 pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<String> {
     config.validate().map_err(|issues| {
-        anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
+        anyhow::anyhow!(
+            "configuration validation failed:\n- {}",
+            issues.join("\n- ")
+        )
     })?;
     if libc_geteuid() != 0 {
         bail!("basestrap requires effective UID 0");
@@ -66,8 +69,8 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     if !table.status.success() {
         bail!("could not read the target partition table; basestrap was not started");
     }
-    let table_text =
-        String::from_utf8(table.stdout).context("sfdisk returned non-UTF-8 partition table data")?;
+    let table_text = String::from_utf8(table.stdout)
+        .context("sfdisk returned non-UTF-8 partition table data")?;
     let label = table_text
         .lines()
         .find_map(|line| line.trim().strip_prefix("label:"))
@@ -95,7 +98,8 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
             expected_count
         );
     }
-    let efi = fs::canonicalize(&partitions[0]).context("resolve EFI partition from target table")?;
+    let efi =
+        fs::canonicalize(&partitions[0]).context("resolve EFI partition from target table")?;
     let root = fs::canonicalize(
         partitions
             .last()
