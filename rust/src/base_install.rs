@@ -11,6 +11,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::{
     config::{Filesystem, FirmwareMode, InstallConfig, Partitioning, SwapMode},
+    discovery::{self, BlockDevice, BlockPartition},
     package_check::{self, Availability},
     packages::{self, PackageSource},
 };
@@ -118,6 +119,24 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     }
     verify_blkid_type(&efi, "vfat")?;
     verify_blkid_type(&root, "ext4")?;
+    let hardware = discovery::discover();
+    let target_info = hardware
+        .disks
+        .iter()
+        .find(|candidate| same_device_path(&candidate.path, &disk))
+        .context("configured target disk is missing from fresh block-device discovery")?;
+    if !target_info.safety_checks_complete
+        || target_info.size_bytes == 0
+        || target_info.read_only
+        || target_info.has_holders
+        || target_info.active_swap
+        || !target_info.mounted_at.is_empty()
+        || target_info.partitions.len() != expected_count
+    {
+        bail!("configured target disk failed fresh safety discovery; basestrap was not started");
+    }
+    verify_target_partition(target_info, &efi, TARGET_BOOT)?;
+    verify_target_partition(target_info, &root, TARGET_ROOT)?;
     verify_mount_source(Path::new(TARGET_ROOT), &root)?;
     verify_mount_source(Path::new(TARGET_BOOT), &efi)?;
 
@@ -244,6 +263,45 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         TARGET_ROOT,
         selected.display()
     ))
+}
+
+fn same_device_path(left: &Path, right: &Path) -> bool {
+    match (fs::canonicalize(left), fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => left == right,
+    }
+}
+
+fn verify_target_partition(
+    disk: &BlockDevice,
+    expected_device: &Path,
+    expected_mount: &str,
+) -> Result<()> {
+    let partition = disk
+        .partitions
+        .iter()
+        .find(|partition| same_device_path(&partition.path, expected_device))
+        .with_context(|| {
+            format!(
+                "partition {} is not a child of the configured target disk",
+                expected_device.display()
+            )
+        })?;
+    if !partition.safety_checks_complete
+        || partition.size_bytes == 0
+        || partition.read_only
+        || partition.has_holders
+        || partition.active_swap
+        || partition.mounted_at.len() != 1
+        || partition.mounted_at[0] != expected_mount
+    {
+        bail!(
+            "partition {} failed fresh safety discovery or is mounted somewhere other than {}; refusing basestrap",
+            expected_device.display(),
+            expected_mount
+        );
+    }
+    Ok(())
 }
 
 fn ensure_pristine_target() -> Result<()> {
