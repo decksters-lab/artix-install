@@ -669,8 +669,12 @@ mod tests {
         assert!(!plan.base_packages.contains(&"base-devel"));
         assert!(plan.base_packages.contains(&"debugedit"));
         assert!(!plan.base_packages.contains(&"sudo"));
-        assert!(plan.desktop_recipes.iter().filter(|recipe| recipe.desktop == Desktop::Cosmalia)
-            .all(|recipe| !recipe.packages.contains(&"base-devel")));
+        let cosmalia = plan
+            .desktop_recipes
+            .iter()
+            .find(|recipe| recipe.desktop == Desktop::Cosmalia)
+            .unwrap();
+        assert!(!cosmalia.packages.contains(&"base-devel"));
         assert_eq!(plan.privilege_packages, ["opendoas"]);
 
         config.system.privilege_escalation = PrivilegeEscalation::Sudo;
