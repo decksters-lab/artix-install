@@ -728,11 +728,12 @@ impl App {
         }
         let current = options
             .iter()
-            .position(|(_, selected)| *selected)
-            .unwrap_or(0);
+            .position(|(_, selected)| *selected);
         let target = self.multi_cursor.min(options.len() - 1);
-        let delta = (target + options.len() - current) % options.len();
-        if delta > 0 {
+        let delta = current.map_or(0, |current| {
+            (target + options.len() - current) % options.len()
+        });
+        if current.is_none() || delta > 0 {
             self.adjust(delta as isize);
         }
         self.section_open = false;
@@ -908,6 +909,34 @@ mod tests {
         app.confirm_section_choice();
         assert_eq!(app.config.system.init_system, InitSystem::OpenRc);
         assert!(!app.section_open);
+    }
+
+    #[test]
+    fn confirming_bios_bootloader_corrects_an_incompatible_loaded_value() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.config.system.firmware = FirmwareMode::Bios;
+        app.config.software.bootloader = Bootloader::Limine;
+        app.selected = 10;
+
+        app.enter_section();
+        assert_eq!(app.single_options(), vec![("grub".to_owned(), false)]);
+        app.confirm_section_choice();
+
+        assert_eq!(app.config.software.bootloader, Bootloader::Grub);
+    }
+
+    #[test]
+    fn confirming_dualboot_efi_policy_corrects_format_to_preserve() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.config.disk.partitioning = Partitioning::DualBoot;
+        app.config.disk.efi_policy = EfiPolicy::Format;
+        app.selected = 16;
+
+        app.enter_section();
+        assert_eq!(app.single_options(), vec![("preserve".to_owned(), false)]);
+        app.confirm_section_choice();
+
+        assert_eq!(app.config.disk.efi_policy, EfiPolicy::Preserve);
     }
 
     #[test]
