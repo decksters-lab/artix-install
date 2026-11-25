@@ -236,14 +236,31 @@ mod tests {
         config::{Bootloader, Desktop, Filesystem, UserServices},
         packages::build_package_plan,
     };
-    use std::{fs, os::unix::fs::PermissionsExt};
+    use std::{
+        fs,
+        os::unix::fs::PermissionsExt,
+        sync::atomic::{AtomicU64, Ordering},
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn fake_pacman(name: &str) -> std::path::PathBuf {
-        let directory = std::env::temp_dir().join(format!(
-            "artix-setup-pacman-check-{}-{name}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&directory).unwrap();
+        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+        let directory = loop {
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let sequence = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+            let candidate = std::env::temp_dir().join(format!(
+                "artix-setup-pacman-check-{}-{timestamp}-{sequence}-{name}",
+                std::process::id()
+            ));
+            match fs::create_dir(&candidate) {
+                Ok(()) => break candidate,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("create fake pacman directory: {error}"),
+            }
+        };
         let path = directory.join("pacman");
         fs::write(
             &path,
