@@ -72,6 +72,19 @@ struct Args {
     /// Exact root partition path confirmation required by --format-root.
     #[arg(long, value_name = "PARTITION", requires = "format_root")]
     confirm_partition: Option<String>,
+    /// Prepare the automatic UEFI EFI System Partition; blank partitions are formatted, existing FAT is preserved.
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan", "validate", "hardware", "preflight", "check_packages",
+            "write_default", "apply_partition_table", "format_root"
+        ]
+    )]
+    prepare_efi: bool,
+    /// Exact EFI partition path confirmation required by --prepare-efi.
+    #[arg(long, value_name = "PARTITION", requires = "prepare_efi")]
+    confirm_efi: Option<String>,
     /// Check planned packages against currently enabled pacman sync databases; does not refresh them.
     #[arg(long)]
     check_packages: bool,
@@ -161,8 +174,28 @@ fn run() -> Result<()> {
     if args.confirm_target.is_some() {
         bail!("--confirm-target is only valid with --apply-partition-table");
     }
+    if args.confirm_efi.is_some() {
+        bail!("--confirm-efi is only valid with --prepare-efi");
+    }
     if args.confirm_partition.is_some() {
         bail!("--confirm-partition is only valid with --format-root");
+    }
+    if args.prepare_efi {
+        if !has_explicit_config {
+            bail!("--prepare-efi requires an explicit --config file");
+        }
+        let confirmation = args.confirm_efi.as_deref().context(
+            "--prepare-efi requires --confirm-efi with the exact EFI partition path",
+        )?;
+        let environment = discovery::discover();
+        let report = preflight::run(&config, &environment);
+        print!("{}", report.render());
+        if !report.is_ready() {
+            bail!("live environment preflight failed; EFI partition was not changed");
+        }
+        let result = storage::prepare_automatic_efi(&config, confirmation)?;
+        println!("{result}");
+        return Ok(());
     }
     if args.check_packages {
         config.validate().map_err(|issues| {
