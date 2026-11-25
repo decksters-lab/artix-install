@@ -118,7 +118,7 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                 }
                 KeyCode::Right | KeyCode::Char('l') => {
                     if app.section_open {
-                        // Right does not change the selected value; Enter or Space does.
+                        // Right is intentionally inert while an option list is open.
                     } else if app.selected == 1 {
                         app.toggle_disks();
                     } else {
@@ -135,8 +135,7 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                     if app.selected == 1 {
                         app.toggle_disks();
                     } else {
-                        app.section_open = true;
-                        app.multi_cursor = 0;
+                        app.enter_section();
                     }
                 }
                 KeyCode::Char(' ') if app.section_open && matches!(app.selected, 6 | 7) => {
