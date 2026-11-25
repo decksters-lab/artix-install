@@ -232,7 +232,10 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Bootloader, Desktop, Filesystem, UserServices};
+    use crate::{
+        config::{Bootloader, Desktop, Filesystem, UserServices},
+        packages::build_package_plan,
+    };
     use std::{fs, os::unix::fs::PermissionsExt};
 
     fn fake_pacman(name: &str) -> std::path::PathBuf {
