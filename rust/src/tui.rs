@@ -184,7 +184,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                " SETUP",
+                " SYSTEM INSTALLER",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
@@ -195,7 +195,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             ),
         ]),
         Line::from(Span::styled(
-            "A modular, configuration-driven Artix installer",
+            "Choose and review your Artix Linux system installation",
             Style::default().fg(Color::Gray),
         )),
     ])
