@@ -269,24 +269,58 @@ fn render(frame: &mut Frame<'_>, app: &App) {
         };
         frame.render_widget(Paragraph::new(instruction), sections[0]);
 
-        let current_index = options.iter().position(|(_, selected)| *selected).unwrap_or(0);
-        let items: Vec<ListItem<'_>> = options.iter().map(|(name, selected)| {
-            let marker = if multi {
-                if *selected { "[x]" } else { "[ ]" }
-            } else if *selected { "(*)" } else { "( )" };
-            ListItem::new(format!(" {marker} {name}"))
-        }).collect();
+        let current_index = options
+            .iter()
+            .position(|(_, selected)| *selected)
+            .unwrap_or(0);
+        let items: Vec<ListItem<'_>> = options
+            .iter()
+            .map(|(name, selected)| {
+                let marker = if multi {
+                    if *selected { "[x]" } else { "[ ]" }
+                } else if *selected {
+                    "(*)"
+                } else {
+                    "( )"
+                };
+                ListItem::new(format!(" {marker} {name}"))
+            })
+            .collect();
         let list = List::new(items)
-            .block(Block::default().title(format!(" {} — {count} choices ", app.setting_label(app.selected))).borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)))
-            .highlight_style(Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .block(
+                Block::default()
+                    .title(format!(
+                        " {} — {count} choices ",
+                        app.setting_label(app.selected)
+                    ))
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray)),
+            )
+            .highlight_style(
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
             .highlight_symbol("▸ ");
         let mut list_state = ratatui::widgets::ListState::default();
-        let cursor = if multi { app.multi_cursor.min(count.saturating_sub(1)) } else { current_index };
-        if count > 0 { list_state.select(Some(cursor)); }
+        let cursor = if multi {
+            app.multi_cursor.min(count.saturating_sub(1))
+        } else {
+            current_index
+        };
+        if count > 0 {
+            list_state.select(Some(cursor));
+        }
         frame.render_stateful_widget(list, sections[1], &mut list_state);
 
         frame.render_widget(
-            Paragraph::new(format!("Choice {} of {count}   Current: {}", cursor + 1, app.setting_value(app.selected))).wrap(Wrap { trim: true }),
+            Paragraph::new(format!(
+                "Choice {} of {count}   Current: {}",
+                cursor + 1,
+                app.setting_value(app.selected)
+            ))
+            .wrap(Wrap { trim: true }),
             sections[2],
         );
         frame.render_widget(
@@ -326,9 +360,17 @@ fn render(frame: &mut Frame<'_>, app: &App) {
     let footer = vec![
         Line::from(vec![
             keycap("↑/↓"),
-            Span::raw(if app.section_open { " Choose option  " } else { " Navigate sections  " }),
+            Span::raw(if app.section_open {
+                " Choose option  "
+            } else {
+                " Navigate sections  "
+            }),
             keycap("→"),
-            Span::raw(if app.section_open { " Confirm / finish  " } else { " Open section  " }),
+            Span::raw(if app.section_open {
+                " Confirm / finish  "
+            } else {
+                " Open section  "
+            }),
             keycap("←"),
             Span::raw(" Back  "),
             keycap("D"),
