@@ -16,7 +16,7 @@ The Rust application must grow beside the current 13-step Bash installer until f
 | `desktop` | Multi-select desktops/WMs, package dependency sets and display-manager priority |
 | `bootloader` | GRUB2, Limine and rEFInd configuration, firmware and kernel command-line validation |
 | `network` | NetworkManager, iwd and dhcpcd setup |
-| `user` | Users, doas/sudo and userspawn/turnstile init-specific setup |
+| `user` | Users, doas, sudo (individually or together), and userspawn/turnstile init-specific setup |
 | `executor` | Typed command execution, cancellation, logging and checkpoints |
 | `ui` | Ratatui screens, progress, dialogs, multi-selects and review |
 
