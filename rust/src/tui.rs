@@ -219,41 +219,83 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             .wrap(Wrap { trim: true })
     } else if matches!(app.selected, 6 | 7) {
         let options = app.multi_options();
-        let mut lines = vec![
-            Line::from(Span::styled(
-                app.setting_label(app.selected),
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Line::from("Left / Right moves cursor; Space or Enter toggles."),
-            Line::from(""),
-        ];
-        for (index, (name, selected)) in options.iter().enumerate() {
-            let mark = if *selected { "[x]" } else { "[ ]" };
-            let cursor = if index == app.multi_cursor {
-                "▸"
-            } else {
-                " "
-            };
-            let style = if index == app.multi_cursor {
+        let count = options.len();
+        let panel = block.inner(body[1]);
+        let sections = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2),
+                Constraint::Min(3),
+                Constraint::Length(2),
+                Constraint::Min(2),
+            ])
+            .split(panel);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(
+                    "← / →",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" move through choices   "),
+                Span::styled(
+                    "Space / Enter",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" toggle selection"),
+            ])),
+            sections[0],
+        );
+
+        let items: Vec<ListItem<'_>> = options
+            .iter()
+            .map(|(name, selected)| {
+                let mark = if *selected { "[x]" } else { "[ ]" };
+                ListItem::new(format!(" {mark} {name}"))
+            })
+            .collect();
+        let list = List::new(items)
+            .block(
+                Block::default()
+                    .title(format!(" Choices — {count} options; ←/→ scroll "))
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray)),
+            )
+            .highlight_style(
                 Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::Gray)
-            };
-            lines.push(Line::from(vec![
-                Span::styled(format!("{cursor} {mark} "), style),
-                Span::raw(name.clone()),
-            ]));
-        }
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            format!("Selected: {}", app.setting_value(app.selected)),
-            Style::default().fg(Color::Yellow),
-        )));
-        lines.push(Line::from(""));
-        lines.push(Line::from(app.setting_description(app.selected)));
-        Paragraph::new(lines).block(block).wrap(Wrap { trim: true })
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("▸ ");
+        let mut list_state = ratatui::widgets::ListState::default();
+        list_state.select(Some(app.multi_cursor.min(count.saturating_sub(1))));
+        frame.render_stateful_widget(list, sections[1], &mut list_state);
+
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(
+                    format!("Choice {} of {count}", app.multi_cursor + 1),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(format!("   Selected: {}", app.setting_value(app.selected))),
+            ]))
+            .wrap(Wrap { trim: true }),
+            sections[2],
+        );
+        frame.render_widget(
+            Paragraph::new(app.setting_description(app.selected))
+                .wrap(Wrap { trim: true }),
+            sections[3],
+        );
+        frame.render_widget(block, body[1]);
+        return;
     } else {
         let content = format!(
             "{}\n\nCurrent value\n  {}\n\n{}\n\nSafety state\n  {}\n\nHardware summary\n  Firmware: {}\n  Memory: {}\n  Disks found: {}\n\nProfile summary\n  Init: {}\n  Root: {}\n  Desktops: {}\n  Kernels: {}\n  Bootloader: {}",
