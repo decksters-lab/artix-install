@@ -685,6 +685,58 @@ impl App {
         }
     }
 
+    pub fn enter_section(&mut self) {
+        let options = if matches!(self.selected, 6 | 7) {
+            self.multi_options()
+        } else {
+            self.single_options()
+        };
+        if options.is_empty() {
+            self.status = "This section has no selectable options. Use its dedicated screen instead.".into();
+            return;
+        }
+        self.multi_cursor = options
+            .iter()
+            .position(|(_, selected)| *selected)
+            .unwrap_or(0);
+        self.section_open = true;
+    }
+
+    pub fn move_choice_cursor(&mut self, delta: isize) {
+        let count = if matches!(self.selected, 6 | 7) {
+            self.multi_options().len()
+        } else {
+            self.single_options().len()
+        };
+        if count == 0 {
+            return;
+        }
+        self.multi_cursor =
+            (self.multi_cursor as isize + delta).rem_euclid(count as isize) as usize;
+    }
+
+    pub fn confirm_section_choice(&mut self) {
+        if matches!(self.selected, 6 | 7) {
+            self.section_open = false;
+            return;
+        }
+        let options = self.single_options();
+        if options.is_empty() {
+            self.section_open = false;
+            return;
+        }
+        let current = options
+            .iter()
+            .position(|(_, selected)| *selected)
+            .unwrap_or(0);
+        let target = self.multi_cursor.min(options.len() - 1);
+        let delta = (target + options.len() - current) % options.len();
+        if delta > 0 {
+            self.adjust(delta as isize);
+        }
+        self.section_open = false;
+    }
+
     pub fn single_options(&self) -> Vec<(String, bool)> {
         let values: Vec<String> = match self.selected {
             0 => vec!["dinit", "openrc", "runit", "s6"]
@@ -712,6 +764,9 @@ impl App {
                 .into_iter()
                 .map(str::to_owned)
                 .collect(),
+            10 if self.config.system.firmware == FirmwareMode::Bios => {
+                vec!["grub".to_owned()]
+            }
             10 => vec!["grub", "limine", "refind"]
                 .into_iter()
                 .map(str::to_owned)
@@ -732,6 +787,9 @@ impl App {
                 .into_iter()
                 .map(str::to_owned)
                 .collect(),
+            16 if self.config.disk.partitioning == Partitioning::DualBoot => {
+                vec!["preserve".to_owned()]
+            }
             16 => vec!["preserve", "format"]
                 .into_iter()
                 .map(str::to_owned)
