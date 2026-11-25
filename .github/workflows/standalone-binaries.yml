@@ -81,7 +81,7 @@ jobs:
           This archive contains a prebuilt executable. Rust and Cargo are
           not required on the target Artix live environment.
           EOF
-          tar -C dist -czf "dist/agsi-x86_64-linux-${LABEL}.tar.gz" "artix-setup-${LABEL}"
+          tar -C dist -czf "dist/agsi-x86_64-linux-${LABEL}.tar.gz" "agsi-${LABEL}"
           cd dist
           sha256sum "agsi-x86_64-linux-${LABEL}.tar.gz" > "agsi-x86_64-linux-${LABEL}.tar.gz.sha256"
 
@@ -126,5 +126,5 @@ jobs:
           else
             TAG_NAME="v0.1.0-test6"
           fi
-          gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --target "${GITHUB_SHA}" --title "Artix Setup v0.1.0-test6 (test)" --notes "Pre-release test build from commit ${GITHUB_SHA}. Not a production release."
+          gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --target "${GITHUB_SHA}" --title "AGSI v0.1.0-test6 (test)" --notes "Pre-release test build from commit ${GITHUB_SHA}. Not a production release."
           gh release upload "$TAG_NAME" dist/* --clobber
