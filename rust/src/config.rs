@@ -445,10 +445,7 @@ impl InstallConfig {
                 self.system.user_services,
                 UserServices::None | UserServices::Userspawn
             ),
-            InitSystem::S6 => matches!(
-                self.system.user_services,
-                UserServices::None | UserServices::Manual
-            ),
+            InitSystem::S6 => self.system.user_services == UserServices::Manual,
         };
         if !user_services_supported {
             issues.push(format!(
