@@ -244,43 +244,22 @@ mod tests {
         config::{Bootloader, Desktop, Filesystem, UserServices},
         packages::build_package_plan,
     };
-    use std::{
-        fs,
-        os::unix::fs::PermissionsExt,
-        sync::atomic::{AtomicU64, Ordering},
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::os::unix::process::ExitStatusExt;
 
-    fn fake_pacman(name: &str) -> std::path::PathBuf {
-        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-        let directory = loop {
-            let timestamp = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos();
-            let sequence = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-            let candidate = std::env::temp_dir().join(format!(
-                "artix-setup-pacman-check-{}-{timestamp}-{sequence}-{name}",
-                std::process::id()
-            ));
-            match fs::create_dir(&candidate) {
-                Ok(()) => break candidate,
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                Err(error) => panic!("create fake pacman directory: {error}"),
-            }
-        };
-        let path = directory.join("pacman");
-        let temporary_path = directory.join("pacman.tmp");
-        fs::write(
-            &temporary_path,
-            "#!/bin/sh\nif [ \"$1\" = \"-Si\" ] && [ \"$2\" = \"base\" ]; then echo \"Name : base\"; exit 0; fi\necho \"error: package '$2' was not found\" >&2\nexit 1\n",
-        )
-        .unwrap();
-        let mut permissions = fs::metadata(&temporary_path).unwrap().permissions();
-        permissions.set_mode(0o755);
-        fs::set_permissions(&temporary_path, permissions).unwrap();
-        fs::rename(&temporary_path, &path).unwrap();
-        path
+    fn mock_pacman(config: &InstallConfig) -> Result<PackageCheckReport> {
+        check_with(config, |target| {
+            let package = target.rsplit('/').next().unwrap_or(target);
+            let available = package == "base";
+            Ok(std::process::Output {
+                status: std::process::ExitStatus::from_raw(if available { 0 } else { 1 << 8 }),
+                stdout: Vec::new(),
+                stderr: if available {
+                    b"Name : base\n".to_vec()
+                } else {
+                    format!("error: package '{package}' was not found\n").into_bytes()
+                },
+            })
+        })
     }
 
     #[test]
@@ -325,8 +304,7 @@ mod tests {
         let mut config = InstallConfig::default();
         config.software.desktop_environments.clear();
         config.software.kernels = vec![Kernel::Linux];
-        let pacman = fake_pacman("base-check");
-        let report = check(&config, &pacman).unwrap();
+        let report = mock_pacman(&config).unwrap();
         assert!(
             report.checks.iter().any(|item| {
                 item.name == "base" && item.availability == Availability::Available
@@ -336,15 +314,13 @@ mod tests {
             item.name == "base-devel" && item.availability == Availability::Missing
         }));
         assert!(report.has_problems());
-        fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 
     #[test]
     fn selected_user_service_packages_are_included_in_availability_checks() {
         let mut config = InstallConfig::default();
         config.system.user_services = UserServices::Turnstile;
-        let pacman = fake_pacman("user-services");
-        let report = check(&config, &pacman).unwrap();
+        let report = mock_pacman(&config).unwrap();
         assert!(report.checks.iter().any(|item| item.name == "turnstile"));
         assert!(
             report
@@ -352,19 +328,16 @@ mod tests {
                 .iter()
                 .any(|item| item.name == "turnstile-dinit")
         );
-        fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 
     #[test]
     fn missing_optional_audio_service_packages_are_deferred() {
         let mut config = InstallConfig::default();
         config.software.desktop_environments.push(Desktop::Cosmalia);
-        let pacman = fake_pacman("optional-audio-services");
-        let report = check(&config, &pacman).unwrap();
+        let report = mock_pacman(&config).unwrap();
         assert!(report.checks.iter().any(|item| {
             item.name == "pipewire-dinit" && item.availability == Availability::Deferred
         }));
-        fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 
     #[test]
@@ -373,8 +346,7 @@ mod tests {
         config.disk.root_filesystem = Filesystem::Btrfs;
         config.disk.encryption = true;
         config.software.bootloader = Bootloader::Limine;
-        let pacman = fake_pacman("storage-bootloader");
-        let report = check(&config, &pacman).unwrap();
+        let report = mock_pacman(&config).unwrap();
         for expected in [
             "btrfs-progs",
             "cryptsetup",
@@ -388,21 +360,18 @@ mod tests {
                 "missing check for {expected}"
             );
         }
-        fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 
     #[test]
     fn external_kernel_repositories_are_deferred_not_misreported_missing() {
         let mut config = InstallConfig::default();
         config.software.kernels = vec![Kernel::LinuxLqx];
-        let pacman = fake_pacman("external-kernel");
-        let report = check(&config, &pacman).unwrap();
+        let report = mock_pacman(&config).unwrap();
         assert!(report.checks.iter().any(|item| {
             item.name == "linux-lqx" && item.availability == Availability::Deferred
         }));
         assert!(report.checks.iter().any(|item| {
             item.name == "linux-lqx-headers" && item.availability == Availability::Deferred
         }));
-        fs::remove_dir_all(pacman.parent().unwrap()).unwrap();
     }
 }
