@@ -101,10 +101,10 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                 KeyCode::Char('d') if !app.section_open => app.toggle_disks(),
                 KeyCode::Char('m') if !app.section_open => app.toggle_storage(),
                 KeyCode::Up | KeyCode::Char('k') if app.section_open => {
-                    app.move_choice_cursor(-1)
+                    app.move_choice_cursor(-1);
                 }
                 KeyCode::Down | KeyCode::Char('j') if app.section_open => {
-                    app.move_choice_cursor(1)
+                    app.move_choice_cursor(1);
                 }
                 KeyCode::Up | KeyCode::Char('k') => app.move_selection(-1),
                 KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
