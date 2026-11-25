@@ -421,9 +421,12 @@ pub fn prepare_automatic_efi(config: &InstallConfig, typed_confirmation: &str) -
 /// Mount the verified automatic UEFI/ext4 layout at /mnt for the next install stage.
 /// This operation never formats devices and rolls back mounts it created on failure.
 pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) -> Result<String> {
-    config.validate().map_err(|issues| anyhow::anyhow!(
-        "configuration validation failed:\n- {}", issues.join("\n- ")
-    ))?;
+    config.validate().map_err(|issues| {
+        anyhow::anyhow!(
+            "configuration validation failed:\n- {}",
+            issues.join("\n- ")
+        )
+    })?;
     if libc_effective_uid() != 0 {
         bail!("mounting the installation target requires effective UID 0");
     }
@@ -432,9 +435,14 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
         || config.disk.root_filesystem != Filesystem::Ext4
         || config.disk.encryption
     {
-        bail!("target mounting currently supports unencrypted automatic UEFI layouts with ext4 root only");
+        bail!(
+            "target mounting currently supports unencrypted automatic UEFI layouts with ext4 root only"
+        );
     }
-    let selected = config.disk.target.as_deref()
+    let selected = config
+        .disk
+        .target
+        .as_deref()
         .context("select a target disk before mounting")?;
     validate_confirmation(selected, typed_confirmation)?;
 
@@ -445,9 +453,15 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
     verify_partition_table_dump(config, &table)?;
     let efi_path = first_partition_path(&table)?;
     let root_path = root_partition_path(&table)?;
-    let efi = disk.partitions.iter().find(|p| same_device_path(&p.path, &efi_path))
+    let efi = disk
+        .partitions
+        .iter()
+        .find(|p| same_device_path(&p.path, &efi_path))
         .context("EFI partition is missing from fresh discovery")?;
-    let root = disk.partitions.iter().find(|p| same_device_path(&p.path, &root_path))
+    let root = disk
+        .partitions
+        .iter()
+        .find(|p| same_device_path(&p.path, &root_path))
         .context("root partition is missing from fresh discovery")?;
     validate_format_target(efi, &efi_path)?;
     validate_format_target(root, &root_path)?;
@@ -472,7 +486,9 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
         bail!("partition paths changed before mounting; refusing to continue");
     }
     for path in [&efi_path, &root_path] {
-        let part = latest_disk.partitions.iter()
+        let part = latest_disk
+            .partitions
+            .iter()
             .find(|p| same_device_path(&p.path, path))
             .context("a target partition disappeared from fresh discovery")?;
         validate_format_target(part, path)?;
@@ -486,16 +502,14 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
     let root_mount = Path::new("/mnt");
     let efi_mount = Path::new("/mnt/boot");
 
-    run_mount(&root_device, root_mount)
-        .context("mount the ext4 root filesystem at /mnt")?;
+    run_mount(&root_device, root_mount).context("mount the ext4 root filesystem at /mnt")?;
     let result = (|| -> Result<()> {
         fs::create_dir_all(efi_mount)
             .context("create /mnt/boot inside the mounted root filesystem")?;
         if mountpoint_is_used(efi_mount)? {
             bail!("/mnt/boot is already a mountpoint; refusing to cover it");
         }
-        run_mount(&efi_device, efi_mount)
-            .context("mount the EFI filesystem at /mnt/boot")?;
+        run_mount(&efi_device, efi_mount).context("mount the EFI filesystem at /mnt/boot")?;
         verify_mount_source(root_mount, &root_device)?;
         verify_mount_source(efi_mount, &efi_device)?;
         Ok(())
@@ -514,14 +528,20 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
             }
         }
         if rollback_errors.is_empty() {
-            return Err(error).context("mount operation failed; mounts created by this operation were rolled back");
+            return Err(error).context(
+                "mount operation failed; mounts created by this operation were rolled back",
+            );
         }
-        bail!("{error:#}; rollback was incomplete: {}", rollback_errors.join("; "));
+        bail!(
+            "{error:#}; rollback was incomplete: {}",
+            rollback_errors.join("; ")
+        );
     }
 
     Ok(format!(
         "Mounted verified ext4 root {} at /mnt and FAT EFI {} at /mnt/boot. No filesystems were formatted and no installation has started.",
-        root_path.display(), efi_path.display()
+        root_path.display(),
+        efi_path.display()
     ))
 }
 
@@ -539,11 +559,18 @@ fn verify_filesystem_type(device: &Path, expected: &str) -> Result<()> {
         .arg(device)
         .output()
         .with_context(|| format!("inspect filesystem on {}", device.display()))?;
-    let actual = String::from_utf8_lossy(&probe.stdout).trim().to_ascii_lowercase();
+    let actual = String::from_utf8_lossy(&probe.stdout)
+        .trim()
+        .to_ascii_lowercase();
     if !probe.status.success() || actual != expected {
         bail!(
             "expected {expected} filesystem on {}, found {}; refusing to mount",
-            device.display(), if actual.is_empty() { "unknown" } else { &actual }
+            device.display(),
+            if actual.is_empty() {
+                "unknown"
+            } else {
+                &actual
+            }
         );
     }
     Ok(())
@@ -551,7 +578,9 @@ fn verify_filesystem_type(device: &Path, expected: &str) -> Result<()> {
 
 fn ensure_mount_tools() -> Result<()> {
     for tool in ["mount", "umount"] {
-        let output = Command::new(tool).arg("--version").output()
+        let output = Command::new(tool)
+            .arg("--version")
+            .output()
             .with_context(|| format!("{tool} is required to mount the installation target"))?;
         if !output.status.success() {
             bail!("{tool} is installed but its version check failed");
@@ -561,53 +590,72 @@ fn ensure_mount_tools() -> Result<()> {
 }
 
 fn ensure_empty_mount_root(path: &Path) -> Result<()> {
-    let metadata = fs::metadata(path)
-        .with_context(|| format!("inspect mount root {}", path.display()))?;
+    let metadata =
+        fs::metadata(path).with_context(|| format!("inspect mount root {}", path.display()))?;
     if !metadata.is_dir() {
         bail!("{} exists but is not a directory", path.display());
     }
     if mountpoint_is_used(path)? {
-        bail!("{} is already a mountpoint; refusing to mount over it", path.display());
+        bail!(
+            "{} is already a mountpoint; refusing to mount over it",
+            path.display()
+        );
     }
     if fs::read_dir(path)
         .with_context(|| format!("inspect contents of {}", path.display()))?
-        .next().is_some()
+        .next()
+        .is_some()
     {
-        bail!("{} is not empty; move its contents or choose a different mount target", path.display());
+        bail!(
+            "{} is not empty; move its contents or choose a different mount target",
+            path.display()
+        );
     }
     Ok(())
 }
 
 fn mountinfo_entries(contents: &str) -> Vec<(String, String)> {
-    contents.lines().filter_map(|line| {
-        let (left, right) = line.split_once(" - ")?;
-        let before: Vec<_> = left.split_whitespace().collect();
-        let after: Vec<_> = right.split_whitespace().collect();
-        if before.len() < 5 || after.len() < 2 {
-            return None;
-        }
-        Some((unescape_mountinfo(before[4]), unescape_mountinfo(after[1])))
-    }).collect()
+    contents
+        .lines()
+        .filter_map(|line| {
+            let (left, right) = line.split_once(" - ")?;
+            let before: Vec<_> = left.split_whitespace().collect();
+            let after: Vec<_> = right.split_whitespace().collect();
+            if before.len() < 5 || after.len() < 2 {
+                return None;
+            }
+            Some((unescape_mountinfo(before[4]), unescape_mountinfo(after[1])))
+        })
+        .collect()
 }
 
 fn unescape_mountinfo(value: &str) -> String {
-    value.replace("\\040", " ").replace("\\011", "\t")
-        .replace("\\012", "\n").replace("\\134", "\\")
+    value
+        .replace("\\040", " ")
+        .replace("\\011", "\t")
+        .replace("\\012", "\n")
+        .replace("\\134", "\\")
 }
 
 fn mountpoint_is_used(path: &Path) -> Result<bool> {
     let contents = fs::read_to_string("/proc/self/mountinfo")
         .context("read /proc/self/mountinfo to verify mount state")?;
     let wanted = path.to_string_lossy();
-    Ok(mountinfo_entries(&contents).iter().any(|(mountpoint, _)| mountpoint == wanted))
+    Ok(mountinfo_entries(&contents)
+        .iter()
+        .any(|(mountpoint, _)| mountpoint == wanted))
 }
 
 fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> {
     let contents = fs::read_to_string("/proc/self/mountinfo")
         .context("read mount table to verify mounted source")?;
     let wanted_mount = mountpoint.to_string_lossy();
-    let expected = fs::canonicalize(expected_device)
-        .with_context(|| format!("resolve expected mounted device {}", expected_device.display()))?;
+    let expected = fs::canonicalize(expected_device).with_context(|| {
+        format!(
+            "resolve expected mounted device {}",
+            expected_device.display()
+        )
+    })?;
     for (mounted_at, source) in mountinfo_entries(&contents) {
         if mounted_at == wanted_mount {
             let actual = fs::canonicalize(&source)
@@ -615,14 +663,26 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
             if actual == expected {
                 return Ok(());
             }
-            bail!("{} is mounted from {}, not the selected device {}", mountpoint.display(), source, expected_device.display());
+            bail!(
+                "{} is mounted from {}, not the selected device {}",
+                mountpoint.display(),
+                source,
+                expected_device.display()
+            );
         }
     }
-    bail!("{} does not appear in the kernel mount table after mount", mountpoint.display())
+    bail!(
+        "{} does not appear in the kernel mount table after mount",
+        mountpoint.display()
+    )
 }
 
 fn run_mount(device: &Path, mountpoint: &Path) -> Result<()> {
-    let status = Command::new("mount").arg("--").arg(device).arg(mountpoint).status()
+    let status = Command::new("mount")
+        .arg("--")
+        .arg(device)
+        .arg(mountpoint)
+        .status()
         .with_context(|| format!("run mount for {}", mountpoint.display()))?;
     if !status.success() {
         bail!("mount failed for {} with {status}", mountpoint.display());
@@ -631,7 +691,10 @@ fn run_mount(device: &Path, mountpoint: &Path) -> Result<()> {
 }
 
 fn run_umount(mountpoint: &Path) -> Result<()> {
-    let status = Command::new("umount").arg("--").arg(mountpoint).status()
+    let status = Command::new("umount")
+        .arg("--")
+        .arg(mountpoint)
+        .status()
         .with_context(|| format!("run umount for {}", mountpoint.display()))?;
     if !status.success() {
         bail!("umount failed for {} with {status}", mountpoint.display());
@@ -984,7 +1047,6 @@ fn libc_effective_uid() -> u32 {
 mod tests {
     use super::*;
     use crate::config::{Filesystem, SwapConfig};
-
 
     #[test]
     fn mountinfo_parser_extracts_mountpoint_and_source_and_unescapes_spaces() {
