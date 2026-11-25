@@ -1073,6 +1073,30 @@ mod tests {
     use super::*;
     use crate::config::{Filesystem, SwapConfig};
 
+
+    #[test]
+    fn mount_root_is_created_and_unsafe_paths_are_rejected() {
+        let base = std::env::temp_dir().join(format!(
+            "artix-setup-mount-root-test-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        let empty = base.join("empty");
+        ensure_empty_mount_root(&empty).unwrap();
+        assert!(empty.is_dir());
+
+        fs::write(empty.join("existing-file"), "do not cover").unwrap();
+        assert!(ensure_empty_mount_root(&empty).is_err());
+
+        let target = base.join("target");
+        fs::create_dir(&target).unwrap();
+        let link = base.join("link");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        assert!(ensure_empty_mount_root(&link).is_err());
+
+        fs::remove_dir_all(base).unwrap();
+    }
+
     #[test]
     fn mountinfo_parser_extracts_mountpoint_and_source_and_unescapes_spaces() {
         let sample = "36 25 8:2 / /mnt/my\\040root rw,relatime - ext4 /dev/vda2 rw\n";
