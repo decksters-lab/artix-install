@@ -368,7 +368,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             } else {
                 " Navigate sections  "
             }),
-            keycap("→"),
+            keycap(if app.section_open { "Enter" } else { "→/Enter" }),
             Span::raw(if app.section_open {
                 " Confirm / finish  "
             } else {
@@ -954,7 +954,7 @@ fn help_text() -> String {
         "",
         "Up / Down    Move through settings; inside a section, move through choices",
         "Right / Enter Open a settings section",
-        "Left / Esc   Return to the settings list",
+        "Left / Esc   Back out of an open section",
         "Space        Toggle a desktop or kernel checkbox",
         "Enter        Confirm and leave a section",
         "D            Open read-only hardware and disk inventory",
@@ -962,7 +962,7 @@ fn help_text() -> String {
         "P            Toggle installation plan preview",
         "S            Save profile as ./artix-setup.toml",
         "?            Toggle this help screen",
-        "Q / Esc      Quit",
+        "Q / Esc      Quit from the main settings list",
         "",
         "DISK INVENTORY",
         "The D screen reads sysfs, procfs and udev metadata only.",
