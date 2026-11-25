@@ -290,8 +290,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
             sections[2],
         );
         frame.render_widget(
-            Paragraph::new(app.setting_description(app.selected))
-                .wrap(Wrap { trim: true }),
+            Paragraph::new(app.setting_description(app.selected)).wrap(Wrap { trim: true }),
             sections[3],
         );
         frame.render_widget(block, body[1]);
