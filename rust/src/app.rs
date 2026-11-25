@@ -652,8 +652,13 @@ impl App {
                 "Choose none, zram, swap partition, swapfile or both. zswap is modeled separately for real swap devices."
             }
             5 => "LUKS2 intent only. Passphrases are never saved in profiles or logs.",
-            6 => {
-                "Multi-select desktops and window managers. Cosmalia follows the upstream Dinit session: cosmic-comp --no-xwayland and Noctalia; no separate cosmic-osd package is listed upstream."
+            6 => match self.config.system.init_system {
+                InitSystem::Dinit => {
+                    "Multi-select desktops and window managers. Cosmalia is a Dinit-only session; its launcher runs cosmic-comp --no-xwayland with Noctalia as the shell."
+                }
+                _ => {
+                    "Multi-select desktops and window managers. Cosmalia is Dinit-only and is unavailable with the currently selected init system."
+                }
             }
             7 => {
                 "Multi-select kernels. Standard linux remains selected as the fallback. Left/Right moves the cursor; Space toggles."
@@ -683,8 +688,15 @@ impl App {
             6 => DESKTOP_CHOICES
                 .iter()
                 .map(|c| {
+                    let name = if *c == Desktop::Cosmalia
+                        && self.config.system.init_system != InitSystem::Dinit
+                    {
+                        format!("{c} (Dinit only — unavailable)")
+                    } else {
+                        c.to_string()
+                    };
                     (
-                        c.to_string(),
+                        name,
                         self.config.software.desktop_environments.contains(c),
                     )
                 })
