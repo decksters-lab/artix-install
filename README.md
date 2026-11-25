@@ -17,8 +17,8 @@ The Rust implementation is a separate project under `rust/`. It is being develop
 
 - Designed to run as a precompiled executable: **Rust and Cargo are not required on the Artix live ISO**.
 - GitHub Actions builds x86_64 GNU and musl binaries and attaches archives plus SHA-256 checksums to versioned GitHub Releases.
-- The musl build is intended to be statically linked; it still needs verification on the actual Artix live ISO.
-- **Not ready for installing a real system:** it currently provides configuration, hardware discovery, validation and installation-plan previews. It does not partition, format or install an operating system.
+- The musl build is statically linked and has been launched and smoke-tested on an Artix live ISO without Rust or Cargo.
+- It now has separately guarded storage and base-install stages, but it is **not a complete installer** and is not ready for real installations. See the Rust prototype status and safety notes below.
 
 When a tested release is available, download and extract the appropriate archive from [GitHub Releases](https://github.com/decksters-lab/artix-install/releases), then run `./artix-setup` from a terminal. Until then, use the Bash installer for actual installations.
 
@@ -169,7 +169,9 @@ The Rust implementation lives in `rust/` and is still under development; it does
 
 The GitHub Actions workflow [Build standalone Linux binaries](.github/workflows/standalone-binaries.yml) builds x86_64 GNU and musl executables, smoke-tests them, and packages each with a SHA-256 checksum. The workflow runs on pushes to this feature branch and can also be started manually from the Actions tab to produce downloadable workflow artifacts. Push a version tag beginning with `v` to publish both archives as GitHub Release assets.
 
-The musl build is intended to be statically linked and is checked for an ELF interpreter in CI. It still needs to be tested on the actual Artix live ISO before being treated as the recommended download. The GNU build is provided as a compatibility fallback.
+The musl build is intended to be statically linked and is checked for an ELF interpreter in CI. It has now been tested on an Artix live ISO: the executable launched, its SHA-256 checksum verified, configuration validation passed, and all 17 packages in the test profile were found in the enabled sync databases. This test did not run any disk-writing or package-installation stage. The GNU build is provided as a compatibility fallback.
+
+For source-build instructions, checksum guidance, and verification of GitHub's signed build-provenance attestations, see [SUPPLY_CHAIN.md](rust/docs/SUPPLY_CHAIN.md). A committed Cargo.lock, locked builds, reproducible-build checks, and an Artix package recipe are still outstanding.
 
 The executable is named `artix-setup`. Extract the archive and run it from a terminal:
 
@@ -179,4 +181,4 @@ cd artix-setup-musl
 ./artix-setup
 ```
 
-This prototype currently plans and validates configuration; it does not yet perform disk partitioning, formatting, installation, or system changes.
+This prototype currently supports guarded automatic partition-table writing, unencrypted ext4 root formatting, EFI preparation, mounting, fstab generation, and a separately confirmed Artix basestrap stage for automatic UEFI/ext4 targets. It does not yet configure the installed system, users, bootloader, services, or reboot, so it is not a complete installer. Do not use it for an actual installation yet.
