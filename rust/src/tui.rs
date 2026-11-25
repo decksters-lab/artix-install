@@ -775,7 +775,13 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
             .disks
             .iter()
             .map(|disk| {
-                let marker = if disk.can_be_selected() { "( )" } else { "(x)" };
+                let marker = if app.config.disk.target.as_ref() == Some(&disk.path) {
+                    "(*)"
+                } else if disk.can_be_selected() {
+                    "( )"
+                } else {
+                    "(x)"
+                };
                 let removable = if disk.removable { "  USB" } else { "" };
                 ListItem::new(format!(
                     " {marker} {}  {}{}",
