@@ -420,10 +420,7 @@ pub fn prepare_automatic_efi(config: &InstallConfig, typed_confirmation: &str) -
 
 /// Mount the verified automatic UEFI/ext4 layout at /mnt for the next install stage.
 /// This operation never formats devices and rolls back mounts it created on failure.
-pub fn mount_automatic_target(
-    config: &InstallConfig,
-    typed_confirmation: &str,
-) -> Result<String> {
+pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) -> Result<String> {
     config.validate().map_err(|issues| {
         anyhow::anyhow!(
             "configuration validation failed:\n- {}",
