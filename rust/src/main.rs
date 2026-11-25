@@ -49,7 +49,7 @@ struct Args {
             "preflight",
             "check_packages",
             "write_default",
-            "format_root", "prepare_efi", "mount_target", "generate_fstab"
+            "format_root", "prepare_efi", "mount_target", "generate_fstab", "install_base"
         ]
     )]
     apply_partition_table: bool,
@@ -68,7 +68,7 @@ struct Args {
             "check_packages",
             "write_default",
             "apply_partition_table",
-            "prepare_efi", "mount_target", "generate_fstab"
+            "prepare_efi", "mount_target", "generate_fstab", "install_base"
         ]
     )]
     format_root: bool,
@@ -81,7 +81,7 @@ struct Args {
         requires = "config",
         conflicts_with_all = [
             "plan", "validate", "hardware", "preflight", "check_packages",
-            "write_default", "apply_partition_table", "format_root", "mount_target", "generate_fstab"
+            "write_default", "apply_partition_table", "format_root", "mount_target", "generate_fstab", "install_base"
         ]
     )]
     prepare_efi: bool,
@@ -94,7 +94,7 @@ struct Args {
         requires = "config",
         conflicts_with_all = [
             "plan", "validate", "hardware", "preflight", "check_packages",
-            "write_default", "apply_partition_table", "format_root", "prepare_efi", "generate_fstab"
+            "write_default", "apply_partition_table", "format_root", "prepare_efi", "generate_fstab", "install_base"
         ]
     )]
     mount_target: bool,
