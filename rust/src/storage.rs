@@ -597,7 +597,9 @@ fn ensure_empty_mount_root(path: &Path) -> Result<()> {
             fs::symlink_metadata(path)
                 .with_context(|| format!("inspect newly created mount root {}", path.display()))?
         }
-        Err(error) => return Err(error).with_context(|| format!("inspect mount root {}", path.display())),
+        Err(error) => {
+            return Err(error).with_context(|| format!("inspect mount root {}", path.display()));
+        }
     };
     if !metadata.file_type().is_dir() {
         bail!("{} exists but is not a real directory", path.display());
