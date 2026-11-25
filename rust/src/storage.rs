@@ -205,22 +205,14 @@ pub fn format_automatic_root(
 ) -> Result<String> {
     config.validate().map_err(|issues| {
         anyhow::anyhow!(
-            "configuration validation failed:\\n- {}",
+            "configuration validation failed:\n- {}",
             issues.join("\\n- ")
         )
     })?;
     if libc_effective_uid() != 0 {
         bail!("root filesystem formatting requires effective UID 0");
     }
-    if config.disk.partitioning != Partitioning::Automatic {
-        bail!("root formatting currently supports automatic partition layouts only");
-    }
-    if config.disk.encryption {
-        bail!("encrypted root formatting is not implemented; refusing to format an unencrypted partition");
-    }
-    if config.disk.root_filesystem != Filesystem::Ext4 {
-        bail!("the first root formatter supports ext4 only; no formatting command was run");
-    }
+    validate_root_format_config(config)?;
 
     let selected = config
         .disk
@@ -301,6 +293,19 @@ pub fn format_automatic_root(
     ))
 }
 
+fn validate_root_format_config(config: &InstallConfig) -> Result<()> {
+    if config.disk.partitioning != Partitioning::Automatic {
+        bail!("root formatting currently supports automatic partition layouts only");
+    }
+    if config.disk.encryption {
+        bail!("encrypted root formatting is not implemented; refusing to format an unencrypted partition");
+    }
+    if config.disk.root_filesystem != Filesystem::Ext4 {
+        bail!("the first root formatter supports ext4 only; no formatting command was run");
+    }
+    Ok(())
+}
+
 fn read_partition_table(disk: &Path) -> Result<String> {
     let output = Command::new("sfdisk")
         .arg("--dump")
@@ -316,7 +321,7 @@ fn read_partition_table(disk: &Path) -> Result<String> {
 fn root_partition_path(dump: &str) -> Result<std::path::PathBuf> {
     dump.lines()
         .filter(|line| line.trim_start().starts_with("/dev/"))
-        .last()
+        .next_back()
         .and_then(|line| line.split_once(':').map(|(path, _)| Path::new(path.trim())))
         .map(Path::to_path_buf)
         .context("partition table does not identify a root partition")
@@ -632,6 +637,27 @@ fn libc_effective_uid() -> u32 {
 mod tests {
     use super::*;
     use crate::config::{Filesystem, SwapConfig};
+
+    #[test]
+    fn root_format_config_allows_only_unencrypted_automatic_ext4() {
+        let mut config = InstallConfig::default();
+        assert!(validate_root_format_config(&config).is_ok());
+        config.disk.encryption = true;
+        assert!(validate_root_format_config(&config).is_err());
+        config.disk.encryption = false;
+        config.disk.root_filesystem = Filesystem::Btrfs;
+        assert!(validate_root_format_config(&config).is_err());
+        config.disk.root_filesystem = Filesystem::Ext4;
+        config.disk.partitioning = Partitioning::Manual;
+        assert!(validate_root_format_config(&config).is_err());
+    }
+
+    #[test]
+    fn root_partition_path_uses_final_partition_and_rejects_empty_dump() {
+        let dump = "label: gpt\n/dev/vda1 : start=2048, size=2097152, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\n/dev/vda2 : start=2099200, size=91852800, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4\n";
+        assert_eq!(root_partition_path(dump).unwrap(), Path::new("/dev/vda2"));
+        assert!(root_partition_path("label: gpt\n").is_err());
+    }
 
     #[test]
     fn uefi_layout_writes_gpt_efi_and_remaining_root() {
