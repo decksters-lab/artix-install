@@ -103,6 +103,19 @@ fn is_missing_error(stderr: &str, package: &str) -> bool {
 }
 
 pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport> {
+    check_with(config, |target| {
+        Command::new(pacman)
+            .arg("-Si")
+            .arg(target)
+            .output()
+            .with_context(|| format!("run {} -Si {target}", pacman.display()))
+    })
+}
+
+fn check_with<F>(config: &InstallConfig, mut query: F) -> Result<PackageCheckReport>
+where
+    F: FnMut(&str) -> Result<std::process::Output>,
+{
     let plan = packages::build_package_plan(config);
     let mut packages = BTreeMap::<String, (PackageSource, bool)>::new();
 
@@ -164,13 +177,8 @@ pub fn check(config: &InstallConfig, pacman: &Path) -> Result<PackageCheckReport
 
         // Artix publishes base and base-devel as installable meta-packages;
         // -Sg only searches group metadata and incorrectly reports them missing.
-        let query = "-Si";
         let target = repository_target(&name, source);
-        let result = Command::new(pacman)
-            .arg(query)
-            .arg(&target)
-            .output()
-            .with_context(|| format!("run {} {query} {target}", pacman.display()))?;
+        let result = query(&target)?;
         if result.status.success() {
             checks.push(PackageCheck {
                 name,
