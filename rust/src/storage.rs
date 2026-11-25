@@ -506,7 +506,9 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
     let result = (|| -> Result<()> {
         match fs::symlink_metadata(efi_mount) {
             Ok(metadata) if metadata.file_type().is_dir() => {}
-            Ok(_) => bail!("/mnt/boot exists but is not a real directory; refusing to mount over it"),
+            Ok(_) => {
+                bail!("/mnt/boot exists but is not a real directory; refusing to mount over it")
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 fs::create_dir(efi_mount)
                     .context("create /mnt/boot inside the mounted root filesystem")?;
