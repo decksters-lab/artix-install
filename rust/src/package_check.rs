@@ -262,14 +262,16 @@ mod tests {
             }
         };
         let path = directory.join("pacman");
+        let temporary_path = directory.join("pacman.tmp");
         fs::write(
-            &path,
+            &temporary_path,
             "#!/bin/sh\nif [ \"$1\" = \"-Si\" ] && [ \"$2\" = \"base\" ]; then echo \"Name : base\"; exit 0; fi\necho \"error: package '$2' was not found\" >&2\nexit 1\n",
         )
         .unwrap();
-        let mut permissions = fs::metadata(&path).unwrap().permissions();
+        let mut permissions = fs::metadata(&temporary_path).unwrap().permissions();
         permissions.set_mode(0o755);
-        fs::set_permissions(&path, permissions).unwrap();
+        fs::set_permissions(&temporary_path, permissions).unwrap();
+        fs::rename(&temporary_path, &path).unwrap();
         path
     }
 
