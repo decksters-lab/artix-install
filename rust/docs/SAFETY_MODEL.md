@@ -10,7 +10,7 @@ The Rust installer is being built in guarded stages alongside the existing Bash 
 - `--mount-target` mounts the verified ext4 root at `/mnt` and FAT EFI at `/mnt/boot`, after exact `--confirm-mount` confirmation. It verifies the actual kernel mount table and rolls back mounts created by the operation if verification fails.
 - `--generate-fstab` requires those exact filesystems to be mounted at the expected paths. It asks Artix `fstabgen -U` for UUID-based entries, validates root and EFI entries, refuses to replace an existing fstab, writes atomically, and verifies the result with `findmnt --verify`.
 
-The storage executors currently support only automatic, unencrypted UEFI with an ext4 root. Manual partitioning, dual-boot, encryption, Btrfs, and BIOS executor paths are not implemented.
+The storage and basestrap executors currently support only automatic, unencrypted UEFI with an ext4 root. Manual partitioning, dual-boot, encryption, Btrfs, and BIOS executor paths are not implemented.
 
 ## Not implemented yet
 
