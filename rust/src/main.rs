@@ -48,7 +48,7 @@ struct Args {
             "preflight",
             "check_packages",
             "write_default",
-            "format_root", "prepare_efi", "mount_target"
+            "format_root", "prepare_efi", "mount_target", "generate_fstab"
         ]
     )]
     apply_partition_table: bool,
@@ -67,7 +67,7 @@ struct Args {
             "check_packages",
             "write_default",
             "apply_partition_table",
-            "prepare_efi", "mount_target"
+            "prepare_efi", "mount_target", "generate_fstab"
         ]
     )]
     format_root: bool,
@@ -93,13 +93,24 @@ struct Args {
         requires = "config",
         conflicts_with_all = [
             "plan", "validate", "hardware", "preflight", "check_packages",
-            "write_default", "apply_partition_table", "format_root", "prepare_efi"
+            "write_default", "apply_partition_table", "format_root", "prepare_efi", "generate_fstab"
         ]
     )]
     mount_target: bool,
     /// Exact configured disk path confirmation required by --mount-target.
     #[arg(long, value_name = "DEVICE", requires = "mount_target")]
     confirm_mount: Option<String>,
+    /// Generate a UUID-based /etc/fstab for the verified mounted target.
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan", "validate", "hardware", "preflight", "check_packages",
+            "write_default", "apply_partition_table", "format_root", "prepare_efi",
+            "mount_target"
+        ]
+    )]
+    generate_fstab: bool,
     /// Check planned packages against currently enabled pacman sync databases; does not refresh them.
     #[arg(long)]
     check_packages: bool,
@@ -230,6 +241,20 @@ fn run() -> Result<()> {
             bail!("live environment preflight failed; target was not mounted");
         }
         let result = storage::mount_automatic_target(&config, confirmation)?;
+        println!("{result}");
+        return Ok(());
+    }
+    if args.generate_fstab {
+        if !has_explicit_config {
+            bail!("--generate-fstab requires an explicit --config file");
+        }
+        let environment = discovery::discover();
+        let report = preflight::run(&config, &environment);
+        print!("{}", report.render());
+        if !report.is_ready() {
+            bail!("live environment preflight failed; fstab was not generated");
+        }
+        let result = storage::generate_automatic_fstab(&config)?;
         println!("{result}");
         return Ok(());
     }
