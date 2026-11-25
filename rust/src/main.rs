@@ -1,4 +1,5 @@
 mod app;
+mod base_install;
 mod config;
 mod discovery;
 mod package_check;
@@ -114,6 +115,20 @@ struct Args {
     /// Check planned packages against currently enabled pacman sync databases; does not refresh them.
     #[arg(long)]
     check_packages: bool,
+    /// Install the verified base system to /mnt with basestrap (requires --confirm-install).
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan", "validate", "hardware", "preflight", "check_packages",
+            "write_default", "apply_partition_table", "format_root", "prepare_efi",
+            "mount_target", "generate_fstab"
+        ]
+    )]
+    install_base: bool,
+    /// Exact configured whole-disk path confirmation required by --install-base.
+    #[arg(long, value_name = "DEVICE", requires = "install_base")]
+    confirm_install: Option<String>,
     /// Write the default configuration to FILE and exit.
     #[arg(long, value_name = "FILE")]
     write_default: Option<PathBuf>,
@@ -254,6 +269,20 @@ fn run() -> Result<()> {
         let result = storage::generate_automatic_fstab(&config)?;
         println!("{result}");
         return Ok(());
+    }
+    if args.install_base {
+        if !has_explicit_config {
+            bail!("--install-base requires an explicit --config file");
+        }
+        let confirmation = args.confirm_install.as_deref().context(
+            "--install-base requires --confirm-install with the exact configured disk path",
+        )?;
+        let result = base_install::install_base(&config, confirmation)?;
+        println!("{result}");
+        return Ok(());
+    }
+    if args.confirm_install.is_some() {
+        bail!("--confirm-install is only valid with --install-base");
     }
     if args.check_packages {
         config.validate().map_err(|issues| {
