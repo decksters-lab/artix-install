@@ -199,10 +199,7 @@ pub fn apply_automatic_partition_table(
 }
 
 /// Format only the root partition from a freshly verified automatic layout.
-pub fn format_automatic_root(
-    config: &InstallConfig,
-    typed_confirmation: &str,
-) -> Result<String> {
+pub fn format_automatic_root(config: &InstallConfig, typed_confirmation: &str) -> Result<String> {
     config.validate().map_err(|issues| {
         anyhow::anyhow!(
             "configuration validation failed:\n- {}",
@@ -231,7 +228,9 @@ pub fn format_automatic_root(
         .partitions
         .iter()
         .find(|partition| same_device_path(&partition.path, &root_path))
-        .context("root partition from the partition table is not present in fresh device discovery")?;
+        .context(
+            "root partition from the partition table is not present in fresh device discovery",
+        )?;
     validate_format_target(root_partition, &root_path)?;
 
     let mkfs = Command::new("mkfs.ext4")
@@ -284,7 +283,9 @@ pub fn format_automatic_root(
         .output()
         .context("verify the newly formatted root filesystem with blkid")?;
     if !probe.status.success() || String::from_utf8_lossy(&probe.stdout).trim() != "ext4" {
-        bail!("mkfs.ext4 returned success, but blkid could not confirm an ext4 filesystem; do not continue");
+        bail!(
+            "mkfs.ext4 returned success, but blkid could not confirm an ext4 filesystem; do not continue"
+        );
     }
 
     Ok(format!(
@@ -298,7 +299,9 @@ fn validate_root_format_config(config: &InstallConfig) -> Result<()> {
         bail!("root formatting currently supports automatic partition layouts only");
     }
     if config.disk.encryption {
-        bail!("encrypted root formatting is not implemented; refusing to format an unencrypted partition");
+        bail!(
+            "encrypted root formatting is not implemented; refusing to format an unencrypted partition"
+        );
     }
     if config.disk.root_filesystem != Filesystem::Ext4 {
         bail!("the first root formatter supports ext4 only; no formatting command was run");
