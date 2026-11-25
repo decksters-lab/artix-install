@@ -1,12 +1,12 @@
 [package]
-name = "artix-setup"
+name = "agsi"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Artix Granular System Installer — a safe, interactive Artix Linux installer prototype"
 
 [[bin]]
-name = "artix-setup"
+name = "agsi"
 path = "src/main.rs"
 
 [dependencies]
