@@ -212,11 +212,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
         .split(outer[1]);
     let items: Vec<ListItem<'_>> = (0..SETTING_COUNT)
         .map(|index| {
-            let marker = if index == 1 && app.config.disk.target.is_none() {
-                "○"
-            } else {
-                "●"
-            };
+            let marker = "●";
             ListItem::new(format!(" {marker} {:<19}", app.setting_label(index)))
         })
         .collect();
@@ -737,11 +733,7 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
 
     let settings: Vec<ListItem<'_>> = (0..SETTING_COUNT)
         .map(|index| {
-            let marker = if index == 1 && app.config.disk.target.is_none() {
-                "○"
-            } else {
-                "●"
-            };
+            let marker = "●";
             ListItem::new(format!(" {marker} {:<19}", app.setting_label(index)))
         })
         .collect();
