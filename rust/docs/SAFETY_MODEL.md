@@ -1,44 +1,46 @@
-# Safety model (prototype)
+# Safety model
 
-This milestone is intentionally unable to alter the host system.
+The Rust installer is being built in guarded stages alongside the existing Bash installer. The Bash installer remains the supported path until the Rust implementation reaches feature parity and passes disposable-VM testing.
 
-## Current guarantees
+## Implemented executor stages
 
-- There is no process-launching API in the Rust source (`std::process::Command`, shell execution, spawn or output calls are absent).
-- The source contains no disk-writing workflow. The partition module is a pure plan generator; partitioning, formatting, LUKS setup, mounting, chroot and package installation are not implemented.
-- An unset `disk.target` is the default. The planner blocks storage and downstream installation steps when no explicit target is configured.
-- A configured target must be an explicit `/dev/...` path; `/dev/disk/by-id/...` is preferred for a future unattended workflow.
-- Dual-boot mode rejects `efi_policy = "format"`; EFI preservation is the default.
-- BIOS mode is GRUB-only. BIOS + F2FS is rejected pending a deliberate compatibility override.
-- Manual additional mountpoints must be absolute non-root paths and cannot contain `..`.
-- Desktop conflicts (SwayFX/Sway and SwayFX/Umbriel) and the dinit-only Cosmalia constraint are validated.
-- `linux` is retained as the required fallback kernel.
-- Profiles do not contain passwords or LUKS passphrases.
-- `--plan`, `--validate` and `--hardware` are read-only operations.
-- Hardware discovery reads sysfs, procfs and udev metadata only; it does not spawn commands or open block devices for writing.
-- The disk inventory lists whole physical block devices and their partition children. It treats a disk as busy if the disk or any discovered partition is mounted.
-- The TUI refuses to select disks that are mounted, have active swap on the disk or any child partition, are read-only, or have active holders on the disk or any child partition. Removable status is shown but is not an automatic exclusion.
-- eMMC boot0/boot1 and RPMB special regions are not shown as normal installation disks.
-- Disk selection fails closed when the current mount table, active swap list, device read-only flag, holder directory or device number cannot be inspected; missing safety data is never treated as proof that a disk is free.
-- The partition manager's Manual mode only assigns existing partitions to root/EFI/swap roles; it does not launch cfdisk or create/resize partitions.
-- Dual-boot plans preserve the existing partition table and make EFI formatting impossible in the planner. In the TUI, an EFI partition is assignable for preservation only when its detected filesystem is FAT32/vfat.
-- Changing the selected target disk clears previous manual root/EFI/swap assignments and additional mountpoints.
-- Automatic plans describe a GPT/UEFI or DOS/MBR layout, root filesystem, optional LUKS2, swap and Btrfs subvolume operations; those are not executed.
-- Btrfs swapfile plans explicitly place the file in a dedicated NOCOW subvolume (or at /swapfile for flat layouts).
-- A selected device path is still only configuration data; no disk operations exist in this milestone.
+- `--apply-partition-table` writes only the automatic partition layout after an exact `--confirm-target` path confirmation. It rechecks device identity, reads the partition table back, and verifies the resulting partitions.
+- `--format-root` formats only the planned ext4 root partition after an exact `--confirm-partition` confirmation. It rechecks the disk, partition table, and partition safety immediately before formatting.
+- `--prepare-efi` preserves an existing FAT EFI filesystem. It formats only a blank EFI partition, after checking both `blkid` and `wipefs`, and requires exact `--confirm-efi` confirmation.
+- `--mount-target` mounts the verified ext4 root at `/mnt` and FAT EFI at `/mnt/boot`, after exact `--confirm-mount` confirmation. It verifies the actual kernel mount table and rolls back mounts created by the operation if verification fails.
+- `--generate-fstab` requires those exact filesystems to be mounted at the expected paths. It asks Artix `fstabgen -U` for UUID-based entries, validates root and EFI entries, refuses to replace an existing fstab, writes atomically, and verifies the result with `findmnt --verify`.
 
-## Before a real executor is added
+The storage executors currently support only automatic, unencrypted UEFI with an ext4 root. Manual partitioning, dual-boot, encryption, Btrfs, and BIOS executor paths are not implemented.
 
-1. Extend read-only block-device discovery to verify partition-table type, filesystem UUIDs/labels, holders, ancestry and live-media identity on target Artix ISOs.
-2. Reject the live medium, mounted devices, devices containing mounted descendants, and ambiguous/removable targets by default.
-3. Extend the planner with live partition-table and stable device identity data, then show the exact partition table and format operations; require typed confirmation of the full device identity and target path.
-4. For manual mode, represent every selected partition, mountpoint and format policy in the plan before executing any action.
-5. For dual-boot, require explicit root and EFI partitions, verify the EFI filesystem and existing contents, and make EFI formatting structurally impossible in the executor.
-6. Re-check device identities immediately before each destructive operation to avoid stale device paths.
-7. Never interpolate user data into shell strings. Invoke programs with argument arrays and validated paths.
-8. Run one operation at a time, capture stdout/stderr, check exit status and stop on failure.
-9. Add transaction/checkpoint recovery and test every failure point in disposable virtual machines before enabling disk writes.
-10. Keep secrets out of TOML, process arguments and logs; use no-echo prompts or dedicated file descriptors.
-11. Verify init-specific package/service availability and optional desktop package availability against current Artix/Arch/CachyOS repositories before offering those choices.
+## Not implemented yet
 
-Any unattended mode must require a fully specified device identity and an explicit destructive-operation opt-in. It must never bypass the same safety checks used by interactive installs.
+- Base-system installation with `basestrap`.
+- Package installation beyond the base system, chroot configuration, user/password setup, locale and timezone application.
+- Init-specific service activation, bootloader installation/configuration, initramfs generation, and first-boot validation.
+- A complete guided one-action installation workflow.
+
+Do not treat the current Rust prototype as a replacement for the Bash installer.
+
+## Safety guarantees and constraints
+
+- An unset `disk.target` is the default. Storage operations require an explicit configuration.
+- Destructive storage operations require the exact target path confirmation for that operation.
+- Disk discovery rejects mounted devices, active swap, read-only devices, active holders, and incomplete safety inspection. The live medium and ambiguous targets must not be selected.
+- Disk identity and partition layout are rechecked before writes. Post-write partition tables and filesystem types are read back and verified.
+- Existing EFI filesystems are never formatted by `--prepare-efi`; only a demonstrably blank EFI partition can be formatted.
+- The mount stage does not format filesystems. It checks filesystem types, refuses occupied mountpoints, verifies actual mount sources, and rolls back its own mounts on failure.
+- The fstab stage uses UUIDs, requires exactly one ext4 root entry and one vfat `/boot` entry, and will not overwrite an existing file.
+- User-supplied data is passed as process arguments, not interpolated into shell commands.
+- Passwords and LUKS passphrases are never serialized into TOML or logs.
+- `--plan`, `--validate`, `--hardware`, and `--check-packages` are read-only. Package checks query only currently enabled sync databases and do not refresh them.
+
+## Required before replacing the Bash installer
+
+1. Implement and test base-system installation, package installation, chroot configuration, bootloader setup, and init-specific service activation.
+2. Port every supported Bash feature or clearly remove unsupported options from the Rust UI.
+3. Add transaction checkpoints and recovery behavior for every stage that can leave a partially installed target.
+4. Test success and failure paths on disposable VMs for every supported firmware, init, filesystem, and desktop combination.
+5. Verify that the installed system boots and that networking, user login, desktop session, and services work.
+6. Keep the Bash installer untouched until parity and release criteria are met.
+
+Any unattended installation must require a fully specified device identity and an explicit destructive-operation opt-in. It must never bypass the same safety checks used by the interactive workflow.
