@@ -80,7 +80,7 @@ struct Args {
         requires = "config",
         conflicts_with_all = [
             "plan", "validate", "hardware", "preflight", "check_packages",
-            "write_default", "apply_partition_table", "format_root", "mount_target"
+            "write_default", "apply_partition_table", "format_root", "mount_target", "generate_fstab"
         ]
     )]
     prepare_efi: bool,
