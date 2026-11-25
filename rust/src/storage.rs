@@ -323,8 +323,7 @@ fn read_partition_table(disk: &Path) -> Result<String> {
 
 fn root_partition_path(dump: &str) -> Result<std::path::PathBuf> {
     dump.lines()
-        .filter(|line| line.trim_start().starts_with("/dev/"))
-        .next_back()
+        .rfind(|line| line.trim_start().starts_with("/dev/"))
         .and_then(|line| line.split_once(':').map(|(path, _)| Path::new(path.trim())))
         .map(Path::to_path_buf)
         .context("partition table does not identify a root partition")
