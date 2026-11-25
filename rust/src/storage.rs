@@ -650,7 +650,7 @@ fn mountpoint_is_used(path: &Path) -> Result<bool> {
     let wanted = path.to_string_lossy();
     Ok(mountinfo_entries(&contents)
         .iter()
-        .any(|(mountpoint, _)| mountpoint == wanted))
+        .any(|(mountpoint, _)| mountpoint == wanted.as_ref()))
 }
 
 fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> {
@@ -664,7 +664,7 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
         )
     })?;
     for (mounted_at, source) in mountinfo_entries(&contents) {
-        if mounted_at == wanted_mount {
+        if mounted_at == wanted_mount.as_ref() {
             let actual = fs::canonicalize(&source)
                 .with_context(|| format!("resolve mounted source {source}"))?;
             if actual == expected {
