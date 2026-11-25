@@ -322,7 +322,11 @@ impl App {
     }
 
     pub fn adjust(&mut self, delta: isize) {
-        let had_cosmalia_selected = self.config.software.desktop_environments.contains(&Desktop::Cosmalia);
+        let had_cosmalia_selected = self
+            .config
+            .software
+            .desktop_environments
+            .contains(&Desktop::Cosmalia);
         match self.selected {
             0 => {
                 self.config.system.init_system = cycle(
