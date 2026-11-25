@@ -121,39 +121,9 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     verify_mount_source(Path::new(TARGET_ROOT), &root)?;
     verify_mount_source(Path::new(TARGET_BOOT), &efi)?;
 
-    // Refuse any pre-existing target installation. A freshly formatted ext4 root
-    // may contain only its standard lost+found directory before basestrap.
-    let root_entries = fs::read_dir(TARGET_ROOT).context("read mounted target root")?;
-    for entry in root_entries {
-        let entry = entry.context("inspect mounted target root entry")?;
-        if entry.file_name() != "lost+found" {
-            bail!(
-                "{} already contains '{}'; refusing to install over existing data",
-                TARGET_ROOT,
-                entry.file_name().to_string_lossy()
-            );
-        }
-        let metadata = fs::symlink_metadata(entry.path()).context("inspect lost+found")?;
-        if !metadata.file_type().is_dir() {
-            bail!("/mnt/lost+found is not a real directory; refusing to continue");
-        }
-        if fs::read_dir(entry.path())
-            .context("inspect lost+found contents")?
-            .next()
-            .is_some()
-        {
-            bail!("/mnt/lost+found is not empty; refusing to continue");
-        }
-    }
-    for path in ["/mnt/etc", "/mnt/usr", "/mnt/var", "/mnt/boot/grub"] {
-        match fs::symlink_metadata(path) {
-            Ok(_) => bail!(
-                "{path} already exists; refusing to overwrite a possible existing installation"
-            ),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error).with_context(|| format!("inspect {path}")),
-        }
-    }
+    // Refuse any pre-existing target installation, then repeat this check immediately
+    // before basestrap after package queries have completed.
+    ensure_pristine_target()?;
 
     let plan = packages::build_package_plan(config);
     if plan
@@ -248,17 +218,7 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     verify_no_unexpected_target_mounts()?;
     verify_blkid_type(&efi, "vfat")?;
     verify_blkid_type(&root, "ext4")?;
-    for path in ["/mnt/etc", "/mnt/usr", "/mnt/var", "/mnt/boot/grub"] {
-        match fs::symlink_metadata(path) {
-            Ok(_) => bail!(
-                "target contents changed during preflight ({path} now exists); basestrap was not started"
-            ),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error).with_context(|| format!("reinspect {path} before basestrap"));
-            }
-        }
-    }
+    ensure_pristine_target()?;
 
     let mut command = Command::new("basestrap");
     command.arg(TARGET_ROOT).args(&package_names);
@@ -275,6 +235,41 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         TARGET_ROOT,
         selected.display()
     ))
+}
+
+fn ensure_pristine_target() -> Result<()> {
+    let root_entries = fs::read_dir(TARGET_ROOT).context("read mounted target root")?;
+    for entry in root_entries {
+        let entry = entry.context("inspect mounted target root entry")?;
+        if entry.file_name() != "lost+found" {
+            bail!(
+                "{} already contains '{}'; refusing to install over existing data",
+                TARGET_ROOT,
+                entry.file_name().to_string_lossy()
+            );
+        }
+        let metadata = fs::symlink_metadata(entry.path()).context("inspect lost+found")?;
+        if !metadata.file_type().is_dir() {
+            bail!("/mnt/lost+found is not a real directory; refusing to continue");
+        }
+        if fs::read_dir(entry.path())
+            .context("inspect lost+found contents")?
+            .next()
+            .is_some()
+        {
+            bail!("/mnt/lost+found is not empty; refusing to continue");
+        }
+    }
+    for path in ["/mnt/etc", "/mnt/usr", "/mnt/var", "/mnt/boot/grub"] {
+        match fs::symlink_metadata(path) {
+            Ok(_) => bail!(
+                "{path} already exists; refusing to overwrite a possible existing installation"
+            ),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error).with_context(|| format!("inspect {path}")),
+        }
+    }
+    Ok(())
 }
 
 fn verify_no_unexpected_target_mounts() -> Result<()> {
