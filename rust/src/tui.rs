@@ -184,7 +184,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                " SYSTEM INSTALLER",
+                " GRANULAR SYSTEM INSTALLER",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
@@ -702,7 +702,7 @@ fn render_disks(frame: &mut Frame<'_>, app: &App) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                " SETUP",
+                " GRANULAR INSTALLER",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
@@ -896,7 +896,7 @@ fn keycap(value: &'static str) -> Span<'static> {
 
 fn help_text() -> String {
     [
-        "ARTIX SETUP — KEYBOARD HELP",
+        "ARTIX GRANULAR SYSTEM INSTALLER — HELP",
         "",
         "Up / Down    Move through settings; inside a section, move through choices",
         "Right / Enter Open a settings section",
