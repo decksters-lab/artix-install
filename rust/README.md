@@ -71,7 +71,7 @@ Btrfs layouts are configurable as flat, standard (`@`, `@home`, `@log`, `@cache`
 
 ## Safety model
 
-The storage executors are deliberately narrow and guarded. Automatic partitioning, root formatting, EFI preparation, mounting, and fstab generation each revalidate their target and stop on uncertainty. Existing EFI filesystems and existing fstab files are preserved. The currently implemented storage path supports only unencrypted automatic UEFI/ext4 installs; base-system installation and later setup stages are not implemented yet.
+The storage and basestrap executors are deliberately narrow and guarded. Automatic partitioning, root formatting, EFI preparation, mounting, fstab generation, and base installation each revalidate their target and stop on uncertainty. Existing EFI filesystems and existing fstab files are preserved. The current executable path supports only unencrypted automatic UEFI/ext4 installs; chroot configuration and later setup stages are not implemented yet.
 
 Read [`docs/SAFETY_MODEL.md`](docs/SAFETY_MODEL.md) for the exact guarantees, limitations, and remaining release requirements.
 
