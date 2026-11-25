@@ -676,7 +676,6 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
     )
 }
 
-
 fn rollback_mount(mountpoint: &Path, description: &str, errors: &mut Vec<String>) {
     match mountpoint_is_used(mountpoint) {
         Ok(false) => {}
