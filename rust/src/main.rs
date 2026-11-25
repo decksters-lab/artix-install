@@ -248,12 +248,9 @@ fn run() -> Result<()> {
         if !has_explicit_config {
             bail!("--generate-fstab requires an explicit --config file");
         }
-        let environment = discovery::discover();
-        let report = preflight::run(&config, &environment);
-        print!("{}", report.render());
-        if !report.is_ready() {
-            bail!("live environment preflight failed; fstab was not generated");
-        }
+        // The target is expected to be mounted for this stage, so the ordinary
+        // free-disk preflight would correctly flag it as busy. The fstab executor
+        // instead verifies the exact mount sources and filesystem types itself.
         let result = storage::generate_automatic_fstab(&config)?;
         println!("{result}");
         return Ok(());
