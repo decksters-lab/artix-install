@@ -15,6 +15,10 @@ The Rust installer is experimental. These checks improve traceability; they are 
   The resulting executable is `target/release/artix-setup`. Source builds are available now, but dependency pinning is not yet at the standard required for reproducible release builds: a committed `Cargo.lock` and locked CI builds are still required.
 - **Package-manager recipe:** an official PKGBUILD / Artix package is not published yet. It should be added only after the source and dependency lock are pinned and the package can be built and tested in a clean Artix environment.
 
+## Preview release publication
+
+The feature-branch workflow publishes a preview release only when a maintainer explicitly marks a commit message with `[publish-preview]`. The workflow builds and smoke-tests both x86_64 archives first, then creates the preview tag at that exact commit. Ordinary branch pushes and pull-request builds do not overwrite a published release. This keeps the release tag, source commit, and packaged binaries aligned.
+
 ## Verify an archive checksum
 
 Download the archive and its matching `.sha256` file from the same GitHub Release, then run:
