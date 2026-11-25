@@ -1075,7 +1075,6 @@ mod tests {
     use super::*;
     use crate::config::{Filesystem, SwapConfig};
 
-
     #[test]
     fn mount_root_is_created_and_unsafe_paths_are_rejected() {
         let base = std::env::temp_dir().join(format!(
