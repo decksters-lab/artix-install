@@ -266,10 +266,16 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         .map(str::trim)
         != Some("gpt")
         || latest_paths.len() != expected_count
-        || fs::canonicalize(latest_paths.first().context("latest table has no EFI partition")?)?
-            != efi
-        || fs::canonicalize(latest_paths.last().context("latest table has no root partition")?)?
-            != root
+        || fs::canonicalize(
+            latest_paths
+                .first()
+                .context("latest table has no EFI partition")?,
+        )? != efi
+        || fs::canonicalize(
+            latest_paths
+                .last()
+                .context("latest table has no root partition")?,
+        )? != root
     {
         bail!("target partition table changed during preflight; basestrap was not started");
     }
