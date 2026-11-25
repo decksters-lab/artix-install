@@ -955,7 +955,7 @@ fn help_text() -> String {
         "Up / Down    Move through settings; inside a section, move through choices",
         "Right / Enter Open a settings section",
         "Left / Esc   Return to the settings list",
-        "Space        Toggle a checkbox or switch",
+        "Space        Toggle a desktop or kernel checkbox",
         "Enter        Confirm and leave a section",
         "D            Open read-only hardware and disk inventory",
         "M            Open partition manager and assign existing partitions",
