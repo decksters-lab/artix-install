@@ -125,11 +125,7 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                     }
                 }
                 KeyCode::Enter if app.section_open => {
-                    if matches!(app.selected, 6 | 7) {
-                        app.toggle_multi_selection();
-                    } else {
-                        app.section_open = false;
-                    }
+                    app.section_open = false;
                 }
                 KeyCode::Char(' ') if app.section_open && matches!(app.selected, 6 | 7) => {
                     app.toggle_multi_selection();
@@ -912,8 +908,11 @@ fn help_text() -> String {
         "ARTIX SETUP — KEYBOARD HELP",
         "",
         "Up / Down    Move through settings",
-        "Left / Right Change a value, or move a multi-select cursor",
-        "Space / Enter Toggle a desktop or kernel choice",
+        "Up / Down    Move through settings; inside a section, move through choices",
+        "Right / Enter Open a settings section",
+        "Left / Esc   Return to the settings list",
+        "Space        Toggle a checkbox or switch",
+        "Enter        Confirm and leave a section",
         "D            Open read-only hardware and disk inventory",
         "M            Open partition manager and assign existing partitions",
         "P            Toggle installation plan preview",
