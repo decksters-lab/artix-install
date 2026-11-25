@@ -524,16 +524,8 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
 
     if let Err(error) = result {
         let mut rollback_errors = Vec::new();
-        if mountpoint_is_used(efi_mount).unwrap_or(false)
-            && let Err(e) = run_umount(efi_mount)
-        {
-            rollback_errors.push(format!("unmount /mnt/boot: {e:#}"));
-        }
-        if mountpoint_is_used(root_mount).unwrap_or(false)
-            && let Err(e) = run_umount(root_mount)
-        {
-            rollback_errors.push(format!("unmount /mnt: {e:#}"));
-        }
+        rollback_mount(efi_mount, "unmount /mnt/boot", &mut rollback_errors);
+        rollback_mount(root_mount, "unmount /mnt", &mut rollback_errors);
         if rollback_errors.is_empty() {
             return Err(error).context(
                 "mount operation failed; mounts created by this operation were rolled back",
@@ -682,6 +674,25 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
         "{} does not appear in the kernel mount table after mount",
         mountpoint.display()
     )
+}
+
+
+fn rollback_mount(mountpoint: &Path, description: &str, errors: &mut Vec<String>) {
+    match mountpoint_is_used(mountpoint) {
+        Ok(false) => {}
+        Ok(true) => {
+            if let Err(error) = run_umount(mountpoint) {
+                errors.push(format!("{description}: {error:#}"));
+            }
+        }
+        Err(check_error) => {
+            if let Err(unmount_error) = run_umount(mountpoint) {
+                errors.push(format!(
+                    "{description}: could not verify mount state ({check_error:#}) and unmount failed ({unmount_error:#})"
+                ));
+            }
+        }
+    }
 }
 
 fn run_mount(device: &Path, mountpoint: &Path) -> Result<()> {
