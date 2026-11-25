@@ -11,7 +11,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::{
     config::{Filesystem, FirmwareMode, InstallConfig, Partitioning, SwapMode},
-    discovery::{self, BlockDevice, BlockPartition},
+    discovery::{self, BlockDevice},
     package_check::{self, Availability},
     packages::{self, PackageSource},
 };
