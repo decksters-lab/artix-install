@@ -350,16 +350,34 @@ pub fn prepare_automatic_efi(config: &InstallConfig, typed_confirmation: &str) -
     let existing_type = String::from_utf8_lossy(&probe.stdout)
         .trim()
         .to_ascii_lowercase();
-    let should_format = if probe.status.success() {
-        if existing_type == "vfat" {
-            false
-        } else {
+    let should_format = if probe.status.success() && existing_type == "vfat" {
+        false
+    } else if probe.status.success() && !existing_type.is_empty() {
+        bail!(
+            "EFI partition contains an existing '{}' filesystem; refusing to overwrite it",
+            existing_type
+        );
+    } else if (probe.status.success() || probe.status.code() == Some(2))
+        && existing_type.is_empty()
+    {
+        // blkid can succeed after finding partition metadata without finding a
+        // filesystem TYPE. Confirm that no on-disk signatures exist before
+        // treating this as a blank EFI partition.
+        let signatures = Command::new("wipefs")
+            .args(["--no-act", "--noheadings", "--output", "TYPE", "--"])
+            .arg(&canonical)
+            .output()
+            .context("wipefs is required to confirm that the EFI partition has no signatures")?;
+        if !signatures.status.success() {
+            bail!("could not inspect EFI partition signatures; refusing to format");
+        }
+        let signatures = String::from_utf8_lossy(&signatures.stdout);
+        if !signatures.trim().is_empty() {
             bail!(
-                "EFI partition contains an existing '{}' filesystem; refusing to overwrite it",
-                existing_type
+                "EFI partition contains existing on-disk signatures ({}); refusing to overwrite them",
+                signatures.trim().replace('\n', ", ")
             );
         }
-    } else if probe.status.code() == Some(2) && existing_type.is_empty() {
         true
     } else {
         bail!("could not determine whether EFI partition is blank; refusing to format");
