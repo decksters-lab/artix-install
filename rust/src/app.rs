@@ -89,7 +89,7 @@ impl App {
                 self.hardware.disks.len()
             );
         } else {
-            self.status = "Returned to configuration.".into();
+            self.status = "Returned to installation settings.".into();
         }
     }
 
@@ -139,7 +139,7 @@ impl App {
         self.status = if self.show_storage {
             "Partition manager is planning-only. No partitioning or formatting is available.".into()
         } else {
-            "Returned to configuration.".into()
+            "Returned to installation settings.".into()
         };
     }
 
@@ -179,7 +179,7 @@ impl App {
         }
         if role == PartitionRole::Swap && self.config.disk.swap.mode != SwapMode::Partition {
             self.status =
-                "Select Swap = partition in the configuration before assigning a swap partition."
+                "Select Swap = partition in installation settings before assigning a swap partition."
                     .into();
             return;
         }
