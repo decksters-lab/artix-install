@@ -596,6 +596,14 @@ mod tests {
         );
         config.system.user_services = UserServices::Manual;
         assert!(config.validate().is_ok());
+        config.system.user_services = UserServices::None;
+        assert!(
+            config
+                .validate()
+                .unwrap_err()
+                .iter()
+                .any(|issue| issue.contains("user_services"))
+        );
 
         config.system.init_system = InitSystem::OpenRc;
         config.system.user_services = UserServices::Userspawn;
