@@ -706,7 +706,7 @@ impl App {
             10 => "UEFI supports GRUB2, Limine or rEFInd. BIOS is locked to GRUB2.",
             11 => {
                 "Choose doas, sudo, or both. Selecting both installs both tools; the final system setup will configure each safely."
-            },
+            }
             12 => {
                 "Init-specific user services: Dinit userspawn-dinit or Turnstile; OpenRC native (0.62+, PAM/XDG_RUNTIME_DIR) or Turnstile; runit userspawn-runit; s6 manual."
             }
