@@ -339,10 +339,10 @@ impl App {
                     ],
                     delta,
                 );
-                if !user_service_choices(self.config.system.init_system)
-                    .contains(&self.config.system.user_services)
-                {
-                    self.config.system.user_services = UserServices::None;
+                let supported_user_services =
+                    user_service_choices(self.config.system.init_system);
+                if !supported_user_services.contains(&self.config.system.user_services) {
+                    self.config.system.user_services = supported_user_services[0];
                 }
                 if self.config.system.init_system != InitSystem::Dinit {
                     self.config
@@ -909,7 +909,7 @@ fn user_service_choices(init: InitSystem) -> &'static [UserServices] {
             UserServices::Turnstile,
         ],
         InitSystem::Runit => &[UserServices::None, UserServices::Userspawn],
-        InitSystem::S6 => &[UserServices::None, UserServices::Manual],
+        InitSystem::S6 => &[UserServices::Manual],
     }
 }
 
@@ -987,6 +987,34 @@ mod tests {
         let options = app.multi_options();
         assert_eq!(options.len(), DESKTOP_CHOICES.len());
         assert!(options.iter().any(|(name, _)| name == "cosmalia"));
+    }
+
+    #[test]
+    fn s6_offers_only_manual_user_services_and_selects_it_automatically() {
+        assert_eq!(user_service_choices(InitSystem::S6), &[UserServices::Manual]);
+
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.selected = 0;
+        app.move_choice_cursor(3);
+        app.confirm_section_choice();
+
+        assert_eq!(app.config.system.init_system, InitSystem::S6);
+        assert_eq!(app.config.system.user_services, UserServices::Manual);
+        app.selected = 12;
+        assert_eq!(app.single_options(), vec![("manual".to_owned(), true)]);
+    }
+
+    #[test]
+    fn leaving_s6_resets_manual_user_services_to_init_default() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.config.system.init_system = InitSystem::S6;
+        app.config.system.user_services = UserServices::Manual;
+        app.selected = 0;
+
+        app.adjust(-1);
+
+        assert_eq!(app.config.system.init_system, InitSystem::Runit);
+        assert_eq!(app.config.system.user_services, UserServices::None);
     }
 
     #[test]
