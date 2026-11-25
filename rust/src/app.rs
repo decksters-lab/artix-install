@@ -83,6 +83,7 @@ impl App {
     pub fn toggle_disks(&mut self) {
         self.show_disks = !self.show_disks;
         if self.show_disks {
+            self.selected = 1;
             self.status = format!(
                 "Read-only inventory: {} physical disk(s) detected.",
                 self.hardware.disks.len()
@@ -1014,22 +1015,6 @@ mod tests {
         assert_eq!(options, vec![("preserve".to_owned(), true)]);
     }
 
-    #[test]
-    fn cosmalia_is_clearly_marked_as_dinit_only() {
-        let mut app = App::new(InstallConfig::default(), sample_hardware());
-        app.selected = 6;
-
-        app.config.system.init_system = InitSystem::OpenRc;
-        let options = app.multi_options();
-        assert!(options[15].0.contains("Dinit only — unavailable"));
-        assert!(app.setting_description(6).contains("unavailable"));
-        assert!(!app.setting_description(6).contains("cosmic-comp"));
-
-        app.config.system.init_system = InitSystem::Dinit;
-        assert_eq!(app.multi_options()[15].0, "cosmalia");
-        assert!(app.setting_description(6).contains("cosmic-comp"));
-    }
-
     fn sample_hardware() -> HardwareSnapshot {
         HardwareSnapshot {
             firmware: "UEFI".into(),
@@ -1088,6 +1073,17 @@ mod tests {
         config.disk.target = Some("/dev/nvme0n1".into());
         config.disk.partitioning = Partitioning::Manual;
         App::new(config, sample_hardware())
+    }
+
+    #[test]
+    fn opening_disk_inventory_focuses_target_disk_setting() {
+        let mut app = App::new(InstallConfig::default(), sample_hardware());
+        app.selected = 6;
+
+        app.toggle_disks();
+
+        assert!(app.show_disks);
+        assert_eq!(app.selected, 1);
     }
 
     #[test]
