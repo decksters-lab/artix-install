@@ -184,9 +184,10 @@ fn run() -> Result<()> {
         if !has_explicit_config {
             bail!("--prepare-efi requires an explicit --config file");
         }
-        let confirmation = args.confirm_efi.as_deref().context(
-            "--prepare-efi requires --confirm-efi with the exact EFI partition path",
-        )?;
+        let confirmation = args
+            .confirm_efi
+            .as_deref()
+            .context("--prepare-efi requires --confirm-efi with the exact EFI partition path")?;
         let environment = discovery::discover();
         let report = preflight::run(&config, &environment);
         print!("{}", report.render());
