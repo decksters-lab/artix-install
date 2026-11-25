@@ -18,7 +18,7 @@ use config::InstallConfig;
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "artix-setup",
+    name = "agsi",
     version,
     about = "Artix Granular System Installer — an interactive Artix Linux installer"
 )]
