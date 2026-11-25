@@ -2,7 +2,7 @@
 
 A Rust + Ratatui reimplementation track for [decksters-lab/artix-install](https://github.com/decksters-lab/artix-install).
 
-> **Status: experimental installer prototype.** The Rust binary now has guarded storage stages for automatic partitioning, ext4 root formatting, safe EFI preparation, target mounting, and UUID-based fstab generation. Base-system installation, chroot configuration, bootloader setup, service activation, and full guided installation are not implemented yet. Keep using the existing `artix-install.sh` for real installs until the Rust port reaches feature parity and passes disposable-VM testing.
+> **Status: experimental installer prototype.** The Rust binary now has guarded storage stages for automatic partitioning, ext4 root formatting, safe EFI preparation, target mounting, UUID-based fstab generation, and a separately confirmed Artix basestrap stage. Chroot configuration, bootloader setup, service activation, and full guided installation are not implemented yet. Keep using the existing `artix-install.sh` for real installs until the Rust port reaches feature parity and passes disposable-VM testing.
 
 ## Build
 
