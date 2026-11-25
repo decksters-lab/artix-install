@@ -294,6 +294,100 @@ pub fn format_automatic_root(config: &InstallConfig, typed_confirmation: &str) -
     ))
 }
 
+
+/// Prepare the EFI System Partition from an automatic UEFI layout.
+///
+/// Existing FAT filesystems are preserved. A blank partition created by our
+/// automatic partitioner is formatted as FAT32. Unknown signatures fail closed.
+pub fn prepare_automatic_efi(config: &InstallConfig, typed_confirmation: &str) -> Result<String> {
+    config.validate().map_err(|issues| anyhow::anyhow!(
+        "configuration validation failed:\n- {}", issues.join("\n- ")
+    ))?;
+    if libc_effective_uid() != 0 {
+        bail!("EFI preparation requires effective UID 0");
+    }
+    if config.disk.partitioning != Partitioning::Automatic
+        || config.system.firmware != FirmwareMode::Uefi
+        || config.disk.encryption
+    {
+        bail!("EFI preparation currently supports unencrypted automatic UEFI layouts only");
+    }
+    let selected = config.disk.target.as_deref()
+        .context("select a target disk before preparing EFI")?;
+    let hardware = discovery::discover();
+    let disk = find_safe_target(&hardware, selected)?;
+    let identity = TargetIdentity::from_disk(disk);
+    let table = read_partition_table(selected)?;
+    verify_partition_table_dump(config, &table)?;
+    let efi_path = table.lines()
+        .find(|line| line.trim_start().starts_with("/dev/"))
+        .and_then(|line| line.split_once(':').map(|(path, _)| Path::new(path.trim()).to_path_buf()))
+        .context("partition table does not identify an EFI partition")?;
+    validate_confirmation(&efi_path, typed_confirmation)?;
+    let partition = disk.partitions.iter()
+        .find(|p| same_device_path(&p.path, &efi_path))
+        .context("EFI partition is not present in fresh device discovery")?;
+    validate_format_target(partition, &efi_path)?;
+
+    let canonical = fs::canonicalize(&efi_path)
+        .with_context(|| format!("resolve EFI partition {}", efi_path.display()))?;
+    let probe = Command::new("blkid")
+        .args(["-p", "-s", "TYPE", "-o", "value"])
+        .arg(&canonical).output()
+        .context("blkid is required to inspect the EFI partition safely")?;
+    let existing_type = String::from_utf8_lossy(&probe.stdout).trim().to_ascii_lowercase();
+    let should_format = if probe.status.success() {
+        if existing_type == "vfat" {
+            false
+        } else {
+            bail!("EFI partition contains an existing '{}' filesystem; refusing to overwrite it", existing_type);
+        }
+    } else if probe.status.code() == Some(2) && existing_type.is_empty() {
+        true
+    } else {
+        bail!("could not determine whether EFI partition is blank; refusing to format");
+    };
+
+    if should_format {
+        let mkfs = Command::new("mkfs.fat").arg("--help").output()
+            .context("mkfs.fat is required to prepare a blank EFI partition")?;
+        if !mkfs.status.success() && mkfs.status.code() != Some(1) {
+            bail!("mkfs.fat is installed but its capability check failed");
+        }
+        let latest = discovery::discover();
+        let latest_disk = find_safe_target(&latest, selected)?;
+        if TargetIdentity::from_disk(latest_disk) != identity {
+            bail!("target disk identity changed before EFI preparation; refusing to continue");
+        }
+        let latest_table = read_partition_table(selected)?;
+        verify_partition_table_dump(config, &latest_table)?;
+        let latest_efi = latest_disk.partitions.iter()
+            .find(|p| same_device_path(&p.path, &efi_path))
+            .context("EFI partition disappeared before formatting")?;
+        validate_format_target(latest_efi, &efi_path)?;
+        let status = Command::new("mkfs.fat")
+            .args(["-F", "32", "-n", "ARTIX_EFI", "--"])
+            .arg(&canonical).status()
+            .context("start FAT32 EFI formatter")?;
+        if !status.success() {
+            bail!("mkfs.fat failed; inspect the EFI partition before retrying");
+        }
+    }
+
+    let verify = Command::new("blkid")
+        .args(["-p", "-s", "TYPE", "-o", "value"])
+        .arg(&canonical).output()
+        .context("verify EFI filesystem type")?;
+    if !verify.status.success() || String::from_utf8_lossy(&verify.stdout).trim() != "vfat" {
+        bail!("EFI preparation did not result in a verified FAT filesystem; do not mount it");
+    }
+    Ok(if should_format {
+        format!("Formatted blank EFI partition {} as FAT32 and verified it. Existing EFI filesystems are never overwritten.", efi_path.display())
+    } else {
+        format!("EFI partition {} already contains FAT and was preserved; filesystem type verified.", efi_path.display())
+    })
+}
+
 fn validate_root_format_config(config: &InstallConfig) -> Result<()> {
     if config.disk.partitioning != Partitioning::Automatic {
         bail!("root formatting currently supports automatic partition layouts only");
