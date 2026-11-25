@@ -357,9 +357,7 @@ pub fn prepare_automatic_efi(config: &InstallConfig, typed_confirmation: &str) -
             "EFI partition contains an existing '{}' filesystem; refusing to overwrite it",
             existing_type
         );
-    } else if (probe.status.success() || probe.status.code() == Some(2))
-        && existing_type.is_empty()
-    {
+    } else if (probe.status.success() || probe.status.code() == Some(2)) && existing_type.is_empty() {
         // blkid can succeed after finding partition metadata without finding a
         // filesystem TYPE. Confirm that no on-disk signatures exist before
         // treating this as a blank EFI partition.
