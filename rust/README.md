@@ -1,4 +1,6 @@
-# Artix Setup — Rust prototype
+# Artix Granular System Installer
+
+*Rust + Ratatui prototype*
 
 A Rust + Ratatui reimplementation track for [decksters-lab/artix-install](https://github.com/decksters-lab/artix-install).
 
