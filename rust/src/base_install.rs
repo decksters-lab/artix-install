@@ -31,6 +31,7 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
     if libc_geteuid() != 0 {
         bail!("basestrap requires effective UID 0");
     }
+    verify_artix_live_environment()?;
 
     let selected = config
         .disk
@@ -263,6 +264,20 @@ pub fn install_base(config: &InstallConfig, typed_confirmation: &str) -> Result<
         TARGET_ROOT,
         selected.display()
     ))
+}
+
+fn verify_artix_live_environment() -> Result<()> {
+    let release = fs::read_to_string("/etc/os-release")
+        .context("read /etc/os-release to verify the live operating system")?;
+    let is_artix = release.lines().any(|line| {
+        line.strip_prefix("ID=")
+            .map(|value| value.trim_matches('"').trim_matches('\'') == "artix")
+            .unwrap_or(false)
+    });
+    if !is_artix {
+        bail!("this stage must run from an Artix Linux live environment; basestrap was not started");
+    }
+    Ok(())
 }
 
 fn same_device_path(left: &Path, right: &Path) -> bool {
