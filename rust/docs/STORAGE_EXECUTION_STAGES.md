@@ -19,7 +19,7 @@ The first mount executor is intentionally limited to the unencrypted, automatic 
 - Resolve the EFI and root partitions from the verified partition table and fresh block-device discovery.
 - Refuse mounted, active-swap, read-only, held, missing, or incompletely inspected partitions.
 - Verify EFI is vfat and root is ext4 with blkid. This stage never formats either partition.
-- Require /mnt to be a real, empty, unmounted directory.
+- Create /mnt if it is absent; otherwise require it to be a real, empty, unmounted directory.
 - Mount root at /mnt, then mount EFI at /mnt/boot.
 - Reject a symlink or non-directory at /mnt/boot.
 - Verify both mounts against /proc/self/mountinfo and compare canonical source devices.
@@ -31,7 +31,7 @@ Developer/test command (not the intended end-user workflow):
 sudo ./artix-setup --config vm-test.toml --mount-target --confirm-mount /dev/vda
 ```
 
-This mount executor has passed formatting, compilation, Clippy, and unit-test CI. It has not yet been exercised against the disposable Artix VM; do not treat it as VM-verified until that test is complete.
+The mount executor has passed formatting, compilation, Clippy, and all 111 unit tests in CI. It has not yet been exercised against the disposable Artix VM; do not treat it as VM-verified until that test is complete.
 
 Manual and dual-boot layouts, encrypted configurations, non-ext4 root filesystems, additional mounts, swap activation, and package installation are outside this stage.
 
