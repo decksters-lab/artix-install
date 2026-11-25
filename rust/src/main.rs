@@ -54,6 +54,24 @@ struct Args {
     /// Exact target path confirmation required by --apply-partition-table.
     #[arg(long, value_name = "DEVICE", requires = "apply_partition_table")]
     confirm_target: Option<String>,
+    /// Format the automatically planned root partition as ext4 (destructive; requires --confirm-partition).
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan",
+            "validate",
+            "hardware",
+            "preflight",
+            "check_packages",
+            "write_default",
+            "apply_partition_table"
+        ]
+    )]
+    format_root: bool,
+    /// Exact root partition path confirmation required by --format-root.
+    #[arg(long, value_name = "PARTITION", requires = "format_root")]
+    confirm_partition: Option<String>,
     /// Check planned packages against currently enabled pacman sync databases; does not refresh them.
     #[arg(long)]
     check_packages: bool,
@@ -123,8 +141,29 @@ fn run() -> Result<()> {
         println!("{result}");
         return Ok(());
     }
+    if args.format_root {
+        if !has_explicit_config {
+            bail!("--format-root requires an explicit --config file");
+        }
+        let confirmation = args
+            .confirm_partition
+            .as_deref()
+            .context("--format-root requires --confirm-partition with the exact root partition path")?;
+        let environment = discovery::discover();
+        let report = preflight::run(&config, &environment);
+        print!("{}", report.render());
+        if !report.is_ready() {
+            bail!("live environment preflight failed; root filesystem was not formatted");
+        }
+        let result = storage::format_automatic_root(&config, confirmation)?;
+        println!("{result}");
+        return Ok(());
+    }
     if args.confirm_target.is_some() {
         bail!("--confirm-target is only valid with --apply-partition-table");
+    }
+    if args.confirm_partition.is_some() {
+        bail!("--confirm-partition is only valid with --format-root");
     }
     if args.check_packages {
         config.validate().map_err(|issues| {
