@@ -561,6 +561,138 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
     ))
 }
 
+/// Generate a UUID-based fstab only after the target root and EFI mounts are verified.
+pub fn generate_automatic_fstab(config: &InstallConfig) -> Result<String> {
+    config.validate().map_err(|issues| {
+        anyhow::anyhow!(
+            "configuration validation failed:\\n- {}",
+            issues.join("\\n- ")
+        )
+    })?;
+    if libc_effective_uid() != 0 {
+        bail!("fstab generation requires effective UID 0");
+    }
+    if config.disk.partitioning != Partitioning::Automatic
+        || config.system.firmware != FirmwareMode::Uefi
+        || config.disk.root_filesystem != Filesystem::Ext4
+        || config.disk.encryption
+    {
+        bail!("fstab generation currently supports unencrypted automatic UEFI/ext4 layouts only");
+    }
+
+    let selected = config
+        .disk
+        .target
+        .as_deref()
+        .context("select a target disk before generating fstab")?;
+    let table = read_partition_table(selected)?;
+    verify_partition_table_dump(config, &table)?;
+    let efi_path = first_partition_path(&table)?;
+    let root_path = root_partition_path(&table)?;
+    let root_device = fs::canonicalize(&root_path)?;
+    let efi_device = fs::canonicalize(&efi_path)?;
+    verify_filesystem_type(&root_device, "ext4")?;
+    verify_filesystem_type(&efi_device, "vfat")?;
+    verify_mount_source(Path::new("/mnt"), &root_device)?;
+    verify_mount_source(Path::new("/mnt/boot"), &efi_device)?;
+
+    let etc = Path::new("/mnt/etc");
+    let etc_metadata = fs::symlink_metadata(etc)
+        .context("/mnt/etc does not exist; install the base system with basestrap first")?;
+    if !etc_metadata.file_type().is_dir() {
+        bail!("/mnt/etc is not a real directory; refusing to write fstab");
+    }
+    let fstab = etc.join("fstab");
+    if fs::symlink_metadata(&fstab).is_ok() {
+        bail!("/mnt/etc/fstab already exists; refusing to overwrite or append to it");
+    }
+
+    let generated = Command::new("fstabgen")
+        .args(["-U", "/mnt"])
+        .output()
+        .context("fstabgen is required to generate UUID-based filesystem entries")?;
+    if !generated.status.success() {
+        bail!(
+            "fstabgen failed: {}",
+            String::from_utf8_lossy(&generated.stderr).trim()
+        );
+    }
+    let contents = String::from_utf8(generated.stdout)
+        .context("fstabgen returned non-UTF-8 output")?;
+    validate_generated_fstab(&contents)?;
+
+    let temporary = etc.join(format!(".fstab.artix-setup-{}.tmp", std::process::id()));
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
+        .with_context(|| format!("create temporary fstab {}", temporary.display()))?;
+    if let Err(error) = (|| -> Result<()> {
+        file.write_all(contents.as_bytes())
+            .context("write generated fstab")?;
+        file.sync_all().context("flush generated fstab to disk")?;
+        fs::rename(&temporary, &fstab).context("atomically install generated /etc/fstab")?;
+        Ok(())
+    })() {
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
+
+    let verify = Command::new("findmnt")
+        .args(["--verify", "--tab-file"])
+        .arg(&fstab)
+        .output()
+        .context("findmnt is required to verify the generated fstab")?;
+    if !verify.status.success() {
+        let _ = fs::remove_file(&fstab);
+        bail!(
+            "findmnt rejected the generated fstab; the file was removed: {}",
+            String::from_utf8_lossy(&verify.stderr).trim()
+        );
+    }
+
+    Ok("Generated and verified /mnt/etc/fstab using filesystem UUIDs. Existing fstab files are never overwritten.".to_owned())
+}
+
+fn validate_generated_fstab(contents: &str) -> Result<()> {
+    let mut root = 0;
+    let mut boot = 0;
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<_> = line.split_whitespace().collect();
+        if fields.len() < 3 {
+            bail!("fstabgen produced a malformed entry: {line}");
+        }
+        if !fields[0].starts_with("UUID=") {
+            bail!("fstabgen did not use a UUID source for mountpoint {}", fields[1]);
+        }
+        match fields[1] {
+            "/" => {
+                root += 1;
+                if fields[2] != "ext4" {
+                    bail!("generated root fstab entry is not ext4");
+                }
+            }
+            "/boot" => {
+                boot += 1;
+                if fields[2] != "vfat" {
+                    bail!("generated EFI fstab entry is not vfat");
+                }
+            }
+            _ => {}
+        }
+    }
+    if root != 1 || boot != 1 {
+        bail!(
+            "generated fstab must contain exactly one UUID-based ext4 / entry and one UUID-based vfat /boot entry"
+        );
+    }
+    Ok(())
+}
+
 fn first_partition_path(dump: &str) -> Result<std::path::PathBuf> {
     dump.lines()
         .find(|line| line.trim_start().starts_with("/dev/"))
@@ -1114,6 +1246,16 @@ mod tests {
         assert!(ensure_empty_mount_root(&link).is_err());
 
         fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn generated_fstab_requires_uuid_root_and_efi_entries() {
+        let valid = "UUID=1111 / ext4 rw,relatime 0 1\\nUUID=2222 /boot vfat rw,umask=0077 0 2\\n";
+        assert!(validate_generated_fstab(valid).is_ok());
+        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\\n").is_err());
+        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\\nUUID=2222 /boot ext4 defaults 0 2\\n").is_err());
+        assert!(validate_generated_fstab("/dev/vda2 / ext4 defaults 0 1\\nUUID=2222 /boot vfat defaults 0 2\\n").is_err());
+        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\\nUUID=2222 / ext4 defaults 0 2\\nUUID=3333 /boot vfat defaults 0 2\\n").is_err());
     }
 
     #[test]
