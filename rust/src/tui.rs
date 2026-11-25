@@ -90,23 +90,62 @@ fn run_loop(terminal: &mut AppTerminal, app: &mut App) -> Result<()> {
                 continue;
             }
             match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => break,
-                KeyCode::Char('d') => app.toggle_disks(),
-                KeyCode::Char('m') => app.toggle_storage(),
-                KeyCode::Up | KeyCode::Char('k') => app.move_selection(-1),
-                KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
-                KeyCode::Left | KeyCode::Char('h') => app.adjust(-1),
-                KeyCode::Right | KeyCode::Char('l') => app.adjust(1),
-                KeyCode::Enter | KeyCode::Char(' ') => {
-                    if matches!(app.selected, 6 | 7) {
-                        app.toggle_multi_selection();
-                    } else if key.code == KeyCode::Enter {
-                        app.adjust(1);
+                KeyCode::Char('q') => break,
+                KeyCode::Esc => {
+                    if app.section_open {
+                        app.section_open = false;
+                    } else {
+                        break;
                     }
                 }
-                KeyCode::Char('p') => app.show_plan = !app.show_plan,
-                KeyCode::Char('?') => app.show_help = !app.show_help,
-                KeyCode::Char('s') => {
+                KeyCode::Char('d') if !app.section_open => app.toggle_disks(),
+                KeyCode::Char('m') if !app.section_open => app.toggle_storage(),
+                KeyCode::Up | KeyCode::Char('k') if app.section_open => {
+                    if matches!(app.selected, 6 | 7) {
+                        app.adjust(-1);
+                    } else {
+                        app.adjust(-1);
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') if app.section_open => app.adjust(1),
+                KeyCode::Up | KeyCode::Char('k') => app.move_selection(-1),
+                KeyCode::Down | KeyCode::Char('j') => app.move_selection(1),
+                KeyCode::Left | KeyCode::Char('h') if app.section_open => {
+                    app.section_open = false;
+                    app.status = format!("{}: {}", app.setting_label(app.selected), app.setting_value(app.selected));
+                }
+                KeyCode::Right | KeyCode::Char('l') => {
+                    if app.section_open {
+                        // Right does not change the selected value; Enter or Space does.
+                    } else if app.selected == 1 {
+                        app.toggle_disks();
+                    } else {
+                        app.section_open = true;
+                        app.multi_cursor = 0;
+                    }
+                }
+                KeyCode::Enter if app.section_open => {
+                    if matches!(app.selected, 6 | 7) {
+                        app.toggle_multi_selection();
+                    } else {
+                        app.section_open = false;
+                    }
+                }
+                KeyCode::Char(' ') if app.section_open && matches!(app.selected, 6 | 7) => {
+                    app.toggle_multi_selection();
+                }
+                KeyCode::Enter if !app.section_open => {
+                    if app.selected == 1 {
+                        app.toggle_disks();
+                    } else {
+                        app.section_open = true;
+                        app.multi_cursor = 0;
+                    }
+                }
+                KeyCode::Char(' ') if app.section_open && matches!(app.selected, 5 | 14 | 17) => app.adjust(1),
+                KeyCode::Char('p') if !app.section_open => app.show_plan = !app.show_plan,
+                KeyCode::Char('?') if !app.section_open => app.show_help = !app.show_help,
+                KeyCode::Char('s') if !app.section_open => {
                     if let Err(error) = app.save_config() {
                         app.status = format!("Could not save profile: {error:#}");
                     }
@@ -217,76 +256,41 @@ fn render(frame: &mut Frame<'_>, app: &App) {
         Paragraph::new(plan::format_plan(&app.config))
             .block(block)
             .wrap(Wrap { trim: true })
-    } else if matches!(app.selected, 6 | 7) {
-        let options = app.multi_options();
+    } else if app.section_open {
+        let multi = matches!(app.selected, 6 | 7);
+        let options = if multi { app.multi_options() } else { app.single_options() };
         let count = options.len();
         let panel = block.inner(body[1]);
         let sections = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(2),
-                Constraint::Min(3),
-                Constraint::Length(2),
-                Constraint::Min(2),
-            ])
+            .constraints([Constraint::Length(2), Constraint::Min(3), Constraint::Length(2), Constraint::Min(2)])
             .split(panel);
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(
-                    "← / →",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" move through choices   "),
-                Span::styled(
-                    "Space / Enter",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" toggle selection"),
-            ])),
-            sections[0],
-        );
+        let instruction = if multi {
+            "↑/↓ move   Space toggle   Enter finish   ← back"
+        } else {
+            "↑/↓ choose   Enter confirm   ← back"
+        };
+        frame.render_widget(Paragraph::new(instruction), sections[0]);
 
-        let items: Vec<ListItem<'_>> = options
-            .iter()
-            .map(|(name, selected)| {
-                let mark = if *selected { "[x]" } else { "[ ]" };
-                ListItem::new(format!(" {mark} {name}"))
-            })
-            .collect();
+        let current_index = options.iter().position(|(_, selected)| *selected).unwrap_or(0);
+        let items: Vec<ListItem<'_>> = options.iter().map(|(name, selected)| {
+            let marker = if multi {
+                if *selected { "[x]" } else { "[ ]" }
+            } else if *selected { "(*)" } else { "( )" };
+            ListItem::new(format!(" {marker} {name}"))
+        }).collect();
         let list = List::new(items)
-            .block(
-                Block::default()
-                    .title(format!(" Choices — {count} options; ←/→ scroll "))
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::DarkGray)),
-            )
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )
+            .block(Block::default().title(format!(" {} — {count} choices ", app.setting_label(app.selected))).borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)))
+            .highlight_style(Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
             .highlight_symbol("▸ ");
         let mut list_state = ratatui::widgets::ListState::default();
-        list_state.select(Some(app.multi_cursor.min(count.saturating_sub(1))));
+        let cursor = if multi { app.multi_cursor.min(count.saturating_sub(1)) } else { current_index };
+        if count > 0 { list_state.select(Some(cursor)); }
         frame.render_stateful_widget(list, sections[1], &mut list_state);
 
         frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(
-                    format!("Choice {} of {count}", app.multi_cursor + 1),
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(format!("   Selected: {}", app.setting_value(app.selected))),
-            ]))
-            .wrap(Wrap { trim: true }),
+            Paragraph::new(format!("Choice {} of {count}   Current: {}", cursor + 1, app.setting_value(app.selected))).wrap(Wrap { trim: true }),
             sections[2],
         );
         frame.render_widget(
@@ -326,9 +330,11 @@ fn render(frame: &mut Frame<'_>, app: &App) {
     let footer = vec![
         Line::from(vec![
             keycap("↑/↓"),
-            Span::raw(" Navigate  "),
-            keycap("←/→"),
-            Span::raw(" Change / cursor  "),
+            Span::raw(if app.section_open { " Choose option  " } else { " Navigate sections  " }),
+            keycap("→"),
+            Span::raw(if app.section_open { " Confirm / finish  " } else { " Open section  " }),
+            keycap("←"),
+            Span::raw(" Back  "),
             keycap("D"),
             Span::raw(" Disks  "),
             keycap("M"),
