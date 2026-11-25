@@ -395,8 +395,12 @@ fn libc_geteuid() -> u32 {
     // Read the effective UID from procfs without adding a libc dependency.
     fs::read_to_string("/proc/self/status")
         .ok()
-        .and_then(|contents| contents.lines().find(|line| line.starts_with("Uid:")))
-        .and_then(|line| line.split_whitespace().nth(1))
-        .and_then(|value| value.parse().ok())
+        .and_then(|contents| {
+            contents
+                .lines()
+                .find(|line| line.starts_with("Uid:"))
+                .and_then(|line| line.split_whitespace().nth(1))
+                .and_then(|value| value.parse().ok())
+        })
         .unwrap_or(u32::MAX)
 }
