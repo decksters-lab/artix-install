@@ -512,7 +512,11 @@ impl App {
     pub fn toggle_multi_selection(&mut self) {
         match self.selected {
             6 => {
-                let Some(choice) = self.available_desktop_choices().get(self.multi_cursor).copied() else {
+                let Some(choice) = self
+                    .available_desktop_choices()
+                    .get(self.multi_cursor)
+                    .copied()
+                else {
                     return;
                 };
                 if choice == Desktop::Cosmalia
@@ -668,7 +672,9 @@ impl App {
                 InitSystem::Dinit => {
                     "Multi-select desktops and window managers. Cosmalia is a Dinit-only session; its launcher runs cosmic-comp --no-xwayland with Noctalia as the shell."
                 }
-                _ => "Multi-select desktops and window managers supported by the selected init system.",
+                _ => {
+                    "Multi-select desktops and window managers supported by the selected init system."
+                }
             },
             7 => {
                 "Multi-select kernels. Standard linux remains selected as the fallback. Up/Down moves the cursor; Space toggles."
@@ -823,8 +829,7 @@ impl App {
             .iter()
             .copied()
             .filter(|desktop| {
-                *desktop != Desktop::Cosmalia
-                    || self.config.system.init_system == InitSystem::Dinit
+                *desktop != Desktop::Cosmalia || self.config.system.init_system == InitSystem::Dinit
             })
             .collect()
     }
