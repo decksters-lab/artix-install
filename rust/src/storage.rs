@@ -783,19 +783,44 @@ fn ensure_empty_mount_root(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn mountinfo_entries(contents: &str) -> Vec<(String, String)> {
-    contents
-        .lines()
-        .filter_map(|line| {
-            let (left, right) = line.split_once(" - ")?;
-            let before: Vec<_> = left.split_whitespace().collect();
-            let after: Vec<_> = right.split_whitespace().collect();
-            if before.len() < 5 || after.len() < 2 {
-                return None;
-            }
-            Some((unescape_mountinfo(before[4]), unescape_mountinfo(after[1])))
-        })
-        .collect()
+/// Parse every mountinfo row and fail closed if any row is malformed.
+fn parse_mountinfo(contents: &str) -> Result<Vec<(String, String)>> {
+    if contents.trim().is_empty() {
+        bail!("the kernel mount table is empty; refusing to assume a mountpoint is unused");
+    }
+
+    let mut entries = Vec::new();
+    for (index, line) in contents.lines().enumerate() {
+        let line_number = index + 1;
+        let (left, right) = line.split_once(" - ").with_context(|| {
+            format!("malformed mountinfo row {line_number}: missing separator")
+        })?;
+        let before: Vec<_> = left.split_whitespace().collect();
+        let after: Vec<_> = right.split_whitespace().collect();
+        if before.len() < 6 || after.len() < 3 || !is_valid_device_number(before[2]) {
+            bail!("malformed or incomplete mountinfo row {line_number}; refusing mount operation");
+        }
+        entries.push((unescape_mountinfo(before[4]), unescape_mountinfo(after[1])));
+    }
+
+    if entries.is_empty() {
+        bail!("the kernel mount table contains no parseable entries");
+    }
+    Ok(entries)
+}
+
+fn unique_mount_source<'a>(
+    entries: &'a [(String, String)],
+    mountpoint: &str,
+) -> Result<&'a str> {
+    let mut matches = entries.iter().filter(|(mounted_at, _)| mounted_at == mountpoint);
+    let (_, source) = matches
+        .next()
+        .with_context(|| format!("{mountpoint} does not appear in the kernel mount table"))?;
+    if matches.next().is_some() {
+        bail!("{mountpoint} appears more than once in the kernel mount table; refusing to trust an ambiguous mount");
+    }
+    Ok(source)
 }
 
 fn unescape_mountinfo(value: &str) -> String {
@@ -809,8 +834,9 @@ fn unescape_mountinfo(value: &str) -> String {
 fn mountpoint_is_used(path: &Path) -> Result<bool> {
     let contents = fs::read_to_string("/proc/self/mountinfo")
         .context("read /proc/self/mountinfo to verify mount state")?;
+    let entries = parse_mountinfo(&contents)?;
     let wanted = path.to_string_lossy();
-    Ok(mountinfo_entries(&contents)
+    Ok(entries
         .iter()
         .any(|(mountpoint, _)| mountpoint == wanted.as_ref()))
 }
@@ -818,32 +844,26 @@ fn mountpoint_is_used(path: &Path) -> Result<bool> {
 fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> {
     let contents = fs::read_to_string("/proc/self/mountinfo")
         .context("read mount table to verify mounted source")?;
+    let entries = parse_mountinfo(&contents)?;
     let wanted_mount = mountpoint.to_string_lossy();
+    let source = unique_mount_source(&entries, wanted_mount.as_ref())?;
     let expected = fs::canonicalize(expected_device).with_context(|| {
         format!(
             "resolve expected mounted device {}",
             expected_device.display()
         )
     })?;
-    for (mounted_at, source) in mountinfo_entries(&contents) {
-        if mounted_at == wanted_mount.as_ref() {
-            let actual = fs::canonicalize(&source)
-                .with_context(|| format!("resolve mounted source {source}"))?;
-            if actual == expected {
-                return Ok(());
-            }
-            bail!(
-                "{} is mounted from {}, not the selected device {}",
-                mountpoint.display(),
-                source,
-                expected_device.display()
-            );
-        }
+    let actual = fs::canonicalize(source)
+        .with_context(|| format!("resolve mounted source {source}"))?;
+    if actual != expected {
+        bail!(
+            "{} is mounted from {}, not the selected device {}",
+            mountpoint.display(),
+            source,
+            expected_device.display()
+        );
     }
-    bail!(
-        "{} does not appear in the kernel mount table after mount",
-        mountpoint.display()
-    )
+    Ok(())
 }
 
 fn rollback_mount(mountpoint: &Path, description: &str, errors: &mut Vec<String>) {
@@ -1281,11 +1301,43 @@ mod tests {
 
     #[test]
     fn mountinfo_parser_extracts_mountpoint_and_source_and_unescapes_spaces() {
-        let sample = "36 25 8:2 / /mnt/my\\040root rw,relatime - ext4 /dev/vda2 rw\n";
+        let sample = "36 25 8:2 / /mnt/my\\040root rw,relatime shared:1 - ext4 /dev/vda2 rw\\n";
         assert_eq!(
-            mountinfo_entries(sample),
+            parse_mountinfo(sample).unwrap(),
             vec![("/mnt/my root".to_string(), "/dev/vda2".to_string())]
         );
+    }
+
+    #[test]
+    fn mountinfo_parser_fails_closed_on_empty_or_malformed_rows() {
+        assert!(parse_mountinfo("").is_err());
+        assert!(parse_mountinfo("not a mountinfo row\\n").is_err());
+
+        let valid = "36 25 8:2 / /mnt rw,relatime - ext4 /dev/vda2 rw\\n";
+        let malformed_after_valid = format!("{valid}broken row\\n");
+        assert!(parse_mountinfo(&malformed_after_valid).is_err());
+
+        let invalid_device_number = "36 25 unknown / /mnt rw,relatime - ext4 /dev/vda2 rw\\n";
+        assert!(parse_mountinfo(invalid_device_number).is_err());
+
+        let incomplete_filesystem = "36 25 8:2 / /mnt rw,relatime - ext4\\n";
+        assert!(parse_mountinfo(incomplete_filesystem).is_err());
+    }
+
+    #[test]
+    fn mount_source_lookup_rejects_missing_or_ambiguous_mountpoints() {
+        let entries = vec![
+            ("/mnt".to_string(), "/dev/vda2".to_string()),
+            ("/mnt/boot".to_string(), "/dev/vda1".to_string()),
+        ];
+        assert_eq!(unique_mount_source(&entries, "/mnt").unwrap(), "/dev/vda2");
+        assert!(unique_mount_source(&entries, "/missing").is_err());
+
+        let stacked = vec![
+            ("/mnt".to_string(), "/dev/vda2".to_string()),
+            ("/mnt".to_string(), "/dev/vdb2".to_string()),
+        ];
+        assert!(unique_mount_source(&stacked, "/mnt").is_err());
     }
 
     #[test]
