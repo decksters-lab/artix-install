@@ -127,7 +127,7 @@ impl BlockDevice {
 impl HardwareSnapshot {
     pub fn report(&self) -> String {
         let mut output = String::from(
-            "ARTIX SETUP — READ-ONLY HARDWARE REPORT\n=======================================\n\n",
+            "ARTIX GRANULAR SYSTEM INSTALLER — READ-ONLY HARDWARE REPORT\n=======================================\n\n",
         );
         output.push_str(&format!("Firmware: {}\n", self.firmware));
         output.push_str(&format!(
