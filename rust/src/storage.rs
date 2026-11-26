@@ -690,14 +690,22 @@ fn validate_generated_fstab(contents: &str) -> Result<()> {
             continue;
         }
         let fields: Vec<_> = line.split_whitespace().collect();
-        if fields.len() < 3 {
-            bail!("fstabgen produced a malformed entry: {line}");
+        if fields.len() != 6 {
+            bail!("fstabgen produced an entry with an invalid field count: {line}");
         }
-        if !fields[0].starts_with("UUID=") {
-            bail!(
-                "fstabgen did not use a UUID source for mountpoint {}",
-                fields[1]
-            );
+        let uuid = fields[0]
+            .strip_prefix("UUID=")
+            .context("fstabgen did not use UUID sources for every entry")?;
+        if uuid.len() != 36
+            || !uuid
+                .bytes()
+                .enumerate()
+                .all(|(index, byte)| match index {
+                    8 | 13 | 18 | 23 => byte == b'-',
+                    _ => byte.is_ascii_hexdigit(),
+                })
+        {
+            bail!("fstabgen produced an invalid UUID source: {}", fields[0]);
         }
         match fields[1] {
             "/" => {
