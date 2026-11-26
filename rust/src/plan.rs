@@ -187,7 +187,7 @@ pub fn format_plan(config: &InstallConfig) -> String {
     for note in &package_plan.deferred {
         output.push_str(&format!("Package check: {note}\n"));
     }
-    output.push_str("\nNo disk operation is permitted by this prototype.\n");
+    output.push_str("\nThis plan command is read-only. Separate guarded commands can execute only the currently supported automatic, unencrypted UEFI/ext4 storage and base-install path.\n");
     output
 }
 
@@ -210,7 +210,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
         }
         Some(target) => {
             items.push(PlanItem { title: format!("Review target disk {}", target.display()),
-                detail: "Future module: verify device identity, capacity, partition table, live-media ancestry and mount state; require typed confirmation of the exact device path.".into(), risk: Risk::Review });
+                detail: "The supported automatic-install path re-discovers and rechecks target identity, capacity, partition layout, mount state and device sources before writes, and requires exact typed confirmation. Manual/dual-boot device-to-target binding remains pending.".into(), risk: Risk::Review });
             if !storage_ready {
                 let mut reasons = storage_plan.blocked.clone();
                 for issue in &validation_issues {
@@ -272,7 +272,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     items.push(PlanItem { title: "Set up encryption, filesystems and swap".into(),
         detail: format!("LUKS2: {}; root: {}; swap: {} ({} GiB); zswap: {}. EFI policy: {}. No passphrase is stored in the profile.", config.disk.encryption, config.disk.root_filesystem, config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap, config.disk.efi_policy), risk });
     items.push(PlanItem { title: "Install Artix base system".into(),
-        detail: format!("Future bootstrap module: install base system and configure {} with init-specific package names and service handling.", config.system.init_system), risk });
+        detail: format!("A guarded basestrap step is implemented for the supported automatic, unencrypted UEFI/ext4 path after storage preparation. Full init-specific system configuration and service handling remain pending for {}.", config.system.init_system), risk });
     items.push(PlanItem { title: "Configure users and system defaults".into(),
         detail: format!("Hostname {}, user {}, locale {}, timezone {}, keyboard {}; configure {}. User-service handling: {}.", config.system.hostname, config.system.username, config.system.locale, config.system.timezone, config.system.keyboard_layout, config.system.privilege_escalation, user_services_detail(config)), risk });
     items.push(PlanItem { title: "Install kernels, graphics and desktop packages".into(),
@@ -356,7 +356,7 @@ mod tests {
         config.disk.target = Some(PathBuf::from("/dev/disk/by-id/example"));
         let output = format_plan(&config);
         assert!(output.contains("[DESTRUCTIVE — NOT EXECUTABLE]"));
-        assert!(output.contains("No disk operation is permitted"));
+        assert!(output.contains("This plan command is read-only"));
     }
 
     #[test]
