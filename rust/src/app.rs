@@ -883,8 +883,8 @@ impl App {
             .validate()
             .map_err(|issues| anyhow::anyhow!(issues.join("; ")))?;
         let contents = toml::to_string_pretty(&self.config).context("serialize configuration")?;
-        fs::write("artix-setup.toml", contents).context("write artix-setup.toml")?;
-        self.status = "Saved configuration to ./artix-setup.toml".into();
+        fs::write("agsi.toml", contents).context("write agsi.toml")?;
+        self.status = "Saved configuration to ./agsi.toml".into();
         Ok(())
     }
 }
