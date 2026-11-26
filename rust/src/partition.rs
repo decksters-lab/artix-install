@@ -19,8 +19,8 @@ impl PartitionPlan {
         let mut out = String::from(
             "PARTITION LAYOUT PLAN — PREVIEW ONLY\n====================================\n\n",
         );
-        out.push_str("This is a description of proposed operations. Nothing is executed.\n");
-        out.push_str("There is no partitioner, formatter, cryptsetup, mount or swap activation code in this build.\n\n");
+        out.push_str("This preview describes proposed operations; running --plan never executes them.\n");
+        out.push_str("Limited guarded executors support automatic, unencrypted UEFI/ext4 storage preparation. LUKS, swap activation, and manual/dual-boot execution are not implemented.\n\n");
 
         if !self.blocked.is_empty() {
             out.push_str(
@@ -55,7 +55,7 @@ impl PartitionPlan {
                 "Status: no destructive action is available; resolve the blocked items first.\n",
             );
         }
-        out.push_str("Execution status: DISABLED — this build cannot change disks.\n");
+        out.push_str("Execution status: DISABLED — this preview never executes operations. Separate guarded commands are limited to the supported storage path.\n");
         out
     }
 }
