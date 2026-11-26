@@ -222,14 +222,20 @@ impl InstallConfig {
         {
             issues.push("username must start with a lowercase letter and contain only lowercase letters, numbers, _ or -".into());
         }
-        for (name, value) in [
-            ("locale", self.system.locale.as_str()),
-            ("timezone", self.system.timezone.as_str()),
-            ("keyboard_layout", self.system.keyboard_layout.as_str()),
-        ] {
-            if value.trim().is_empty() || value.contains('\n') || value.contains('\r') {
-                issues.push(format!("{name} must be a non-empty single-line value"));
-            }
+        if !valid_locale(&self.system.locale) {
+            issues.push(
+                "locale must be a valid locale name such as 'en_US.UTF-8' or 'C.UTF-8'".into(),
+            );
+        }
+        if !valid_timezone(&self.system.timezone) {
+            issues.push(
+                "timezone must be a relative zoneinfo name such as 'Europe/London' or 'Etc/UTC', without '.' or '..' path components".into(),
+            );
+        }
+        if !valid_keymap(&self.system.keyboard_layout) {
+            issues.push(
+                "keyboard_layout must contain only ASCII letters, numbers, '_' or '-'".into(),
+            );
         }
         if let Some(target) = &self.disk.target {
             validate_device_path(target, "disk.target", &mut issues);
@@ -499,6 +505,71 @@ impl InstallConfig {
     }
 }
 
+fn valid_locale(value: &str) -> bool {
+    if matches!(value, "C" | "POSIX" | "C.UTF-8" | "C.utf8") {
+        return true;
+    }
+    if value.is_empty() || !value.is_ascii() {
+        return false;
+    }
+    let (base, modifier) = match value.split_once('@') {
+        Some((base, modifier)) if !modifier.is_empty() && !modifier.contains('@') => {
+            (base, Some(modifier))
+        }
+        Some(_) => return false,
+        None => (value, None),
+    };
+    if modifier.is_some_and(|part| {
+        !part
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    }) {
+        return false;
+    }
+    let (name, codeset) = match base.split_once('.') {
+        Some((name, codeset)) if !codeset.is_empty() && !codeset.contains('.') => {
+            (name, Some(codeset))
+        }
+        Some(_) => return false,
+        None => (base, None),
+    };
+    if codeset.is_some_and(|part| {
+        !part
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    }) {
+        return false;
+    }
+    let Some((language, territory)) = name.split_once('_') else {
+        return false;
+    };
+    (2..=3).contains(&language.len())
+        && language.bytes().all(|byte| byte.is_ascii_alphabetic())
+        && (2..=3).contains(&territory.len())
+        && territory.bytes().all(|byte| byte.is_ascii_alphanumeric())
+}
+
+fn valid_timezone(value: &str) -> bool {
+    !value.is_empty()
+        && !value.starts_with('/')
+        && value.split('/').all(|component| {
+            !component.is_empty()
+                && component != "."
+                && component != ".."
+                && component.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'+' | b'-')
+                })
+        })
+}
+
+fn valid_keymap(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
 fn normalize_mountpoint(value: &str) -> Option<String> {
     let mut parts = Vec::new();
     for component in Path::new(value).components() {
@@ -545,6 +616,37 @@ mod tests {
         assert!(config.validate().is_ok());
         assert!(config.disk.target.is_none());
         assert_eq!(config.software.kernels, vec![Kernel::Linux]);
+    }
+
+    #[test]
+    fn locale_timezone_and_keymap_accept_common_safe_values() {
+        let mut config = InstallConfig::default();
+        config.system.locale = "en_GB.UTF-8".into();
+        config.system.timezone = "America/Argentina/Buenos_Aires".into();
+        config.system.keyboard_layout = "us-intl".into();
+        assert!(config.validate().is_ok());
+
+        config.system.locale = "C.UTF-8".into();
+        config.system.timezone = "Etc/GMT+5".into();
+        config.system.keyboard_layout = "jp106".into();
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn locale_timezone_and_keymap_reject_path_and_config_injection() {
+        let mut config = InstallConfig::default();
+        config.system.locale = "../../etc/passwd".into();
+        config.system.timezone = "../../etc".into();
+        config.system.keyboard_layout = "../us".into();
+        let issues = config.validate().unwrap_err();
+        assert!(issues.iter().any(|issue| issue.contains("locale")));
+        assert!(issues.iter().any(|issue| issue.contains("timezone")));
+        assert!(issues.iter().any(|issue| issue.contains("keyboard_layout")));
+
+        config.system.locale = "en_US.UTF-8\nBAD=1".into();
+        config.system.timezone = "/etc/localtime".into();
+        config.system.keyboard_layout = "us; touch /tmp/pwned".into();
+        assert!(config.validate().is_err());
     }
 
     #[test]
