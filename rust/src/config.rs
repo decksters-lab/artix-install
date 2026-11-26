@@ -556,9 +556,9 @@ fn valid_timezone(value: &str) -> bool {
             !component.is_empty()
                 && component != "."
                 && component != ".."
-                && component.bytes().all(|byte| {
-                    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'+' | b'-')
-                })
+                && component
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'+' | b'-'))
         })
 }
 
