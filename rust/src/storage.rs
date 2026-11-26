@@ -801,9 +801,9 @@ fn parse_mountinfo(contents: &str) -> Result<Vec<(String, String)>> {
     let mut entries = Vec::new();
     for (index, line) in contents.lines().enumerate() {
         let line_number = index + 1;
-        let (left, right) = line.split_once(" - ").with_context(|| {
-            format!("malformed mountinfo row {line_number}: missing separator")
-        })?;
+        let (left, right) = line
+            .split_once(" - ")
+            .with_context(|| format!("malformed mountinfo row {line_number}: missing separator"))?;
         let before: Vec<_> = left.split_whitespace().collect();
         let after: Vec<_> = right.split_whitespace().collect();
         if before.len() < 6 || after.len() < 3 || !valid_mount_device_number(before[2]) {
@@ -818,16 +818,17 @@ fn parse_mountinfo(contents: &str) -> Result<Vec<(String, String)>> {
     Ok(entries)
 }
 
-fn unique_mount_source<'a>(
-    entries: &'a [(String, String)],
-    mountpoint: &str,
-) -> Result<&'a str> {
-    let mut matches = entries.iter().filter(|(mounted_at, _)| mounted_at == mountpoint);
+fn unique_mount_source<'a>(entries: &'a [(String, String)], mountpoint: &str) -> Result<&'a str> {
+    let mut matches = entries
+        .iter()
+        .filter(|(mounted_at, _)| mounted_at == mountpoint);
     let (_, source) = matches
         .next()
         .with_context(|| format!("{mountpoint} does not appear in the kernel mount table"))?;
     if matches.next().is_some() {
-        bail!("{mountpoint} appears more than once in the kernel mount table; refusing to trust an ambiguous mount");
+        bail!(
+            "{mountpoint} appears more than once in the kernel mount table; refusing to trust an ambiguous mount"
+        );
     }
     Ok(source)
 }
@@ -862,8 +863,8 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
             expected_device.display()
         )
     })?;
-    let actual = fs::canonicalize(source)
-        .with_context(|| format!("resolve mounted source {source}"))?;
+    let actual =
+        fs::canonicalize(source).with_context(|| format!("resolve mounted source {source}"))?;
     if actual != expected {
         bail!(
             "{} is mounted from {}, not the selected device {}",
