@@ -541,8 +541,18 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
 
     if let Err(error) = result {
         let mut rollback_errors = Vec::new();
-        rollback_mount(efi_mount, &efi_device, "unmount /mnt/boot", &mut rollback_errors);
-        rollback_mount(root_mount, &root_device, "unmount /mnt", &mut rollback_errors);
+        rollback_mount(
+            efi_mount,
+            &efi_device,
+            "unmount /mnt/boot",
+            &mut rollback_errors,
+        );
+        rollback_mount(
+            root_mount,
+            &root_device,
+            "unmount /mnt",
+            &mut rollback_errors,
+        );
         if rollback_errors.is_empty() {
             return Err(error).context(
                 "mount operation failed; mounts created by this operation were rolled back",
