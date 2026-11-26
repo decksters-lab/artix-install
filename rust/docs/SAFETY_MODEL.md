@@ -8,15 +8,16 @@ The Rust installer is being built in guarded stages alongside the existing Bash 
 - `--format-root` formats only the planned ext4 root partition after an exact `--confirm-partition` confirmation. It rechecks the disk, partition table, and partition safety immediately before formatting.
 - `--prepare-efi` preserves an existing FAT EFI filesystem. It formats only a blank EFI partition, after checking both `blkid` and `wipefs`, and requires exact `--confirm-efi` confirmation.
 - `--mount-target` mounts the verified ext4 root at `/mnt` and FAT EFI at `/mnt/boot`, after exact `--confirm-mount` confirmation. It verifies the actual kernel mount table and rolls back mounts created by the operation if verification fails.
-- `--generate-fstab` requires those exact filesystems to be mounted at the expected paths. It asks Artix `fstabgen -U` for UUID-based entries, validates root and EFI entries, refuses to replace an existing fstab, writes atomically, and verifies the result with `findmnt --verify`.
+- `--install-base` installs the selected package plan with Artix `basestrap` only after checking the live Artix environment, effective root privileges, exact whole-disk confirmation, GPT partition layout, EFI/root filesystem types, exact `/mnt` and `/mnt/boot` mount sources, target cleanliness, and current package availability. It repeats the target and mount checks immediately before basestrap. It does not run a chroot or configure the installed system.
+- `--generate-fstab` requires those exact filesystems to be mounted at the expected paths and the base system to have created `/mnt/etc`. It asks Artix `fstabgen -U` for UUID-based entries, validates exactly one ext4 root and one vfat EFI entry, refuses to replace an existing fstab, writes atomically, and verifies the result with `findmnt --verify`.
 
-The storage and basestrap executors currently support only automatic, unencrypted UEFI with an ext4 root. Manual partitioning, dual-boot, encryption, Btrfs, and BIOS executor paths are not implemented.
+The storage and basestrap executors currently support only automatic, unencrypted UEFI with an ext4 root and no swap partition. Manual partitioning, dual-boot, encryption, Btrfs, BIOS executor paths, and active swap configuration are not implemented. The base installer can install the configured package set, but it is not yet a complete system installation.
 
 ## Not implemented yet
 
-- Base-system installation with `basestrap`.
-- Package installation beyond the base system, chroot configuration, user/password setup, locale and timezone application.
-- Init-specific service activation, bootloader installation/configuration, initramfs generation, and first-boot validation.
+- Post-base chroot configuration: hostname, locale, timezone, keyboard, users, password prompts, doas/sudo policy, and network configuration.
+- Swap setup (swap partition, swapfile, zram and zswap) and init-specific service activation.
+- Bootloader installation/configuration, initramfs generation, and first-boot validation.
 - A complete guided one-action installation workflow.
 
 Do not treat the current Rust prototype as a replacement for the Bash installer.
@@ -29,6 +30,7 @@ Do not treat the current Rust prototype as a replacement for the Bash installer.
 - Disk identity and partition layout are rechecked before writes. Post-write partition tables and filesystem types are read back and verified.
 - Existing EFI filesystems are never formatted by `--prepare-efi`; only a demonstrably blank EFI partition can be formatted.
 - The mount stage does not format filesystems. It checks filesystem types, refuses occupied mountpoints, verifies actual mount sources, and rolls back its own mounts on failure.
+- The base-install stage refuses a non-pristine target root, unresolved package sources, unavailable required packages, unexpected target mounts, and any layout outside its explicitly supported automatic UEFI/ext4/no-swap-partition scope.
 - The fstab stage uses UUIDs, requires exactly one ext4 root entry and one vfat `/boot` entry, and will not overwrite an existing file.
 - User-supplied data is passed as process arguments, not interpolated into shell commands.
 - Passwords and LUKS passphrases are never serialized into TOML or logs.
@@ -36,7 +38,7 @@ Do not treat the current Rust prototype as a replacement for the Bash installer.
 
 ## Required before replacing the Bash installer
 
-1. Implement and test base-system installation, package installation, chroot configuration, bootloader setup, and init-specific service activation.
+1. Complete and VM-test the existing base-system installation stage, then implement chroot configuration, bootloader setup, and init-specific service activation.
 2. Port every supported Bash feature or clearly remove unsupported options from the Rust UI.
 3. Add transaction checkpoints and recovery behavior for every stage that can leave a partially installed target.
 4. Test success and failure paths on disposable VMs for every supported firmware, init, filesystem, and desktop combination.
