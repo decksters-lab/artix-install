@@ -19,7 +19,9 @@ impl PartitionPlan {
         let mut out = String::from(
             "PARTITION LAYOUT PLAN — PREVIEW ONLY\n====================================\n\n",
         );
-        out.push_str("This preview describes proposed operations; running --plan never executes them.\n");
+        out.push_str(
+            "This preview describes proposed operations; running --plan never executes them.\n",
+        );
         out.push_str("Limited guarded executors support automatic, unencrypted UEFI/ext4 storage preparation. LUKS, swap activation, and manual/dual-boot execution are not implemented.\n\n");
 
         if !self.blocked.is_empty() {
