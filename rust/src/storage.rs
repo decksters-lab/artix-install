@@ -633,6 +633,15 @@ pub fn generate_automatic_fstab(config: &InstallConfig) -> Result<String> {
         String::from_utf8(generated.stdout).context("fstabgen returned non-UTF-8 output")?;
     validate_generated_fstab(&contents)?;
 
+    // fstabgen runs an external process. Reconfirm that /mnt still refers to
+    // the selected partitions before creating any file in the target tree.
+    verify_mount_source(Path::new("/mnt"), &root_device)
+        .context("root mount changed while generating fstab; refusing to write")?;
+    verify_mount_source(Path::new("/mnt/boot"), &efi_device)
+        .context("EFI mount changed while generating fstab; refusing to write")?;
+    verify_filesystem_type(&root_device, "ext4")?;
+    verify_filesystem_type(&efi_device, "vfat")?;
+
     let temporary = etc.join(format!(".fstab.artix-setup-{}.tmp", std::process::id()));
     let mut file = fs::OpenOptions::new()
         .write(true)
