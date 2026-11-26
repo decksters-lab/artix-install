@@ -783,6 +783,15 @@ fn ensure_empty_mount_root(path: &Path) -> Result<()> {
     Ok(())
 }
 
+fn valid_mount_device_number(value: &str) -> bool {
+    let mut parts = value.split(':');
+    matches!(
+        (parts.next(), parts.next(), parts.next()),
+        (Some(major), Some(minor), None)
+            if major.parse::<u32>().is_ok() && minor.parse::<u32>().is_ok()
+    )
+}
+
 /// Parse every mountinfo row and fail closed if any row is malformed.
 fn parse_mountinfo(contents: &str) -> Result<Vec<(String, String)>> {
     if contents.trim().is_empty() {
@@ -797,7 +806,7 @@ fn parse_mountinfo(contents: &str) -> Result<Vec<(String, String)>> {
         })?;
         let before: Vec<_> = left.split_whitespace().collect();
         let after: Vec<_> = right.split_whitespace().collect();
-        if before.len() < 6 || after.len() < 3 || !is_valid_device_number(before[2]) {
+        if before.len() < 6 || after.len() < 3 || !valid_mount_device_number(before[2]) {
             bail!("malformed or incomplete mountinfo row {line_number}; refusing mount operation");
         }
         entries.push((unescape_mountinfo(before[4]), unescape_mountinfo(after[1])));
