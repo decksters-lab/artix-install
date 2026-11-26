@@ -1310,7 +1310,7 @@ mod tests {
 
     #[test]
     fn mountinfo_parser_extracts_mountpoint_and_source_and_unescapes_spaces() {
-        let sample = "36 25 8:2 / /mnt/my\\040root rw,relatime shared:1 - ext4 /dev/vda2 rw\\n";
+        let sample = "36 25 8:2 / /mnt/my\\040root rw,relatime shared:1 - ext4 /dev/vda2 rw\n";
         assert_eq!(
             parse_mountinfo(sample).unwrap(),
             vec![("/mnt/my root".to_string(), "/dev/vda2".to_string())]
@@ -1320,16 +1320,16 @@ mod tests {
     #[test]
     fn mountinfo_parser_fails_closed_on_empty_or_malformed_rows() {
         assert!(parse_mountinfo("").is_err());
-        assert!(parse_mountinfo("not a mountinfo row\\n").is_err());
+        assert!(parse_mountinfo("not a mountinfo row\n").is_err());
 
-        let valid = "36 25 8:2 / /mnt rw,relatime - ext4 /dev/vda2 rw\\n";
-        let malformed_after_valid = format!("{valid}broken row\\n");
+        let valid = "36 25 8:2 / /mnt rw,relatime - ext4 /dev/vda2 rw\n";
+        let malformed_after_valid = format!("{valid}broken row\n");
         assert!(parse_mountinfo(&malformed_after_valid).is_err());
 
-        let invalid_device_number = "36 25 unknown / /mnt rw,relatime - ext4 /dev/vda2 rw\\n";
+        let invalid_device_number = "36 25 unknown / /mnt rw,relatime - ext4 /dev/vda2 rw\n";
         assert!(parse_mountinfo(invalid_device_number).is_err());
 
-        let incomplete_filesystem = "36 25 8:2 / /mnt rw,relatime - ext4\\n";
+        let incomplete_filesystem = "36 25 8:2 / /mnt rw,relatime - ext4\n";
         assert!(parse_mountinfo(incomplete_filesystem).is_err());
     }
 
