@@ -123,8 +123,10 @@ jobs:
           set -eu
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG_NAME="${GITHUB_REF_NAME}"
+            gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --target "${GITHUB_SHA}" --title "AGSI ${TAG_NAME}" --notes "Build from commit ${GITHUB_SHA}."
           else
             TAG_NAME="v0.1.0-test7"
+            gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --target "${GITHUB_SHA}" --title "AGSI v0.1.0-test7 (test)" --notes "Pre-release test build from commit ${GITHUB_SHA}. Not a production release." --prerelease
+            gh release edit "$TAG_NAME" --prerelease
           fi
-          gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --target "${GITHUB_SHA}" --title "AGSI v0.1.0-test7 (test)" --notes "Pre-release test build from commit ${GITHUB_SHA}. Includes the renamed agsi executable. Not a production release."
           gh release upload "$TAG_NAME" dist/* --clobber
