@@ -906,7 +906,7 @@ fn help_text() -> String {
         "D            Open read-only hardware and disk inventory",
         "M            Open partition manager and assign existing partitions",
         "P            Toggle installation plan preview",
-        "S            Save profile as ./artix-setup.toml",
+        "S            Save profile as ./agsi.toml",
         "?            Toggle this help screen",
         "Q / Esc      Quit from the main settings list",
         "",
