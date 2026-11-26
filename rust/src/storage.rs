@@ -1335,6 +1335,18 @@ mod tests {
         let valid = "UUID=1111 / ext4 rw,relatime 0 1\nUUID=2222 /boot vfat rw,umask=0077 0 2\n";
         assert!(validate_generated_fstab(valid).is_ok());
         assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\n").is_err());
+        assert!(validate_generated_fstab(
+            "UUID= / ext4 defaults 0 1\nUUID=2222 /boot vfat defaults 0 2\n"
+        )
+        .is_err());
+        assert!(validate_generated_fstab(
+            "UUID=not-a-uuid / ext4 defaults 0 1\nUUID=2222 /boot vfat defaults 0 2\n"
+        )
+        .is_err());
+        assert!(validate_generated_fstab(
+            "UUID=11111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-222222222222 /boot vfat defaults 0 2 extra\n"
+        )
+        .is_err());
         assert!(
             validate_generated_fstab(
                 "UUID=1111 / ext4 defaults 0 1\nUUID=2222 /boot ext4 defaults 0 2\n"
