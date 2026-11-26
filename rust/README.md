@@ -23,7 +23,7 @@ cargo run
 cargo run -- --plan
 cargo run -- --validate --config configs/gaming-dinit.toml
 cargo run -- --config configs/wayland-hyprland.toml --plan
-cargo run -- --write-default artix-setup.toml
+cargo run -- --write-default agsi.toml
 cargo run -- --hardware
 ```
 
@@ -33,7 +33,7 @@ Inside the TUI:
 - `←` / `→`: cycle a setting, or move the cursor in the desktop/kernel multi-selects
 - `Space` / `Enter`: toggle the highlighted desktop or kernel
 - `p`: preview the generated plan
-- `s`: save `./artix-setup.toml`
+- `s`: save `./agsi.toml`
 - `?`: help
 - `d`: open the read-only hardware/disk inventory
 - `m`: open the partition manager / layout preview
