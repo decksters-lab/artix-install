@@ -1338,10 +1338,12 @@ mod tests {
             "UUID=11111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\nUUID=1234-ABCD /boot vfat defaults 0 2\\n"
         )
         .is_ok());
-        assert!(validate_generated_fstab(
-            "UUID=1234-ABCD / ext4 defaults 0 1\\nUUID=1234-ABCD /boot vfat defaults 0 2\\n"
-        )
-        .is_err());
+        assert!(
+            validate_generated_fstab(
+                "UUID=1234-ABCD / ext4 defaults 0 1\\nUUID=1234-ABCD /boot vfat defaults 0 2\\n"
+            )
+            .is_err()
+        );
         assert!(
             validate_generated_fstab(
                 "UUID=11111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\\n"
