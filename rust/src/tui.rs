@@ -184,7 +184,7 @@ fn render(frame: &mut Frame<'_>, app: &App) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
-                " GRANULAR SYSTEM INSTALLER",
+                "GRANULAR SYSTEM INSTALLER",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
