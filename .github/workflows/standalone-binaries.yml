@@ -1,5 +1,9 @@
 name: Build standalone Linux binaries
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   pull_request:
@@ -128,5 +132,6 @@ jobs:
             TAG_NAME="v0.1.0-test7"
             gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --target "${GITHUB_SHA}" --title "AGSI v0.1.0-test7 (test)" --notes "Pre-release test build from commit ${GITHUB_SHA}. Not a production release." --prerelease
             gh release edit "$TAG_NAME" --prerelease
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/$TAG_NAME" -f sha="${GITHUB_SHA}" -F force=true
           fi
           gh release upload "$TAG_NAME" dist/* --clobber
