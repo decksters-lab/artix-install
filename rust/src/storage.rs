@@ -1332,34 +1332,34 @@ mod tests {
 
     #[test]
     fn generated_fstab_requires_uuid_root_and_efi_entries() {
-        let valid = "UUID=1111 / ext4 rw,relatime 0 1\nUUID=2222 /boot vfat rw,umask=0077 0 2\n";
+        let valid = "UUID=11111111-1111-1111-1111-111111111111 / ext4 rw,relatime 0 1\nUUID=22222222-2222-2222-2222-222222222222 /boot vfat rw,umask=0077 0 2\n";
         assert!(validate_generated_fstab(valid).is_ok());
-        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\n").is_err());
+        assert!(validate_generated_fstab("UUID=11111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\n").is_err());
         assert!(validate_generated_fstab(
-            "UUID= / ext4 defaults 0 1\nUUID=2222 /boot vfat defaults 0 2\n"
+            "UUID= / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-222222222222 /boot vfat defaults 0 2\n"
         )
         .is_err());
         assert!(validate_generated_fstab(
-            "UUID=not-a-uuid / ext4 defaults 0 1\nUUID=2222 /boot vfat defaults 0 2\n"
+            "UUID=not-a-uuid / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-222222222222 /boot vfat defaults 0 2\n"
         )
         .is_err());
         assert!(validate_generated_fstab(
-            "UUID=11111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-222222222222 /boot vfat defaults 0 2 extra\n"
+            "UUID=11111111-1111-1111-1111-1111111111111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-2222222222222222-2222-2222-2222-222222222222 /boot vfat defaults 0 2 extra\n"
         )
         .is_err());
         assert!(
             validate_generated_fstab(
-                "UUID=1111 / ext4 defaults 0 1\nUUID=2222 /boot ext4 defaults 0 2\n"
+                "UUID=11111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-222222222222 /boot ext4 defaults 0 2\n"
             )
             .is_err()
         );
         assert!(
             validate_generated_fstab(
-                "/dev/vda2 / ext4 defaults 0 1\nUUID=2222 /boot vfat defaults 0 2\n"
+                "/dev/vda2 / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-222222222222 /boot vfat defaults 0 2\n"
             )
             .is_err()
         );
-        assert!(validate_generated_fstab("UUID=1111 / ext4 defaults 0 1\nUUID=2222 / ext4 defaults 0 2\nUUID=3333 /boot vfat defaults 0 2\n").is_err());
+        assert!(validate_generated_fstab("UUID=11111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-222222222222 / ext4 defaults 0 2\nUUID=33333333-3333-3333-3333-333333333333 /boot vfat defaults 0 2\n").is_err());
     }
 
     #[test]
