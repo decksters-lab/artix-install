@@ -36,7 +36,7 @@ jobs:
             label: musl
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -91,12 +91,12 @@ jobs:
 
       - name: Attest packaged archive provenance
         if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: dist/agsi-x86_64-linux-${{ matrix.label }}.tar.gz
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agsi-x86_64-linux-${{ matrix.label }}
           path: |
@@ -111,10 +111,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out source for GitHub CLI
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download both build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: agsi-x86_64-linux-*
           path: dist
