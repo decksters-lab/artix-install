@@ -33,7 +33,7 @@ pub fn format_plan(config: &InstallConfig) -> String {
         let label = match item.risk {
             Risk::Info => "INFO",
             Risk::Review => "REVIEW",
-            Risk::Destructive => "DESTRUCTIVE — NOT EXECUTABLE",
+            Risk::Destructive => "DESTRUCTIVE — PREVIEW ONLY",
             Risk::Blocked => "BLOCKED",
         };
         output.push_str(&format!(
@@ -348,14 +348,14 @@ mod tests {
         let output = format_plan(&InstallConfig::default());
         assert!(output.contains("[BLOCKED] Select and review a target disk"));
         assert!(output.contains("Target disk:       NOT SELECTED"));
-        assert!(!output.contains("[DESTRUCTIVE — NOT EXECUTABLE]"));
+        assert!(!output.contains("[DESTRUCTIVE — PREVIEW ONLY]"));
     }
     #[test]
     fn configured_target_is_non_executable() {
         let mut config = InstallConfig::default();
         config.disk.target = Some(PathBuf::from("/dev/disk/by-id/example"));
         let output = format_plan(&config);
-        assert!(output.contains("[DESTRUCTIVE — NOT EXECUTABLE]"));
+        assert!(output.contains("[DESTRUCTIVE — PREVIEW ONLY]"));
         assert!(output.contains("This plan command is read-only"));
     }
 
