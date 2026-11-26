@@ -697,13 +697,10 @@ fn validate_generated_fstab(contents: &str) -> Result<()> {
             .strip_prefix("UUID=")
             .context("fstabgen did not use UUID sources for every entry")?;
         if uuid.len() != 36
-            || !uuid
-                .bytes()
-                .enumerate()
-                .all(|(index, byte)| match index {
-                    8 | 13 | 18 | 23 => byte == b'-',
-                    _ => byte.is_ascii_hexdigit(),
-                })
+            || !uuid.bytes().enumerate().all(|(index, byte)| match index {
+                8 | 13 | 18 | 23 => byte == b'-',
+                _ => byte.is_ascii_hexdigit(),
+            })
         {
             bail!("fstabgen produced an invalid UUID source: {}", fields[0]);
         }
