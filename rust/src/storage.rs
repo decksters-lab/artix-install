@@ -1344,7 +1344,7 @@ mod tests {
         )
         .is_err());
         assert!(validate_generated_fstab(
-            "UUID=11111111-1111-1111-1111-1111111111111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-2222222222222222-2222-2222-2222-222222222222 /boot vfat defaults 0 2 extra\n"
+            "UUID=11111111-1111-1111-1111-111111111111 / ext4 defaults 0 1\nUUID=22222222-2222-2222-2222-222222222222 /boot vfat defaults 0 2 extra\n"
         )
         .is_err());
         assert!(
