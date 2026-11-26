@@ -19,7 +19,7 @@ struct PlanItem {
 
 pub fn format_plan(config: &InstallConfig) -> String {
     let mut output =
-        String::from("ARTIX SETUP — INSTALLATION PLAN\n================================\n\n");
+        String::from("ARTIX GRANULAR SYSTEM INSTALLER — INSTALLATION PLAN\n================================\n\n");
     output.push_str("PLANNING-ONLY PROTOTYPE\nThis preview does not execute commands, partition disks, format filesystems,\nopen LUKS mappings, mount filesystems, install packages, or change the host.\n\n");
     if let Err(issues) = config.validate() {
         output.push_str("CONFIGURATION INVALID — INSTALL STEPS BLOCKED\n---------------------------------------------\n");
