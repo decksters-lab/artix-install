@@ -21,7 +21,7 @@ pub fn format_plan(config: &InstallConfig) -> String {
     let mut output = String::from(
         "ARTIX GRANULAR SYSTEM INSTALLER — INSTALLATION PLAN\n================================\n\n",
     );
-    output.push_str("PLANNING-ONLY PROTOTYPE\nThis preview does not execute commands, partition disks, format filesystems,\nopen LUKS mappings, mount filesystems, install packages, or change the host.\n\n");
+    output.push_str("READ-ONLY PLAN PREVIEW\nThe --plan command itself never executes commands or changes the host. Separate\nguarded commands can perform limited automatic, unencrypted UEFI/ext4 storage\npreparation and base installation; other storage layouts remain planning-only.\n\n");
     if let Err(issues) = config.validate() {
         output.push_str("CONFIGURATION INVALID — INSTALL STEPS BLOCKED\n---------------------------------------------\n");
         for issue in issues {
@@ -197,9 +197,9 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     let storage_ready = storage_plan.is_reviewable() && validation_issues.is_empty();
     let mut items = vec![
         PlanItem { title: "Inspect installer environment".into(),
-            detail: "Read-only hardware discovery is available via --hardware and the TUI. This plan does not embed a fresh hardware snapshot; Artix live-media and required-tool checks remain future work.".into(), risk: Risk::Info },
+            detail: "Read-only hardware discovery is available via --hardware and the TUI. The separate --preflight command checks Artix identity, root privileges and required storage tools; this plan output does not include a live preflight result.".into(), risk: Risk::Info },
         PlanItem { title: "Discover block devices".into(),
-            detail: "Read-only sysfs/procfs/udev discovery is available in the hardware report and TUI. Partition-table type, filesystem UUID binding, live-media ancestry and stable identity revalidation are still pending. Never choose the first disk automatically.".into(), risk: Risk::Info },
+            detail: "Read-only sysfs/procfs/udev discovery is available in the hardware report and TUI. Supported automatic storage executors recheck target identity, partition-table type and topology, mount state, holders and device sources before writes; fstab generation uses filesystem UUIDs. Explicit device-to-target binding for manual/dual-boot layouts remains pending. Never choose the first disk automatically.".into(), risk: Risk::Info },
     ];
     match &config.disk.target {
         None => {
