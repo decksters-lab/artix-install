@@ -696,26 +696,29 @@ fn validate_generated_fstab(contents: &str) -> Result<()> {
         let uuid = fields[0]
             .strip_prefix("UUID=")
             .context("fstabgen did not use UUID sources for every entry")?;
-        if uuid.len() != 36
-            || !uuid.bytes().enumerate().all(|(index, byte)| match index {
+        let standard_uuid = uuid.len() == 36
+            && uuid.bytes().enumerate().all(|(index, byte)| match index {
                 8 | 13 | 18 | 23 => byte == b'-',
                 _ => byte.is_ascii_hexdigit(),
-            })
-        {
-            bail!("fstabgen produced an invalid UUID source: {}", fields[0]);
-        }
+            });
+        let fat_uuid = uuid.len() == 9
+            && uuid.as_bytes()[4] == b'-'
+            && uuid
+                .bytes()
+                .enumerate()
+                .all(|(index, byte)| index == 4 || byte.is_ascii_hexdigit());
         match fields[1] {
             "/" => {
                 root += 1;
-                if fields[2] != "ext4" {
-                    bail!("generated root fstab entry is not ext4");
+                if fields[2] != "ext4" || !standard_uuid {
+                    bail!("generated root fstab entry must use ext4 and a standard UUID");
                 }
             }
             "/boot" => {
-                boot += 1;
-                if fields[2] != "vfat" {
-                    bail!("generated EFI fstab entry is not vfat");
+                if fields[2] != "vfat" || !(standard_uuid || fat_uuid) {
+                    bail!("generated EFI fstab entry must use vfat and a valid FAT UUID");
                 }
+                boot += 1;
             }
             _ => {}
         }
