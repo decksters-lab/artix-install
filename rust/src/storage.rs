@@ -541,8 +541,8 @@ pub fn mount_automatic_target(config: &InstallConfig, typed_confirmation: &str) 
 
     if let Err(error) = result {
         let mut rollback_errors = Vec::new();
-        rollback_mount(efi_mount, "unmount /mnt/boot", &mut rollback_errors);
-        rollback_mount(root_mount, "unmount /mnt", &mut rollback_errors);
+        rollback_mount(efi_mount, &efi_device, "unmount /mnt/boot", &mut rollback_errors);
+        rollback_mount(root_mount, &root_device, "unmount /mnt", &mut rollback_errors);
         if rollback_errors.is_empty() {
             return Err(error).context(
                 "mount operation failed; mounts created by this operation were rolled back",
@@ -876,21 +876,35 @@ fn verify_mount_source(mountpoint: &Path, expected_device: &Path) -> Result<()> 
     Ok(())
 }
 
-fn rollback_mount(mountpoint: &Path, description: &str, errors: &mut Vec<String>) {
+fn rollback_mount(
+    mountpoint: &Path,
+    expected_device: &Path,
+    description: &str,
+    errors: &mut Vec<String>,
+) {
     match mountpoint_is_used(mountpoint) {
-        Ok(false) => {}
-        Ok(true) => {
-            if let Err(error) = run_umount(mountpoint) {
-                errors.push(format!("{description}: {error:#}"));
-            }
+        Ok(false) => return,
+        Err(error) => {
+            errors.push(format!(
+                "{description}: could not verify mount state ({error:#}); leaving it untouched"
+            ));
+            return;
         }
-        Err(check_error) => {
-            if let Err(unmount_error) = run_umount(mountpoint) {
-                errors.push(format!(
-                    "{description}: could not verify mount state ({check_error:#}) and unmount failed ({unmount_error:#})"
-                ));
-            }
-        }
+        Ok(true) => {}
+    }
+
+    // Never unmount a mount created by another process. During rollback, only
+    // remove a mount whose source still resolves to the device this operation used.
+    if let Err(error) = verify_mount_source(mountpoint, expected_device) {
+        errors.push(format!(
+            "{description}: mount source could not be verified as {}; leaving it untouched ({error:#})",
+            expected_device.display()
+        ));
+        return;
+    }
+
+    if let Err(error) = run_umount(mountpoint) {
+        errors.push(format!("{description}: {error:#}"));
     }
 }
 
