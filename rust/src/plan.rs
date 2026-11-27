@@ -81,7 +81,7 @@ pub fn format_plan(config: &InstallConfig) -> String {
     let efi_policy = if config.disk.partitioning == Partitioning::Automatic
         && config.system.firmware == crate::config::FirmwareMode::Uefi
     {
-        "automatic: newly created EFI partition is formatted"
+        "automatic: preserve existing FAT filesystems; format only a blank EFI partition as FAT32"
     } else if config.system.firmware == crate::config::FirmwareMode::Bios {
         "not applicable (BIOS)"
     } else {
@@ -234,7 +234,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
                         "Would create a fresh partition layout on {} using {} root. This overwrites the target device and requires typed confirmation. EFI policy: {}.",
                         target.display(),
                         config.disk.root_filesystem,
-                        config.disk.efi_policy
+                        efi_policy
                     ),
                     Partitioning::Manual => format!(
                         "Would assign existing root, EFI and optional extra mountpoint partitions on {}. The selected root partition is formatted as {}; EFI follows the explicit preserve/format policy, and each additional mount has its own format flag.",
@@ -270,7 +270,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
         Risk::Blocked
     };
     items.push(PlanItem { title: "Set up encryption, filesystems and swap".into(),
-        detail: format!("LUKS2: {}; root: {}; swap: {} ({} GiB); zswap: {}. EFI policy: {}. No passphrase is stored in the profile.", config.disk.encryption, config.disk.root_filesystem, config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap, config.disk.efi_policy), risk });
+        detail: format!("LUKS2: {}; root: {}; swap: {} ({} GiB); zswap: {}. EFI policy: {}. No passphrase is stored in the profile.", config.disk.encryption, config.disk.root_filesystem, config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap, efi_policy), risk });
     items.push(PlanItem { title: "Install Artix base system".into(),
         detail: format!("A guarded basestrap step is implemented for the supported automatic, unencrypted UEFI/ext4 path after storage preparation. Full init-specific system configuration and service handling remain pending for {}.", config.system.init_system), risk });
     items.push(PlanItem { title: "Configure users and system defaults".into(),
@@ -350,6 +350,16 @@ mod tests {
         assert!(output.contains("Target disk:       NOT SELECTED"));
         assert!(!output.contains("[DESTRUCTIVE — PREVIEW ONLY]"));
     }
+    #[test]
+    fn automatic_uefi_plan_explains_safe_efi_behavior_consistently() {
+        let mut config = InstallConfig::default();
+        config.disk.target = Some(PathBuf::from("/dev/disk/by-id/example"));
+        let output = format_plan(&config);
+        let policy = "automatic: preserve existing FAT filesystems; format only a blank EFI partition as FAT32";
+        assert!(output.matches(policy).count() >= 2);
+        assert!(!output.contains("EFI policy: preserve."));
+    }
+
     #[test]
     fn configured_target_is_non_executable() {
         let mut config = InstallConfig::default();
