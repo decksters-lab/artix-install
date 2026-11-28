@@ -137,14 +137,20 @@ fn verify_system_identity(config: &InstallConfig, etc: &Path) -> Result<()> {
         bail!("installed /etc/locale.conf does not set the configured LANG value");
     }
 
-    let locale_gen = read_regular_file(&etc.join("locale.gen"))?;
-    if !locale_gen.lines().any(|line| {
-        let fields: Vec<_> = line.split_whitespace().collect();
-        !line.trim_start().starts_with('#')
-            && fields.first().copied() == Some(config.system.locale.as_str())
-            && fields.get(1).copied() == Some("UTF-8")
-    }) {
-        bail!("configured locale is not enabled in /etc/locale.gen");
+    let special_locale = matches!(
+        config.system.locale.as_str(),
+        "C" | "POSIX" | "C.UTF-8" | "C.utf8"
+    );
+    if !special_locale {
+        let locale_gen = read_regular_file(&etc.join("locale.gen"))?;
+        if !locale_gen.lines().any(|line| {
+            let fields: Vec<_> = line.split_whitespace().collect();
+            !line.trim_start().starts_with('#')
+                && fields.first().copied() == Some(config.system.locale.as_str())
+                && fields.get(1).copied() == Some("UTF-8")
+        }) {
+            bail!("configured locale is not enabled in /etc/locale.gen");
+        }
     }
     let locales = run_chroot_output(&["locale", "-a"])?;
     let locale_output = String::from_utf8_lossy(&locales.stdout);
@@ -171,7 +177,22 @@ fn verify_system_identity(config: &InstallConfig, etc: &Path) -> Result<()> {
         bail!("/etc/localtime does not point to the configured timezone");
     }
 
+    let timezone_path = format!("/usr/share/zoneinfo/{}", config.system.timezone);
+    run_chroot_output(&["test", "-f", &timezone_path])?;
+
     let keymap = console_keymap(&config.system.keyboard_layout);
+    let keymap_pattern = format!("{keymap}.map*");
+    let keymaps = run_chroot_output(&[
+        "find",
+        "/usr/share/kbd/keymaps",
+        "-type",
+        "f",
+        "-name",
+        &keymap_pattern,
+    ])?;
+    if keymaps.stdout.is_empty() {
+        bail!("configured console keymap '{keymap}' is not installed in the target");
+    }
     let vconsole = read_regular_file(&etc.join("vconsole.conf"))?;
     if !vconsole
         .lines()
