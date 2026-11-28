@@ -172,11 +172,14 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
         .args(["passwd", username])
         .status();
     if !matches!(passwd, Ok(status) if status.success()) {
-        rollback_created_user(username);
+        let user_removed = rollback_created_user(username);
         rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
-        bail!(
-            "password setup failed; the newly created user and AGSI privilege files were rolled back"
-        );
+        if !user_removed {
+            bail!(
+                "password setup failed; AGSI privilege files were removed, but userdel could not remove the new account '{username}'"
+            );
+        }
+        bail!("password setup failed; the newly created user and AGSI privilege files were rolled back");
     }
 
     if matches!(
@@ -190,7 +193,11 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
             .context("validate installed sudoers configuration")?;
         if !check.success() {
             rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
-            rollback_created_user(username);
+            if !rollback_created_user(username) {
+                bail!(
+                    "visudo rejected the new privilege configuration; AGSI privilege files were removed, but userdel could not remove the new account '{username}'"
+                );
+            }
             bail!(
                 "visudo rejected the new privilege configuration; AGSI privilege files and the newly created user were rolled back"
             );
@@ -284,11 +291,12 @@ fn write_file(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
     Ok(())
 }
 
-fn rollback_created_user(username: &str) {
-    let _ = Command::new("chroot")
+fn rollback_created_user(username: &str) -> bool {
+    Command::new("chroot")
         .arg(TARGET)
         .args(["userdel", "--remove", username])
-        .status();
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 fn rollback_privilege_files(mode: PrivilegeEscalation, doas: &Path, sudo: &Path) {
