@@ -295,7 +295,6 @@ fn write_file(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
         .mode(mode)
         .open(path)
         .with_context(|| format!("create {}", path.display()))?;
-    use std::io::Write;
     let result = (|| -> Result<()> {
         use std::io::Write;
         file.write_all(contents)
