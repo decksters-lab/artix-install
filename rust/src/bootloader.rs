@@ -191,7 +191,15 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
         }
         return Err(error);
     }
-    unmount_result?;
+    if let Err(error) = unmount_result {
+        if !vendor_existed {
+            let _ = fs::remove_dir_all(&vendor_dir);
+        }
+        if !grub_cfg_existed {
+            let _ = fs::remove_file(&grub_cfg);
+        }
+        return Err(error).context("GRUB files were cleaned up where possible, but chroot mount cleanup failed");
+    }
 
     let vendor_loader = vendor_dir.join("grubx64.efi");
     ensure_nonempty_file(&vendor_loader)?;
