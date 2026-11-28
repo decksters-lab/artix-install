@@ -115,7 +115,7 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     let marker_managed = is_managed_marker(&marker)?;
 
     let boot = Path::new(TARGET).join("boot");
-    verify_real_directory(&boot)?;
+    ensure_real_directory(&boot)?;
     verify_kernel_initramfs_pairs(&boot)?;
 
     let efi_root = boot.join("EFI");
@@ -123,7 +123,7 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     let vendor_dir = efi_root.join(EFI_VENDOR);
     let vendor_existed = directory_exists(&vendor_dir)?;
     if vendor_existed {
-        verify_real_directory(&vendor_dir)?;
+        ensure_real_directory(&vendor_dir)?;
         if !marker_managed {
             bail!(
                 "/boot/EFI/{EFI_VENDOR} already exists without an AGSI-managed GRUB installation marker; refusing to overwrite another bootloader"
@@ -371,7 +371,7 @@ fn mount_chroot_pseudofilesystems() -> Result<Vec<PathBuf>> {
         ("/sys", "/mnt/sys"),
     ] {
         let target_path = Path::new(target);
-        if let Err(error) = verify_real_directory(target_path) {
+        if let Err(error) = ensure_real_directory(target_path) {
             return Err(cleanup_mounts_after_error(&mounted, error));
         }
         match is_mountpoint(target) {
