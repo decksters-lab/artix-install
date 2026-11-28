@@ -110,7 +110,7 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
         ensure_regular_file(&path)?;
     }
     let marker = etc.join(GRUB_MARKER);
-    ensure_regular_or_absent(&marker)?;
+    let marker_managed = is_managed_marker(&marker)?;
 
     let boot = Path::new(TARGET).join("boot");
     verify_real_directory(&boot)?;
@@ -122,7 +122,7 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     let vendor_existed = directory_exists(&vendor_dir)?;
     if vendor_existed {
         verify_real_directory(&vendor_dir)?;
-        if !marker.is_file() {
+        if !marker_managed {
             bail!(
                 "/boot/EFI/{EFI_VENDOR} already exists without an AGSI-managed GRUB installation marker; refusing to overwrite another bootloader"
             );
@@ -131,7 +131,7 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
 
     let grub_cfg = boot.join("grub/grub.cfg");
     let grub_cfg_existed = path_exists(&grub_cfg)?;
-    if grub_cfg_existed && !marker.is_file() {
+    if grub_cfg_existed && !marker_managed {
         bail!("/boot/grub/grub.cfg already exists without the AGSI marker; refusing to overwrite it");
     }
     if grub_cfg_existed {
@@ -148,8 +148,7 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
         ensure_regular_file(&fallback_loader)?;
     }
     let fallback_marker = fallback_dir.join(GRUB_MARKER);
-    ensure_regular_or_absent(&fallback_marker)?;
-    let fallback_managed = fallback_marker.is_file();
+    let fallback_managed = is_managed_marker(&fallback_marker)?;
 
     for tool in ["grub-install", "grub-mkconfig"] {
         let output = Command::new("chroot")
@@ -570,12 +569,25 @@ fn path_exists(path: &Path) -> Result<bool> {
     }
 }
 
-fn write_marker(path: &Path) -> Result<()> {
+fn is_managed_marker(path: &Path) -> Result<bool> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_file() => return Ok(()),
+        Ok(metadata) if metadata.file_type().is_file() => {
+            let contents = fs::read_to_string(path)
+                .with_context(|| format!("read AGSI marker {}", path.display()))?;
+            if contents != "Managed by AGSI.\\n" {
+                bail!("{} exists but is not a recognized AGSI marker", path.display());
+            }
+            Ok(true)
+        }
         Ok(_) => bail!("AGSI marker {} is not a regular file", path.display()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error).with_context(|| format!("inspect {}", path.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
+    }
+}
+
+fn write_marker(path: &Path) -> Result<()> {
+    if is_managed_marker(path)? {
+        return Ok(());
     }
     let mut file = OpenOptions::new()
         .write(true)
