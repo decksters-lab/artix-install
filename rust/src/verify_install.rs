@@ -280,10 +280,12 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
         match config.system.user_services {
             UserServices::None | UserServices::Manual => {}
             UserServices::Userspawn => {
-                let service = if dinit.join("userspawn").exists() {
+                let service = if verify_service_file(&dinit.join("userspawn")).is_ok() {
                     "userspawn"
-                } else {
+                } else if verify_service_file(&dinit.join("dinit-user-spawn")).is_ok() {
                     "dinit-user-spawn"
+                } else {
+                    bail!("neither userspawn nor dinit-user-spawn exists in the target");
                 };
                 services.push(service.to_owned());
             }
@@ -307,12 +309,12 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
     }
 
     if needs_audio(config) {
-        if dinit.join("rtkit-daemon").exists() {
+        if verify_service_file(&dinit.join("rtkit-daemon")).is_ok() {
             verify_service_link(
                 &boot.join("rtkit-daemon"),
                 "/etc/dinit.d/rtkit-daemon",
             )?;
-        } else if dinit.join("rtkit").exists() {
+        } else if verify_service_file(&dinit.join("rtkit")).is_ok() {
             verify_service_link(&boot.join("rtkit"), "/etc/dinit.d/rtkit")?;
         }
     }
@@ -344,7 +346,7 @@ fn verify_grub_uefi(etc: &Path, boot: &Path) -> Result<()> {
     ensure_nonempty_file(&boot.join("EFI/Artix/grubx64.efi"))?;
     ensure_nonempty_file(&boot.join("grub/grub.cfg"))?;
     let fallback_marker = boot.join("EFI/BOOT").join(GRUB_MARKER);
-    if fallback_marker.exists() {
+    if path_exists(&fallback_marker)? {
         ensure_nonempty_file(&boot.join("EFI/BOOT/BOOTX64.EFI"))?;
         if read_regular_file(&fallback_marker)? != "Managed by AGSI.\n" {
             bail!("AGSI fallback EFI marker is invalid");
@@ -520,6 +522,14 @@ fn verify_mount(mountpoint: &str, expected: &Path) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn path_exists(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
+    }
 }
 
 fn verify_mode(path: &Path, expected: u32) -> Result<()> {
