@@ -293,6 +293,11 @@ mod tests {
             "galaxy/cosmic-session"
         );
         assert_eq!(repository_target("grub", PackageSource::Artix), "grub");
+        assert_eq!(package_source("zramen"), PackageSource::ArtixGalaxy);
+        assert_eq!(
+            repository_target("zramen-dinit", package_source("zramen-dinit")),
+            "galaxy/zramen-dinit"
+        );
     }
 
     #[test]
