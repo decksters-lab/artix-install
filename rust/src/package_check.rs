@@ -95,6 +95,15 @@ fn repository_target(name: &str, source: PackageSource) -> String {
     }
 }
 
+fn package_source(name: &str) -> PackageSource {
+    match name {
+        "zramen" | "zramen-dinit" | "zramen-openrc" | "zramen-runit" | "zramen-s6" => {
+            PackageSource::ArtixGalaxy
+        }
+        _ => PackageSource::Artix,
+    }
+}
+
 fn is_missing_error(stderr: &str, package: &str) -> bool {
     let message = stderr.to_ascii_lowercase();
     message.contains("target not found")
@@ -141,7 +150,7 @@ where
         if !external_kernel {
             packages
                 .entry(name.to_owned())
-                .or_insert((PackageSource::Artix, false));
+                .or_insert((package_source(name), false));
         }
     }
 
