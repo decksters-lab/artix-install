@@ -185,7 +185,9 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
         if !grub_cfg_existed {
             let _ = fs::remove_file(&grub_cfg);
         }
-        unmount_result?;
+        if let Err(cleanup_error) = unmount_result {
+            bail!("{error:#}; additionally, chroot mount cleanup failed: {cleanup_error:#}");
+        }
         return Err(error);
     }
     unmount_result?;
@@ -354,42 +356,89 @@ fn mount_chroot_pseudofilesystems() -> Result<Vec<PathBuf>> {
         ("/sys", "/mnt/sys"),
     ] {
         let target_path = Path::new(target);
-        verify_real_directory(target_path)?;
-        if is_mountpoint(target)? {
-            unmount_chroot_pseudofilesystems(&mounted)?;
-            bail!("{target} is already a mountpoint; refusing to replace it");
+        if let Err(error) = verify_real_directory(target_path) {
+            cleanup_mounts_after_error(&mounted, error)?;
+            unreachable!();
         }
+        match is_mountpoint(target) {
+            Ok(true) => {
+                unmount_chroot_pseudofilesystems(&mounted)?;
+                bail!("{target} is already a mountpoint; refusing to replace it");
+            }
+            Ok(false) => {}
+            Err(error) => {
+                cleanup_mounts_after_error(&mounted, error)?;
+                unreachable!();
+            }
+        }
+
         let status = Command::new("mount")
             .args(["--rbind", source, target])
-            .status()
-            .with_context(|| format!("bind-mount {source} into the target"))?;
-        if !status.success() {
-            unmount_chroot_pseudofilesystems(&mounted)?;
-            bail!("could not bind-mount {source} into {target}");
+            .status();
+        match status {
+            Ok(status) if status.success() => mounted.push(target_path.to_path_buf()),
+            Ok(_) => {
+                unmount_chroot_pseudofilesystems(&mounted)?;
+                bail!("could not bind-mount {source} into {target}");
+            }
+            Err(error) => {
+                cleanup_mounts_after_error(
+                    &mounted,
+                    error.into(),
+                )?;
+                unreachable!();
+            }
         }
-        mounted.push(target_path.to_path_buf());
+
         let status = Command::new("mount")
             .args(["--make-rslave", target])
-            .status()
-            .with_context(|| format!("make {target} a slave mount"))?;
-        if !status.success() {
-            unmount_chroot_pseudofilesystems(&mounted)?;
-            bail!("could not make {target} a slave mount");
+            .status();
+        match status {
+            Ok(status) if status.success() => {}
+            Ok(_) => {
+                unmount_chroot_pseudofilesystems(&mounted)?;
+                bail!("could not make {target} a slave mount");
+            }
+            Err(error) => {
+                cleanup_mounts_after_error(
+                    &mounted,
+                    error.into(),
+                )?;
+                unreachable!();
+            }
         }
     }
     Ok(mounted)
 }
 
+fn cleanup_mounts_after_error(
+    mounted: &[PathBuf],
+    error: anyhow::Error,
+) -> Result<Vec<PathBuf>> {
+    if let Err(cleanup_error) = unmount_chroot_pseudofilesystems(mounted) {
+        bail!("{error:#}; additionally, chroot mount cleanup failed: {cleanup_error:#}");
+    }
+    Err(error)
+}
+
 fn unmount_chroot_pseudofilesystems(mounted: &[PathBuf]) -> Result<()> {
+    let mut failures = Vec::new();
     for target in mounted.iter().rev() {
-        let status = Command::new("umount")
+        match Command::new("umount")
             .arg("--recursive")
             .arg(target)
             .status()
-            .with_context(|| format!("unmount {}", target.display()))?;
-        if !status.success() {
-            bail!("could not unmount {}; inspect the live mount table before continuing", target.display());
+        {
+            Ok(status) if status.success() => {}
+            Ok(_) => failures.push(format!("could not unmount {}", target.display())),
+            Err(error) => failures.push(format!("could not unmount {}: {error}", target.display())),
         }
+    }
+    if !failures.is_empty() {
+        bail!(
+            "{}; inspect the live mount table before continuing",
+            failures.join("; ")
+        );
     }
     Ok(())
 }
