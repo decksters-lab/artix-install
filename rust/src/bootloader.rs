@@ -122,13 +122,11 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     let vendor_existed = directory_exists(&vendor_dir)?;
     if vendor_existed {
         verify_real_directory(&vendor_dir)?;
-        let vendor_marker = vendor_dir.join(GRUB_MARKER);
-        if !vendor_marker.is_file() {
+        if !marker.is_file() {
             bail!(
-                "/boot/EFI/{EFI_VENDOR} already exists without the AGSI marker; refusing to overwrite another bootloader"
+                "/boot/EFI/{EFI_VENDOR} already exists without an AGSI-managed GRUB installation marker; refusing to overwrite another bootloader"
             );
         }
-        ensure_regular_file(&vendor_marker)?;
     }
 
     let grub_cfg = boot.join("grub/grub.cfg");
@@ -195,18 +193,25 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     let vendor_loader = vendor_dir.join("grubx64.efi");
     ensure_nonempty_file(&vendor_loader)?;
     ensure_nonempty_file(&grub_cfg)?;
-    write_marker(&vendor_dir.join(GRUB_MARKER))?;
+    if let Err(error) = write_marker(&marker) {
+        if !vendor_existed {
+            let _ = fs::remove_dir_all(&vendor_dir);
+        }
+        if !grub_cfg_existed {
+            let _ = fs::remove_file(&grub_cfg);
+        }
+        return Err(error);
+    }
 
     let fallback_status = if fallback_existed && !fallback_managed {
         "preserved the existing EFI fallback loader"
     } else {
-        ensure_real_directory(&fallback_dir)?;
-        fs::copy(&vendor_loader, &fallback_loader)
-            .context("copy GRUB to the UEFI fallback boot path")?;
+        ensure_directory(&fallback_dir)?;
         write_marker(&fallback_marker)?;
+        copy_file_atomic(&vendor_loader, &fallback_loader)
+            .context("copy GRUB to the UEFI fallback boot path")?;
         "installed or updated the AGSI-managed UEFI fallback loader"
     };
-    write_marker(&marker)?;
 
     let efi_part_number = partition_number(&efi)?;
     let nvram_status = register_nvram_entry(&disk, &efi_part_number);
@@ -456,6 +461,51 @@ fn run_chroot(arguments: &[&str]) -> Result<()> {
     Ok(())
 }
 
+fn ensure_directory(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_dir() => Ok(()),
+        Ok(_) => bail!("{} exists but is not a real directory", path.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir(path).with_context(|| format!("create {}", path.display()))?;
+            Ok(())
+        }
+        Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
+    }
+}
+
+fn copy_file_atomic(source: &Path, destination: &Path) -> Result<()> {
+    let parent = destination.parent().context("fallback EFI loader has no parent directory")?;
+    let temporary = parent.join(".agsi-grub-loader.tmp");
+    let mut input = fs::File::open(source)
+        .with_context(|| format!("open GRUB loader {}", source.display()))?;
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o644)
+        .open(&temporary)
+        .with_context(|| format!("create temporary fallback loader {}", temporary.display()))?;
+    let result = (|| -> Result<()> {
+        std::io::copy(&mut input, &mut output)
+            .context("copy GRUB loader to temporary fallback file")?;
+        output.sync_all().context("sync temporary fallback loader")?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        drop(output);
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
+    drop(output);
+    if let Err(error) = fs::rename(&temporary, destination) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error).with_context(|| format!("install fallback loader {}", destination.display()));
+    }
+    fs::File::open(parent)
+        .and_then(|directory| directory.sync_all())
+        .with_context(|| format!("sync fallback EFI directory {}", parent.display()))?;
+    Ok(())
+}
+
 fn ensure_directory_or_absent(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_dir() => Ok(()),
@@ -534,10 +584,18 @@ fn write_marker(path: &Path) -> Result<()> {
         .open(path)
         .with_context(|| format!("create AGSI marker {}", path.display()))?;
     use std::io::Write;
-    file.write_all(b"Managed by AGSI.\n")
-        .with_context(|| format!("write AGSI marker {}", path.display()))?;
-    file.sync_all()
-        .with_context(|| format!("sync AGSI marker {}", path.display()))?;
+    let result = (|| -> Result<()> {
+        file.write_all(b"Managed by AGSI.\n")
+            .with_context(|| format!("write AGSI marker {}", path.display()))?;
+        file.sync_all()
+            .with_context(|| format!("sync AGSI marker {}", path.display()))?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(error);
+    }
     Ok(())
 }
 
