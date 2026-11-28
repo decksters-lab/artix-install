@@ -241,11 +241,20 @@ fn configure_zramen(config: &InstallConfig, dinit_dir: &Path) -> Result<()> {
     // Keep package comments and unrelated administrator settings, but make the
     // profile-selected values authoritative for the four zramen controls AGSI
     // owns. The package ships these settings commented out by default.
-    let managed = ["ZRAM_SIZE", "ZRAM_MAX_SIZE", "ZRAM_COMP_ALGORITHM", "ZRAM_PRIORITY"];
+    let managed = [
+        "ZRAM_SIZE",
+        "ZRAM_MAX_SIZE",
+        "ZRAM_COMP_ALGORITHM",
+        "ZRAM_PRIORITY",
+    ];
     let mut lines: Vec<String> = existing
         .lines()
         .filter(|line| {
-            let uncommented = line.trim().strip_prefix('#').unwrap_or(line.trim()).trim_start();
+            let uncommented = line
+                .trim()
+                .strip_prefix('#')
+                .unwrap_or(line.trim())
+                .trim_start();
             !managed.iter().any(|key| {
                 uncommented
                     .strip_prefix(key)
@@ -256,7 +265,10 @@ fn configure_zramen(config: &InstallConfig, dinit_dir: &Path) -> Result<()> {
         .collect();
     lines.extend([
         "ZRAM_SIZE=100".to_owned(),
-        format!("ZRAM_MAX_SIZE={}", u32::from(config.disk.swap.size_gib) * 1024),
+        format!(
+            "ZRAM_MAX_SIZE={}",
+            u32::from(config.disk.swap.size_gib) * 1024
+        ),
         "ZRAM_COMP_ALGORITHM=lz4".to_owned(),
         "ZRAM_PRIORITY=32767".to_owned(),
     ]);
