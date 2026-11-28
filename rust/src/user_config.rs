@@ -67,7 +67,10 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
         })
         .collect();
     if partitions.len() != 2 {
-        bail!("configured target has {} partitions; expected exactly two", partitions.len());
+        bail!(
+            "configured target has {} partitions; expected exactly two",
+            partitions.len()
+        );
     }
     let efi = fs::canonicalize(&partitions[0]).context("resolve target EFI partition")?;
     let root = fs::canonicalize(&partitions[1]).context("resolve target root partition")?;
