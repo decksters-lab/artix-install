@@ -640,11 +640,23 @@ mod tests {
         assert!(!plan.storage_packages.contains(&"zramen-dinit"));
         config.disk.swap.mode = SwapMode::Zram;
         config.system.init_system = InitSystem::OpenRc;
-        assert!(build_package_plan(&config).storage_packages.contains(&"zramen-openrc"));
+        assert!(
+            build_package_plan(&config)
+                .storage_packages
+                .contains(&"zramen-openrc")
+        );
         config.system.init_system = InitSystem::Runit;
-        assert!(build_package_plan(&config).storage_packages.contains(&"zramen-runit"));
+        assert!(
+            build_package_plan(&config)
+                .storage_packages
+                .contains(&"zramen-runit")
+        );
         config.system.init_system = InitSystem::S6;
-        assert!(build_package_plan(&config).storage_packages.contains(&"zramen-s6"));
+        assert!(
+            build_package_plan(&config)
+                .storage_packages
+                .contains(&"zramen-s6")
+        );
     }
 
     #[test]
