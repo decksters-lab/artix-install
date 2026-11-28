@@ -14,7 +14,10 @@ const TARGET: &str = "/mnt";
 
 pub fn configure_system(config: &InstallConfig) -> Result<String> {
     config.validate().map_err(|issues| {
-        anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
+        anyhow::anyhow!(
+            "configuration validation failed:\n- {}",
+            issues.join("\n- ")
+        )
     })?;
     if effective_uid()? != 0 {
         bail!("system configuration requires effective UID 0");
@@ -25,10 +28,16 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
         || config.disk.encryption
         || config.disk.swap.mode == SwapMode::Partition
     {
-        bail!("system configuration currently supports automatic, unencrypted UEFI/ext4 installs without a swap partition");
+        bail!(
+            "system configuration currently supports automatic, unencrypted UEFI/ext4 installs without a swap partition"
+        );
     }
 
-    let disk = config.disk.target.as_deref().context("select a target disk before configuring the installed system")?;
+    let disk = config
+        .disk
+        .target
+        .as_deref()
+        .context("select a target disk before configuring the installed system")?;
     let table = Command::new("sfdisk")
         .arg("--dump")
         .arg(disk)
@@ -37,21 +46,38 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
     if !table.status.success() {
         bail!("could not read the configured target partition table");
     }
-    let table = String::from_utf8(table.stdout).context("sfdisk returned non-UTF-8 partition data")?;
-    if table.lines().find_map(|line| line.trim().strip_prefix("label:")).map(str::trim) != Some("gpt") {
+    let table =
+        String::from_utf8(table.stdout).context("sfdisk returned non-UTF-8 partition data")?;
+    if table
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("label:"))
+        .map(str::trim)
+        != Some("gpt")
+    {
         bail!("configured target does not have the expected GPT partition table");
     }
-    let partitions: Vec<PathBuf> = table.lines()
+    let partitions: Vec<PathBuf> = table
+        .lines()
         .filter(|line| line.trim_start().starts_with("/dev/"))
-        .filter_map(|line| line.split_once(':').map(|(path, _)| PathBuf::from(path.trim())))
+        .filter_map(|line| {
+            line.split_once(':')
+                .map(|(path, _)| PathBuf::from(path.trim()))
+        })
         .collect();
     if partitions.len() != 2 {
-        bail!("configured target has {} partitions; expected exactly two", partitions.len());
+        bail!(
+            "configured target has {} partitions; expected exactly two",
+            partitions.len()
+        );
     }
     let efi = fs::canonicalize(&partitions[0]).context("resolve target EFI partition")?;
     let root = fs::canonicalize(&partitions[1]).context("resolve target root partition")?;
     for (device, label) in [(&efi, "EFI"), (&root, "root")] {
-        if !fs::metadata(device).with_context(|| format!("inspect {label} partition"))?.file_type().is_block_device() {
+        if !fs::metadata(device)
+            .with_context(|| format!("inspect {label} partition"))?
+            .file_type()
+            .is_block_device()
+        {
             bail!("{label} partition is not a block device");
         }
     }
@@ -68,9 +94,15 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
     }
 
     let zoneinfo_root = Path::new(TARGET).join("usr/share/zoneinfo");
-    let zoneinfo_root = fs::canonicalize(&zoneinfo_root).context("installed timezone database is missing")?;
-    let zoneinfo = fs::canonicalize(zoneinfo_root.join(&config.system.timezone))
-        .with_context(|| format!("timezone '{}' is not installed in the target", config.system.timezone))?;
+    let zoneinfo_root =
+        fs::canonicalize(&zoneinfo_root).context("installed timezone database is missing")?;
+    let zoneinfo =
+        fs::canonicalize(zoneinfo_root.join(&config.system.timezone)).with_context(|| {
+            format!(
+                "timezone '{}' is not installed in the target",
+                config.system.timezone
+            )
+        })?;
     if !zoneinfo.starts_with(&zoneinfo_root) || !zoneinfo.is_file() {
         bail!("selected timezone resolves outside the installed zoneinfo database");
     }
@@ -98,21 +130,33 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
                 bail!("/mnt/etc/localtime already points elsewhere; refusing to replace it");
             }
         }
-        Ok(_) => bail!("/mnt/etc/localtime already exists and is not the expected timezone symlink"),
+        Ok(_) => {
+            bail!("/mnt/etc/localtime already exists and is not the expected timezone symlink")
+        }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(error).context("inspect installed /etc/localtime"),
     }
 
     atomic_write(&locale_gen, updated_locale_gen.as_bytes())?;
-    atomic_write(&hostname, format!("{}\n", config.system.hostname).as_bytes())?;
-    atomic_write(&locale_conf, format!("LANG={}\n", config.system.locale).as_bytes())?;
-    atomic_write(&vconsole, format!("KEYMAP={}\nFONT=default8x16\n", console_keymap).as_bytes())?;
+    atomic_write(
+        &hostname,
+        format!("{}\n", config.system.hostname).as_bytes(),
+    )?;
+    atomic_write(
+        &locale_conf,
+        format!("LANG={}\n", config.system.locale).as_bytes(),
+    )?;
+    atomic_write(
+        &vconsole,
+        format!("KEYMAP={}\nFONT=default8x16\n", console_keymap).as_bytes(),
+    )?;
     atomic_write(
         &hosts,
         format!(
             "127.0.0.1\tlocalhost\n127.0.1.1\t{}.localdomain {}\n::1\t\tlocalhost\n",
             config.system.hostname, config.system.hostname
-        ).as_bytes(),
+        )
+        .as_bytes(),
     )?;
     let xorg_dir = etc.join("X11");
     ensure_directory(&xorg_dir)?;
@@ -137,7 +181,10 @@ EndSection
             .context("create installed /etc/localtime timezone symlink")?;
     }
 
-    if !matches!(config.system.locale.as_str(), "C" | "POSIX" | "C.UTF-8" | "C.utf8") {
+    if !matches!(
+        config.system.locale.as_str(),
+        "C" | "POSIX" | "C.UTF-8" | "C.utf8"
+    ) {
         let status = Command::new("chroot")
             .arg(TARGET)
             .arg("locale-gen")
@@ -150,13 +197,23 @@ EndSection
 
     Ok(format!(
         "Configured hostname '{}', timezone '{}', locale '{}', and console keymap '{}' in /mnt. The target was verified against its configured root and EFI partitions.",
-        config.system.hostname, config.system.timezone, config.system.locale, config.system.keyboard_layout
+        config.system.hostname,
+        config.system.timezone,
+        config.system.locale,
+        config.system.keyboard_layout
     ))
 }
 
 fn verify_mount(mountpoint: &str, expected: &Path) -> Result<()> {
     let output = Command::new("findmnt")
-        .args(["--noheadings", "--raw", "--output", "SOURCE", "--target", mountpoint])
+        .args([
+            "--noheadings",
+            "--raw",
+            "--output",
+            "SOURCE",
+            "--target",
+            mountpoint,
+        ])
         .output()
         .with_context(|| format!("findmnt is required to verify {mountpoint}"))?;
     if !output.status.success() {
@@ -167,7 +224,11 @@ fn verify_mount(mountpoint: &str, expected: &Path) -> Result<()> {
     let actual = fs::canonicalize(source)
         .with_context(|| format!("resolve mounted source '{source}' for {mountpoint}"))?;
     if actual != expected {
-        bail!("{mountpoint} is mounted from {}, not the expected {}", actual.display(), expected.display());
+        bail!(
+            "{mountpoint} is mounted from {}, not the expected {}",
+            actual.display(),
+            expected.display()
+        );
     }
     Ok(())
 }
@@ -209,7 +270,10 @@ fn verify_keymap(layout: &str) -> Result<()> {
         .output()
         .context("find is required to verify the selected console keymap")?;
     if !output.status.success() || output.stdout.is_empty() {
-        bail!("console keymap '{}' is not present in the installed target", layout);
+        bail!(
+            "console keymap '{}' is not present in the installed target",
+            layout
+        );
     }
     Ok(())
 }
@@ -225,7 +289,10 @@ fn enable_locale(contents: &str, locale: &str) -> Result<String> {
         let fields: Vec<_> = uncommented.split_whitespace().collect();
         if fields.first().copied() == Some(locale) {
             if fields.get(1).copied() != Some("UTF-8") {
-                bail!("locale '{}' exists in locale.gen but is not configured with UTF-8", locale);
+                bail!(
+                    "locale '{}' exists in locale.gen but is not configured with UTF-8",
+                    locale
+                );
             }
             if found {
                 bail!("locale '{}' appears more than once in locale.gen", locale);
@@ -238,7 +305,10 @@ fn enable_locale(contents: &str, locale: &str) -> Result<String> {
         }
     }
     if !found {
-        bail!("locale '{}' is not listed in the installed /etc/locale.gen; refusing to invent a locale entry", locale);
+        bail!(
+            "locale '{}' is not listed in the installed /etc/locale.gen; refusing to invent a locale entry",
+            locale
+        );
     }
     Ok(output)
 }
@@ -246,15 +316,24 @@ fn enable_locale(contents: &str, locale: &str) -> Result<String> {
 fn ensure_regular_file_or_absent(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_file() => Ok(()),
-        Ok(_) => bail!("{} exists but is not a regular file; refusing to replace it", path.display()),
+        Ok(_) => bail!(
+            "{} exists but is not a regular file; refusing to replace it",
+            path.display()
+        ),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
     }
 }
 
 fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
-    let parent = path.parent().context("configuration path has no parent directory")?;
-    let temporary = parent.join(format!(".agsi-{}-{}.tmp", path.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
+    let parent = path
+        .parent()
+        .context("configuration path has no parent directory")?;
+    let temporary = parent.join(format!(
+        ".agsi-{}-{}.tmp",
+        path.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id()
+    ));
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -263,10 +342,13 @@ fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
         .with_context(|| format!("create temporary file {}", temporary.display()))?;
     if let Err(error) = (|| -> Result<()> {
         use std::io::Write;
-        file.write_all(contents).context("write temporary configuration")?;
+        file.write_all(contents)
+            .context("write temporary configuration")?;
         file.sync_all().context("sync temporary configuration")?;
         fs::rename(&temporary, path).with_context(|| format!("install {}", path.display()))?;
-        fs::File::open(parent)?.sync_all().context("sync configuration directory")?;
+        fs::File::open(parent)?
+            .sync_all()
+            .context("sync configuration directory")?;
         Ok(())
     })() {
         let _ = fs::remove_file(&temporary);
@@ -278,9 +360,13 @@ fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
 fn effective_uid() -> Result<u32> {
     let status = fs::read_to_string("/proc/self/status")
         .context("read /proc/self/status to verify effective UID")?;
-    let uid_line = status.lines().find(|line| line.starts_with("Uid:"))
+    let uid_line = status
+        .lines()
+        .find(|line| line.starts_with("Uid:"))
         .context("/proc/self/status has no Uid entry")?;
-    uid_line.split_whitespace().nth(2)
+    uid_line
+        .split_whitespace()
+        .nth(2)
         .context("effective UID is missing from /proc/self/status")?
         .parse::<u32>()
         .context("effective UID is not numeric")
