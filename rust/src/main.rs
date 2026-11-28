@@ -1,5 +1,6 @@
 mod app;
 mod base_install;
+mod bootloader;
 mod config;
 mod discovery;
 mod package_check;
@@ -165,6 +166,18 @@ struct Args {
         ]
     )]
     configure_services: bool,
+    /// Install and configure GRUB for the verified UEFI target.
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan", "validate", "hardware", "preflight", "check_packages", "write_default",
+            "apply_partition_table", "format_root", "prepare_efi", "mount_target",
+            "generate_fstab", "install_base", "configure_system", "configure_user",
+            "configure_services"
+        ]
+    )]
+    install_bootloader: bool,
     /// Write the default configuration to FILE and exit.
     #[arg(long, value_name = "FILE")]
     write_default: Option<PathBuf>,
@@ -225,6 +238,14 @@ fn run() -> Result<()> {
             bail!("--configure-services requires an explicit --config file");
         }
         let result = service_config::configure_services(&config)?;
+        println!("{result}");
+        return Ok(());
+    }
+    if args.install_bootloader {
+        if !has_explicit_config {
+            bail!("--install-bootloader requires an explicit --config file");
+        }
+        let result = bootloader::install_grub_uefi(&config)?;
         println!("{result}");
         return Ok(());
     }
