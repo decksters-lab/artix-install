@@ -9,8 +9,8 @@ mod plan;
 mod preflight;
 mod storage;
 mod system_config;
-mod user_config;
 mod tui;
+mod user_config;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
 
