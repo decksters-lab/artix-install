@@ -283,7 +283,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     items.push(PlanItem { title: "Install kernels, graphics and desktop packages".into(),
         detail: format!("Kernels: {}; CPU: {}; GPU: {}; desktops: {}. {} Optional package availability must be checked against live repositories.", config.software.kernels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "), config.software.cpu_vendor, config.software.gpu, list_desktops(config), desktop_details(config)), risk });
     items.push(PlanItem { title: "Configure networking, multilib and bootloader".into(),
-        detail: format!("Network: {}; multilib: {}; bootloader: {}. --configure-services enables selected Dinit service links offline; --install-bootloader installs GRUB for UEFI only. OpenRC, runit, s6, zram setup, other bootloaders and BIOS boot remain pending.", config.software.network, config.software.multilib, config.software.bootloader), risk });
+        detail: format!("Network: {}; multilib: {}; bootloader: {}. --configure-services enables selected Dinit service links offline; --install-bootloader installs GRUB for UEFI only. Dinit ZRAM uses Artix zramen with its matching service package and configured size; OpenRC/runit/s6 service activation, other bootloaders and BIOS boot remain pending.", config.software.network, config.software.multilib, config.software.bootloader), risk });
     items.push(PlanItem { title: "Verify boot and installed services".into(),
         detail: "The read-only --verify-install stage checks exact target mounts, UUID-based fstab, system identity, user/password/privilege policy, Dinit service links, kernel/initramfs and GRUB UEFI files. It does not reboot; firmware handoff and startup still require a VM boot test.".into(), risk });
     items
