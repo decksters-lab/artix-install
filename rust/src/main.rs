@@ -7,6 +7,7 @@ mod packages;
 mod partition;
 mod plan;
 mod preflight;
+mod service_config;
 mod storage;
 mod system_config;
 mod tui;
@@ -153,6 +154,17 @@ struct Args {
         ]
     )]
     configure_user: bool,
+    /// Enable selected Dinit services in the installed target.
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan", "validate", "hardware", "preflight", "check_packages", "write_default",
+            "apply_partition_table", "format_root", "prepare_efi", "mount_target",
+            "generate_fstab", "install_base", "configure_system", "configure_user"
+        ]
+    )]
+    configure_services: bool,
     /// Write the default configuration to FILE and exit.
     #[arg(long, value_name = "FILE")]
     write_default: Option<PathBuf>,
@@ -205,6 +217,14 @@ fn run() -> Result<()> {
             bail!("--configure-user requires an explicit --config file");
         }
         let result = user_config::configure_user(&config)?;
+        println!("{result}");
+        return Ok(());
+    }
+    if args.configure_services {
+        if !has_explicit_config {
+            bail!("--configure-services requires an explicit --config file");
+        }
+        let result = service_config::configure_services(&config)?;
         println!("{result}");
         return Ok(());
     }

@@ -283,7 +283,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     items.push(PlanItem { title: "Install kernels, graphics and desktop packages".into(),
         detail: format!("Kernels: {}; CPU: {}; GPU: {}; desktops: {}. {} Optional package availability must be checked against live repositories.", config.software.kernels.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "), config.software.cpu_vendor, config.software.gpu, list_desktops(config), desktop_details(config)), risk });
     items.push(PlanItem { title: "Configure networking, multilib and bootloader".into(),
-        detail: format!("Network: {}; multilib: {}; bootloader: {}. Firmware compatibility and init-specific service activation must be validated.", config.software.network, config.software.multilib, config.software.bootloader), risk });
+        detail: format!("Network: {}; multilib: {}; bootloader: {}. The guarded --configure-services stage can activate Dinit core/network/user service links offline; OpenRC, runit, s6, zram setup and bootloader configuration remain pending.", config.software.network, config.software.multilib, config.software.bootloader), risk });
     items.push(PlanItem { title: "Verify boot and installed services".into(),
         detail: "Future verification module: validate fstab, initramfs, kernel command line, bootloader entries, display manager and enabled services before offering reboot.".into(), risk });
     items
