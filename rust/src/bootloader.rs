@@ -1,7 +1,7 @@
 //! Guarded GRUB installation for the supported UEFI target.
 use std::{
     fs::{self, OpenOptions},
-    os::unix::fs::{FileTypeExt, OpenOptionsExt, PermissionsExt},
+    os::unix::fs::{FileTypeExt, OpenOptionsExt},
     path::{Path, PathBuf},
     process::Command,
 };
