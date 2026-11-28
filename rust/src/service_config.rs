@@ -26,7 +26,9 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
         bail!("service configuration requires effective UID 0");
     }
     if config.system.init_system != InitSystem::Dinit {
-        bail!("offline service activation currently supports Dinit only; no service files were changed");
+        bail!(
+            "offline service activation currently supports Dinit only; no service files were changed"
+        );
     }
     if config.disk.partitioning != Partitioning::Automatic
         || config.system.firmware != FirmwareMode::Uefi
@@ -34,7 +36,9 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
         || config.disk.encryption
         || config.disk.swap.mode == SwapMode::Partition
     {
-        bail!("service configuration currently supports automatic, unencrypted UEFI/ext4 installs without a swap partition");
+        bail!(
+            "service configuration currently supports automatic, unencrypted UEFI/ext4 installs without a swap partition"
+        );
     }
 
     let disk = config
@@ -130,7 +134,10 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
     for name in &services {
         let service_file = dinit_dir.join(name);
         verify_service_file(&service_file)?;
-        links.push((boot_dir.join(name), PathBuf::from(format!("/etc/dinit.d/{name}"))));
+        links.push((
+            boot_dir.join(name),
+            PathBuf::from(format!("/etc/dinit.d/{name}")),
+        ));
     }
 
     let mut user_boot_dir = None;
@@ -160,7 +167,8 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
                     for path in &created {
                         let _ = fs::remove_file(path);
                     }
-                    return Err(error).with_context(|| format!("enable Dinit service {}", link.display()));
+                    return Err(error)
+                        .with_context(|| format!("enable Dinit service {}", link.display()));
                 }
                 created.push(link.clone());
             }
@@ -184,12 +192,20 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
         if created.is_empty() {
             "none".to_owned()
         } else {
-            created.iter().map(|path| path.file_name().unwrap_or_default().to_string_lossy()).collect::<Vec<_>>().join(", ")
+            created
+                .iter()
+                .map(|path| path.file_name().unwrap_or_default().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(", ")
         },
         if already_enabled.is_empty() {
             "none".to_owned()
         } else {
-            already_enabled.iter().map(|path| path.file_name().unwrap_or_default().to_string_lossy()).collect::<Vec<_>>().join(", ")
+            already_enabled
+                .iter()
+                .map(|path| path.file_name().unwrap_or_default().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(", ")
         },
         user_note,
         zram_note
