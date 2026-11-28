@@ -172,7 +172,9 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
         .status();
     if !matches!(useradd, Ok(status) if status.success()) {
         rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
-        bail!("useradd failed inside /mnt; privilege configuration was rolled back and no password was set");
+        bail!(
+            "useradd failed inside /mnt; privilege configuration was rolled back and no password was set"
+        );
     }
 
     eprintln!("Set the password for '{username}' in the target system:");
