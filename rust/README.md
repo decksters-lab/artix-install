@@ -4,7 +4,7 @@
 
 A Rust + Ratatui reimplementation track for [decksters-lab/artix-install](https://github.com/decksters-lab/artix-install).
 
-> **Status: experimental installer prototype.** The Rust binary has guarded storage stages for automatic partitioning, ext4 root formatting, safe EFI preparation, target mounting, UUID-based fstab generation, Artix basestrap installation, an initial post-install system-identity stage, and a guarded target-user stage that creates the configured account, prompts for its password interactively, and configures the selected doas/sudo wheel policy. Offline Dinit service activation is implemented for core, network, and selected user services; zram setup, other init systems, bootloader installation/configuration, and full guided installation remain pending. Keep using the existing `artix-install.sh` for real installs until the Rust port reaches feature parity and passes disposable-VM testing.
+> **Status: experimental installer prototype.** The Rust binary has guarded storage stages for automatic partitioning, ext4 root formatting, safe EFI preparation, target mounting, UUID-based fstab generation, Artix basestrap installation, an initial post-install system-identity stage, and a guarded target-user stage that creates the configured account, prompts for its password interactively, and configures the selected doas/sudo wheel policy. Offline Dinit service activation is implemented for core, network, and selected user services; zram setup, OpenRC/runit/s6 activation, non-GRUB bootloaders, BIOS boot, and full guided installation remain pending. GRUB installation is currently UEFI-only and has not yet been VM-tested. Keep using the existing `artix-install.sh` for real installs until the Rust port reaches feature parity and passes disposable-VM testing.
 
 ## Build
 
@@ -28,6 +28,7 @@ cargo run -- --hardware
 cargo run -- --config agsi.toml --configure-system
 cargo run -- --config agsi.toml --configure-user
 cargo run -- --config agsi.toml --configure-services
+cargo run -- --config agsi.toml --install-bootloader
 ```
 
 Inside the TUI:
@@ -76,7 +77,7 @@ Btrfs layouts are configurable as flat, standard (`@`, `@home`, `@log`, `@cache`
 
 ## Safety model
 
-The storage and basestrap executors are deliberately narrow and guarded. Automatic partitioning, root formatting, EFI preparation, mounting, fstab generation, and base installation each revalidate their target and stop on uncertainty. Existing EFI filesystems and existing fstab files are preserved. The current executable path supports only unencrypted automatic UEFI/ext4 installs without a swap partition. `--configure-system` verifies the configured disk's mounted root and EFI sources before writing hostname, locale, timezone, console keymap, X11 keyboard layout, and hosts files. `--configure-user` creates the configured account, prompts for its password through the target's `passwd`, and configures the selected doas/sudo wheel policy. `--configure-services` currently supports Dinit only and enables the selected core/network/user service links under `/etc/dinit.d/boot.d`; it does not run `dinitctl` against the live environment. Zram setup, OpenRC/runit/s6 activation, bootloader installation/configuration, and final boot verification remain unimplemented.
+The storage and basestrap executors are deliberately narrow and guarded. Automatic partitioning, root formatting, EFI preparation, mounting, fstab generation, and base installation each revalidate their target and stop on uncertainty. Existing EFI filesystems and existing fstab files are preserved. The current executable path supports only unencrypted automatic UEFI/ext4 installs without a swap partition. `--configure-system` verifies the configured disk's mounted root and EFI sources before writing hostname, locale, timezone, console keymap, X11 keyboard layout, and hosts files. `--configure-user` creates the configured account, prompts for its password through the target's `passwd`, and configures the selected doas/sudo wheel policy. `--configure-services` currently supports Dinit only and enables the selected core/network/user service links under `/etc/dinit.d/boot.d`; it does not run `dinitctl` against the live environment. Zram setup and OpenRC/runit/s6 activation remain unimplemented. `--install-bootloader` currently installs GRUB for UEFI only, generates the GRUB menu, preserves an existing fallback EFI loader, and attempts NVRAM registration when efivarfs is available. Limine, rEFInd, BIOS GRUB, and final boot verification remain unimplemented.
 
 Read [`docs/SAFETY_MODEL.md`](docs/SAFETY_MODEL.md) for the exact guarantees, limitations, and remaining release requirements.
 
