@@ -315,7 +315,7 @@ fn verify_link_destination(link: &Path, expected: &Path) -> Result<()> {
     match fs::symlink_metadata(link) {
         Ok(metadata) if metadata.file_type().is_symlink() => {
             let actual = fs::read_link(link).with_context(|| format!("read {}", link.display()))?;
-            if &actual != expected {
+            if actual != expected {
                 bail!(
                     "{} already points to {}, not {}; refusing to replace it",
                     link.display(),
