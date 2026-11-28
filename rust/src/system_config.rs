@@ -16,7 +16,7 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
     config.validate().map_err(|issues| {
         anyhow::anyhow!("configuration validation failed:\n- {}", issues.join("\n- "))
     })?;
-    if unsafe { libc_geteuid() } != 0 {
+    if effective_uid()? != 0 {
         bail!("system configuration requires effective UID 0");
     }
     if config.disk.partitioning != Partitioning::Automatic
@@ -204,12 +204,15 @@ fn atomic_write(path: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-unsafe extern "C" {
-    fn geteuid() -> u32;
-}
-
-fn libc_geteuid() -> u32 {
-    unsafe { geteuid() }
+fn effective_uid() -> Result<u32> {
+    let status = fs::read_to_string("/proc/self/status")
+        .context("read /proc/self/status to verify effective UID")?;
+    let uid_line = status.lines().find(|line| line.starts_with("Uid:"))
+        .context("/proc/self/status has no Uid entry")?;
+    uid_line.split_whitespace().nth(2)
+        .context("effective UID is missing from /proc/self/status")?
+        .parse::<u32>()
+        .context("effective UID is not numeric")
 }
 
 #[cfg(test)]
