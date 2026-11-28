@@ -289,15 +289,14 @@ fn verify_kernel_initramfs_pairs(boot: &Path) -> Result<()> {
         let Some(name) = name.to_str() else {
             continue;
         };
-        if let Some(kernel) = name.strip_prefix("vmlinuz-") {
-            if entry
+        if let Some(kernel) = name.strip_prefix("vmlinuz-")
+            && entry
                 .file_type()
                 .context("inspect kernel image type")?
                 .is_file()
-                && entry.metadata().context("inspect kernel image size")?.len() > 0
-            {
-                kernels.push(kernel.to_owned());
-            }
+            && entry.metadata().context("inspect kernel image size")?.len() > 0
+        {
+            kernels.push(kernel.to_owned());
         }
     }
     if kernels.is_empty() {
