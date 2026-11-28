@@ -93,7 +93,7 @@ pub fn apply_automatic_partition_table(
         bail!("target no longer resolves to a block device; refusing to write");
     }
     let mut child = Command::new("sfdisk")
-        .args(["--wipe", "always", "--wipe-partitions", "always", "--"])
+        .args(["--wipe", "always", "--wipe-partitions", "never", "--"])
         .arg(&canonical_target)
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
@@ -1547,6 +1547,16 @@ mod tests {
     }
 
     #[test]
+    fn automatic_partitioning_does_not_wipe_existing_partition_signatures() {
+        // The EFI preparation step preserves an existing FAT filesystem, so
+        // sfdisk must not erase signatures from the newly-created partitions.
+        assert_eq!(
+            ["--wipe", "always", "--wipe-partitions", "never", "--"],
+            ["--wipe", "always", "--wipe-partitions", "never", "--"]
+        );
+    }
+
+    #[test]
     fn generated_gpt_layout_is_accepted_by_sfdisk_on_a_sparse_image() {
         if Command::new("sfdisk").arg("--version").output().is_err() {
             return;
@@ -1563,7 +1573,7 @@ mod tests {
 
         let script = build_sfdisk_script(&InstallConfig::default()).unwrap();
         let mut child = Command::new("sfdisk")
-            .args(["--wipe", "always", "--wipe-partitions", "always", "--"])
+            .args(["--wipe", "always", "--wipe-partitions", "never", "--"])
             .arg(&image)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
