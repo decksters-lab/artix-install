@@ -118,6 +118,11 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
         }
     }
 
+    if matches!(config.disk.swap.mode, SwapMode::Zram | SwapMode::Both) {
+        verify_service_file(&dinit_dir.join("zramen"))?;
+        configure_zramen(config, &dinit_dir)?;
+    }
+
     let mut user_services = Vec::new();
     if config.system.user_services == UserServices::Userspawn && needs_audio(config) {
         verify_real_directory(&dinit_dir.join("user"))?;
@@ -179,9 +184,12 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
     }
 
     let zram_note = if matches!(config.disk.swap.mode, SwapMode::Zram | SwapMode::Both) {
-        " Zram activation is not included in this stage and remains pending."
+        format!(
+            " ZRAM is configured through zramen with a {} GiB maximum; Dinit will activate it during boot.",
+            config.disk.swap.size_gib
+        )
     } else {
-        ""
+        String::new()
     };
     let user_note = if per_user_audio_enabled {
         " Per-user PipeWire and WirePlumber services were linked for userspawn."
@@ -212,6 +220,36 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
         user_note,
         zram_note
     ))
+}
+
+fn configure_zramen(config: &InstallConfig, dinit_dir: &Path) -> Result<()> {
+    let config_dir = dinit_dir.join("config");
+    ensure_real_directory(&config_dir)?;
+    let path = config_dir.join("zramen.conf");
+    let expected = format!(
+        "ZRAM_SIZE=100\\nZRAM_MAX_SIZE={}\\nZRAM_COMP_ALGORITHM=lz4\\nZRAM_PRIORITY=32767\\n",
+        u32::from(config.disk.swap.size_gib) * 1024
+    );
+
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_file() => {
+            let existing = fs::read_to_string(&path)
+                .with_context(|| format!("read {}", path.display()))?;
+            if existing != expected {
+                bail!(
+                    "{} already exists with different settings; refusing to overwrite it",
+                    path.display()
+                );
+            }
+        }
+        Ok(_) => bail!("{} exists but is not a regular file", path.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::write(&path, expected)
+                .with_context(|| format!("write {}", path.display()))?;
+        }
+        Err(error) => return Err(error).with_context(|| format!("inspect {}", path.display())),
+    }
+    Ok(())
 }
 
 fn selected_services(config: &InstallConfig) -> Result<Vec<String>> {
@@ -247,6 +285,9 @@ fn selected_services(config: &InstallConfig) -> Result<Vec<String>> {
         .any(|desktop| matches!(desktop, Desktop::Cosmic | Desktop::Cosmalia))
     {
         services.push("upower".to_owned());
+    }
+    if matches!(config.disk.swap.mode, SwapMode::Zram | SwapMode::Both) {
+        services.push("zramen".to_owned());
     }
 
     Ok(services)
@@ -416,7 +457,14 @@ mod tests {
     #[test]
     fn dinit_default_services_include_core_and_selected_network() {
         let services = selected_services(&InstallConfig::default()).unwrap();
-        assert_eq!(services, ["dbus", "elogind", "NetworkManager"]);
+        assert_eq!(services, ["dbus", "elogind", "NetworkManager", "zramen"]);
+
+        let mut without_zram = InstallConfig::default();
+        without_zram.disk.swap.mode = SwapMode::None;
+        assert_eq!(
+            selected_services(&without_zram).unwrap(),
+            ["dbus", "elogind", "NetworkManager"]
+        );
     }
 
     #[test]
