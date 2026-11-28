@@ -174,7 +174,8 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
 EndSection
 "#,
             config.system.keyboard_layout
-        ).as_bytes(),
+        )
+        .as_bytes(),
     )?;
     if !localtime.exists() {
         std::os::unix::fs::symlink(&timezone_link, &localtime)
