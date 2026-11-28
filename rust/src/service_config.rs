@@ -227,7 +227,7 @@ fn configure_zramen(config: &InstallConfig, dinit_dir: &Path) -> Result<()> {
     ensure_real_directory(&config_dir)?;
     let path = config_dir.join("zramen.conf");
     let expected = format!(
-        "ZRAM_SIZE=100\\nZRAM_MAX_SIZE={}\\nZRAM_COMP_ALGORITHM=lz4\\nZRAM_PRIORITY=32767\\n",
+        "ZRAM_SIZE=100\nZRAM_MAX_SIZE={}\nZRAM_COMP_ALGORITHM=lz4\nZRAM_PRIORITY=32767\n",
         u32::from(config.disk.swap.size_gib) * 1024
     );
 
