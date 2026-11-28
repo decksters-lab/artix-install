@@ -226,28 +226,43 @@ fn configure_zramen(config: &InstallConfig, dinit_dir: &Path) -> Result<()> {
     let config_dir = dinit_dir.join("config");
     ensure_real_directory(&config_dir)?;
     let path = config_dir.join("zramen.conf");
-    let expected = format!(
-        "ZRAM_SIZE=100\nZRAM_MAX_SIZE={}\nZRAM_COMP_ALGORITHM=lz4\nZRAM_PRIORITY=32767\n",
-        u32::from(config.disk.swap.size_gib) * 1024
-    );
-
-    match fs::symlink_metadata(&path) {
-        Ok(metadata) if metadata.file_type().is_file() => {
-            let existing = fs::read_to_string(&path)
-                .with_context(|| format!("read {}", path.display()))?;
-            if existing != expected {
-                bail!(
-                    "{} already exists with different settings; refusing to overwrite it",
-                    path.display()
-                );
-            }
-        }
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_file() => Some(metadata),
         Ok(_) => bail!("{} exists but is not a regular file", path.display()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            fs::write(&path, expected)
-                .with_context(|| format!("write {}", path.display()))?;
-        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
         Err(error) => return Err(error).with_context(|| format!("inspect {}", path.display())),
+    };
+    let existing = if metadata.is_some() {
+        fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?
+    } else {
+        String::new()
+    };
+
+    // Keep package comments and unrelated administrator settings, but make the
+    // profile-selected values authoritative for the four zramen controls AGSI
+    // owns. The package ships these settings commented out by default.
+    let managed = ["ZRAM_SIZE", "ZRAM_MAX_SIZE", "ZRAM_COMP_ALGORITHM", "ZRAM_PRIORITY"];
+    let mut lines: Vec<String> = existing
+        .lines()
+        .filter(|line| {
+            let uncommented = line.trim().strip_prefix('#').unwrap_or(line.trim()).trim_start();
+            !managed.iter().any(|key| {
+                uncommented
+                    .strip_prefix(key)
+                    .is_some_and(|rest| rest.starts_with('='))
+            })
+        })
+        .map(str::to_owned)
+        .collect();
+    lines.extend([
+        "ZRAM_SIZE=100".to_owned(),
+        format!("ZRAM_MAX_SIZE={}", u32::from(config.disk.swap.size_gib) * 1024),
+        "ZRAM_COMP_ALGORITHM=lz4".to_owned(),
+        "ZRAM_PRIORITY=32767".to_owned(),
+    ]);
+    let desired = format!("{}\n", lines.join("\n"));
+    if existing != desired {
+        fs::write(&path, desired).with_context(|| format!("write {}", path.display()))?;
     }
     Ok(())
 }
