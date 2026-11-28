@@ -499,9 +499,6 @@ fn copy_file_atomic(source: &Path, destination: &Path) -> Result<()> {
         let _ = fs::remove_file(&temporary);
         return Err(error).with_context(|| format!("install fallback loader {}", destination.display()));
     }
-    fs::File::open(parent)
-        .and_then(|directory| directory.sync_all())
-        .with_context(|| format!("sync fallback EFI directory {}", parent.display()))?;
     Ok(())
 }
 
