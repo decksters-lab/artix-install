@@ -7,11 +7,11 @@ mod packages;
 mod partition;
 mod plan;
 mod preflight;
+mod service_config;
 mod storage;
 mod system_config;
 mod tui;
 mod user_config;
-mod service_config;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
 
