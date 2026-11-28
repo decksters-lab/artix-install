@@ -406,10 +406,7 @@ fn mount_chroot_pseudofilesystems() -> Result<Vec<PathBuf>> {
                 bail!("could not make {target} a slave mount");
             }
             Err(error) => {
-                return Err(cleanup_mounts_after_error(
-                    &mounted,
-                    error.into(),
-                ));
+                return Err(cleanup_mounts_after_error(&mounted, error.into()));
             }
         }
     }
