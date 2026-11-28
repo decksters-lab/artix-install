@@ -597,12 +597,12 @@ fn read_regular_file(path: &Path) -> Result<String> {
 }
 
 fn ensure_nonempty_file(path: &Path) -> Result<()> {
-    read_regular_file(path)?;
-    if fs::metadata(path)
-        .with_context(|| format!("inspect {}", path.display()))?
-        .len()
-        == 0
-    {
+    let metadata = fs::symlink_metadata(path)
+        .with_context(|| format!("required file {} is missing", path.display()))?;
+    if !metadata.file_type().is_file() {
+        bail!("{} is not a regular file", path.display());
+    }
+    if metadata.len() == 0 {
         bail!("{} is empty", path.display());
     }
     Ok(())
