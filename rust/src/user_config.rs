@@ -8,14 +8,19 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 
-use crate::config::{Filesystem, FirmwareMode, InstallConfig, Partitioning, PrivilegeEscalation, SwapMode};
+use crate::config::{
+    Filesystem, FirmwareMode, InstallConfig, Partitioning, PrivilegeEscalation, SwapMode,
+};
 
 const TARGET: &str = "/mnt";
 
 pub fn configure_user(config: &InstallConfig) -> Result<String> {
-    config.validate().map_err(|issues| anyhow::anyhow!(
-        "configuration validation failed:\n- {}", issues.join("\n- ")
-    ))?;
+    config.validate().map_err(|issues| {
+        anyhow::anyhow!(
+            "configuration validation failed:\n- {}",
+            issues.join("\n- ")
+        )
+    })?;
     if effective_uid()? != 0 {
         bail!("user configuration requires effective UID 0");
     }
@@ -25,22 +30,41 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
         || config.disk.encryption
         || config.disk.swap.mode == SwapMode::Partition
     {
-        bail!("user configuration currently supports automatic, unencrypted UEFI/ext4 installs without a swap partition");
+        bail!(
+            "user configuration currently supports automatic, unencrypted UEFI/ext4 installs without a swap partition"
+        );
     }
 
-    let disk = config.disk.target.as_deref().context("select a target disk before configuring the installed user")?;
-    let table = Command::new("sfdisk").arg("--dump").arg(disk).output()
+    let disk = config
+        .disk
+        .target
+        .as_deref()
+        .context("select a target disk before configuring the installed user")?;
+    let table = Command::new("sfdisk")
+        .arg("--dump")
+        .arg(disk)
+        .output()
         .context("sfdisk is required to verify the installed target")?;
     if !table.status.success() {
         bail!("could not read the configured target partition table");
     }
-    let table = String::from_utf8(table.stdout).context("sfdisk returned non-UTF-8 partition data")?;
-    if table.lines().find_map(|line| line.trim().strip_prefix("label:")).map(str::trim) != Some("gpt") {
+    let table =
+        String::from_utf8(table.stdout).context("sfdisk returned non-UTF-8 partition data")?;
+    if table
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("label:"))
+        .map(str::trim)
+        != Some("gpt")
+    {
         bail!("configured target does not have the expected GPT partition table");
     }
-    let partitions: Vec<PathBuf> = table.lines()
+    let partitions: Vec<PathBuf> = table
+        .lines()
         .filter(|line| line.trim_start().starts_with("/dev/"))
-        .filter_map(|line| line.split_once(':').map(|(path, _)| PathBuf::from(path.trim())))
+        .filter_map(|line| {
+            line.split_once(':')
+                .map(|(path, _)| PathBuf::from(path.trim()))
+        })
         .collect();
     if partitions.len() != 2 {
         bail!("configured target has {} partitions; expected exactly two", partitions.len());
@@ -48,8 +72,11 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
     let efi = fs::canonicalize(&partitions[0]).context("resolve target EFI partition")?;
     let root = fs::canonicalize(&partitions[1]).context("resolve target root partition")?;
     for (device, label) in [(&efi, "EFI"), (&root, "root")] {
-        if !fs::metadata(device).with_context(|| format!("inspect {label} partition"))?
-            .file_type().is_block_device() {
+        if !fs::metadata(device)
+            .with_context(|| format!("inspect {label} partition"))?
+            .file_type()
+            .is_block_device()
+        {
             bail!("{label} partition is not a block device");
         }
     }
@@ -57,7 +84,11 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
     verify_mount("/mnt/boot", &efi)?;
 
     let etc = Path::new(TARGET).join("etc");
-    if !fs::symlink_metadata(&etc).context("installed /etc directory is missing")?.file_type().is_dir() {
+    if !fs::symlink_metadata(&etc)
+        .context("installed /etc directory is missing")?
+        .file_type()
+        .is_dir()
+    {
         bail!("/mnt/etc is not a real directory");
     }
     if !etc.join("fstab").is_file() || !etc.join("hostname").is_file() {
@@ -68,20 +99,33 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
     }
 
     let username = &config.system.username;
-    let existing = Command::new("chroot").arg(TARGET).args(["id", "-u", username]).output()
+    let existing = Command::new("chroot")
+        .arg(TARGET)
+        .args(["id", "-u", username])
+        .output()
         .context("check whether the configured user already exists")?;
     if existing.status.success() {
         bail!("user '{username}' already exists in the target; refusing to modify its account");
     }
-    if !Command::new("chroot").arg(TARGET).args(["getent", "group", "wheel"]).status()
-        .context("check target wheel group")?.success() {
-        bail!("the target does not have a wheel group; refusing to create a user without privilege access");
+    if !Command::new("chroot")
+        .arg(TARGET)
+        .args(["getent", "group", "wheel"])
+        .status()
+        .context("check target wheel group")?
+        .success()
+    {
+        bail!(
+            "the target does not have a wheel group; refusing to create a user without privilege access"
+        );
     }
 
     let mut groups = vec!["wheel".to_owned()];
     for group in ["video", "audio", "input", "storage", "optical", "lp"] {
-        let found = Command::new("chroot").arg(TARGET).args(["getent", "group", group])
-            .output().with_context(|| format!("check target group {group}"))?;
+        let found = Command::new("chroot")
+            .arg(TARGET)
+            .args(["getent", "group", group])
+            .output()
+            .with_context(|| format!("check target group {group}"))?;
         if found.status.success() {
             groups.push(group.to_owned());
         }
@@ -104,52 +148,94 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
         }
     }
 
-    let useradd = Command::new("chroot").arg(TARGET)
-        .args(["useradd", "--create-home", "--groups", &groups.join(","), "--shell", "/bin/bash", username])
-        .status().context("create the configured target user")?;
+    let useradd = Command::new("chroot")
+        .arg(TARGET)
+        .args([
+            "useradd",
+            "--create-home",
+            "--groups",
+            &groups.join(","),
+            "--shell",
+            "/bin/bash",
+            username,
+        ])
+        .status()
+        .context("create the configured target user")?;
     if !useradd.success() {
         rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
         bail!("useradd failed inside /mnt; no password was set");
     }
 
     eprintln!("Set the password for '{username}' in the target system:");
-    let passwd = Command::new("chroot").arg(TARGET).args(["passwd", username])
-        .status().context("start passwd inside the installed target")?;
+    let passwd = Command::new("chroot")
+        .arg(TARGET)
+        .args(["passwd", username])
+        .status()
+        .context("start passwd inside the installed target")?;
     if !passwd.success() {
-        bail!("user '{username}' was created, but passwd did not complete; rerun after resolving the password issue");
+        bail!(
+            "user '{username}' was created, but passwd did not complete; rerun after resolving the password issue"
+        );
     }
 
-    if matches!(config.system.privilege_escalation, PrivilegeEscalation::Sudo | PrivilegeEscalation::Both) {
-        let check = Command::new("chroot").arg(TARGET).args(["visudo", "-cf", "/etc/sudoers"])
-            .status().context("validate installed sudoers configuration")?;
+    if matches!(
+        config.system.privilege_escalation,
+        PrivilegeEscalation::Sudo | PrivilegeEscalation::Both
+    ) {
+        let check = Command::new("chroot")
+            .arg(TARGET)
+            .args(["visudo", "-cf", "/etc/sudoers"])
+            .status()
+            .context("validate installed sudoers configuration")?;
         if !check.success() {
             let _ = fs::remove_file(&sudo_dropin);
-            bail!("visudo rejected the new sudoers configuration; the added sudoers drop-in was removed");
+            bail!(
+                "visudo rejected the new sudoers configuration; the added sudoers drop-in was removed"
+            );
         }
     }
 
     Ok(format!(
         "Created target user '{username}' with groups {} and configured {:?} wheel privilege access. Password was entered interactively and was not stored in the installer configuration.",
-        groups.join(", "), config.system.privilege_escalation
+        groups.join(", "),
+        config.system.privilege_escalation
     ))
 }
 
 fn verify_mount(mountpoint: &str, expected: &Path) -> Result<()> {
-    let output = Command::new("findmnt").args([
-        "--noheadings", "--raw", "--output", "SOURCE", "--target", mountpoint,
-    ]).output().with_context(|| format!("findmnt is required to verify {mountpoint}"))?;
-    if !output.status.success() { bail!("{mountpoint} is not mounted"); }
+    let output = Command::new("findmnt")
+        .args([
+            "--noheadings",
+            "--raw",
+            "--output",
+            "SOURCE",
+            "--target",
+            mountpoint,
+        ])
+        .output()
+        .with_context(|| format!("findmnt is required to verify {mountpoint}"))?;
+    if !output.status.success() {
+        bail!("{mountpoint} is not mounted");
+    }
     let source = String::from_utf8(output.stdout).context("findmnt returned non-UTF-8 source")?;
-    let actual = fs::canonicalize(source.trim()).with_context(|| format!("resolve mounted source for {mountpoint}"))?;
+    let actual = fs::canonicalize(source.trim())
+        .with_context(|| format!("resolve mounted source for {mountpoint}"))?;
     if actual != expected {
-        bail!("{mountpoint} is mounted from {}, not expected {}", actual.display(), expected.display());
+        bail!(
+            "{mountpoint} is mounted from {}, not expected {}",
+            actual.display(),
+            expected.display()
+        );
     }
     Ok(())
 }
 
 fn ensure_absent(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
-        Ok(_) => bail!("{} already exists; refusing to overwrite existing privilege policy", path.display()),
+        Ok(_) => bail!(
+            "{} already exists; refusing to overwrite existing privilege policy",
+            path.display()
+        ),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
     }
@@ -166,35 +252,52 @@ fn ensure_sudoers_dropin(etc: &Path, dropin: &Path) -> Result<()> {
         }
         Err(error) => return Err(error).context("inspect /mnt/etc/sudoers.d"),
     }
-    let main = fs::read_to_string(etc.join("sudoers")).context("installed /etc/sudoers is missing")?;
+    let main =
+        fs::read_to_string(etc.join("sudoers")).context("installed /etc/sudoers is missing")?;
     if !main.lines().any(|line| {
         let line = line.trim();
         line.starts_with("#includedir") && line.split_whitespace().nth(1) == Some("/etc/sudoers.d")
     }) {
-        bail!("installed /etc/sudoers does not include /etc/sudoers.d; refusing to write an inactive policy");
+        bail!(
+            "installed /etc/sudoers does not include /etc/sudoers.d; refusing to write an inactive policy"
+        );
     }
     ensure_absent(dropin)?;
     write_file(dropin, b"%wheel ALL=(ALL:ALL) ALL\n", 0o440)
 }
 
 fn write_file(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
-    let mut file = OpenOptions::new().write(true).create_new(true).mode(mode).open(path)
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(mode)
+        .open(path)
         .with_context(|| format!("create {}", path.display()))?;
     use std::io::Write;
-    file.write_all(contents).with_context(|| format!("write {}", path.display()))?;
-    file.sync_all().with_context(|| format!("sync {}", path.display()))?;
+    file.write_all(contents)
+        .with_context(|| format!("write {}", path.display()))?;
+    file.sync_all()
+        .with_context(|| format!("sync {}", path.display()))?;
     Ok(())
 }
 
 fn rollback_privilege_files(mode: PrivilegeEscalation, doas: &Path, sudo: &Path) {
-    if matches!(mode, PrivilegeEscalation::Doas | PrivilegeEscalation::Both) { let _ = fs::remove_file(doas); }
-    if matches!(mode, PrivilegeEscalation::Sudo | PrivilegeEscalation::Both) { let _ = fs::remove_file(sudo); }
+    if matches!(mode, PrivilegeEscalation::Doas | PrivilegeEscalation::Both) {
+        let _ = fs::remove_file(doas);
+    }
+    if matches!(mode, PrivilegeEscalation::Sudo | PrivilegeEscalation::Both) {
+        let _ = fs::remove_file(sudo);
+    }
 }
 
 fn effective_uid() -> Result<u32> {
-    let status = fs::read_to_string("/proc/self/status").context("read /proc/self/status to verify effective UID")?;
-    status.lines().find(|line| line.starts_with("Uid:"))
+    let status = fs::read_to_string("/proc/self/status")
+        .context("read /proc/self/status to verify effective UID")?;
+    status
+        .lines()
+        .find(|line| line.starts_with("Uid:"))
         .and_then(|line| line.split_whitespace().nth(2))
         .context("effective UID is missing from /proc/self/status")?
-        .parse::<u32>().context("effective UID is not numeric")
+        .parse::<u32>()
+        .context("effective UID is not numeric")
 }
