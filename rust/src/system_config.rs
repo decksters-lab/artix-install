@@ -75,6 +75,8 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
         bail!("selected timezone resolves outside the installed zoneinfo database");
     }
 
+    verify_keymap(&config.system.keyboard_layout)?;
+
     let locale_gen = etc.join("locale.gen");
     let locale_contents = fs::read_to_string(&locale_gen)
         .context("installed /etc/locale.gen is missing or unreadable")?;
@@ -139,6 +141,24 @@ fn verify_mount(mountpoint: &str, expected: &Path) -> Result<()> {
         .with_context(|| format!("resolve mounted source '{source}' for {mountpoint}"))?;
     if actual != expected {
         bail!("{mountpoint} is mounted from {}, not the expected {}", actual.display(), expected.display());
+    }
+    Ok(())
+}
+
+fn verify_keymap(layout: &str) -> Result<()> {
+    let root = Path::new(TARGET).join("usr/share/kbd/keymaps");
+    if !root.is_dir() {
+        bail!("installed console keymap database is missing");
+    }
+    let pattern = format!("{layout}.map*");
+    let output = Command::new("find")
+        .arg(&root)
+        .args(["-type", "f", "-name"])
+        .arg(&pattern)
+        .output()
+        .context("find is required to verify the selected console keymap")?;
+    if !output.status.success() || output.stdout.is_empty() {
+        bail!("console keymap '{}' is not present in the installed target", layout);
     }
     Ok(())
 }
