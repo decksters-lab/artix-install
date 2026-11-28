@@ -304,8 +304,9 @@ fn verify_kernel_initramfs_pairs(boot: &Path) -> Result<()> {
     }
     for kernel in &kernels {
         let initramfs = boot.join(format!("initramfs-{kernel}.img"));
-        if !initramfs.is_file() || fs::metadata(&initramfs)?.len() == 0 {
-            bail!("kernel {kernel} has no non-empty matching initramfs in /mnt/boot");
+        ensure_regular_file(&initramfs)?;
+        if fs::metadata(&initramfs)?.len() == 0 {
+            bail!("kernel {kernel} has an empty matching initramfs in /mnt/boot");
         }
     }
     Ok(())
