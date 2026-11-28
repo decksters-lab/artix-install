@@ -531,15 +531,6 @@ fn ensure_regular_file(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn ensure_regular_or_absent(path: &Path) -> Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_file() => Ok(()),
-        Ok(_) => bail!("{} exists but is not a regular file", path.display()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
-    }
-}
-
 fn ensure_nonempty_file(path: &Path) -> Result<()> {
     ensure_regular_file(path)?;
     if fs::metadata(path)
