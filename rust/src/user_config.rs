@@ -188,7 +188,9 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
                 "password setup failed; AGSI privilege files were removed, but userdel could not remove the new account '{username}'"
             );
         }
-        bail!("password setup failed; the newly created user and AGSI privilege files were rolled back");
+        bail!(
+            "password setup failed; the newly created user and AGSI privilege files were rolled back"
+        );
     }
 
     if matches!(
