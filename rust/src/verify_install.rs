@@ -384,12 +384,33 @@ fn verify_zramen(config: &InstallConfig, dinit: &Path) -> Result<()> {
     verify_service_link(&dinit.join("boot.d/zramen"), "/etc/dinit.d/zramen")?;
 
     let config_path = dinit.join("config/zramen.conf");
-    let expected = format!(
-        "ZRAM_SIZE=100\nZRAM_MAX_SIZE={}\nZRAM_COMP_ALGORITHM=lz4\nZRAM_PRIORITY=32767\n",
-        u32::from(config.disk.swap.size_gib) * 1024
-    );
-    if read_regular_file(&config_path)? != expected {
-        bail!("Dinit zramen configuration does not match the selected ZRAM size and safe defaults");
+    let contents = read_regular_file(&config_path)?;
+    let expected = [
+        ("ZRAM_SIZE", "100".to_owned()),
+        (
+            "ZRAM_MAX_SIZE",
+            (u32::from(config.disk.swap.size_gib) * 1024).to_string(),
+        ),
+        ("ZRAM_COMP_ALGORITHM", "lz4".to_owned()),
+        ("ZRAM_PRIORITY", "32767".to_owned()),
+    ];
+    for (key, expected_value) in expected {
+        let values: Vec<_> = contents
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    return None;
+                }
+                let (name, value) = line.split_once('=')?;
+                (name.trim() == key).then_some(value.trim())
+            })
+            .collect();
+        if values.as_slice() != [expected_value.as_str()] {
+            bail!(
+                "Dinit zramen setting {key} does not have exactly one expected value"
+            );
+        }
     }
     Ok(())
 }
