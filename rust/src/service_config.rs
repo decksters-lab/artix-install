@@ -128,8 +128,6 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
     }
 
     let boot_dir = dinit_dir.join("boot.d");
-    ensure_real_directory(&boot_dir)?;
-
     let mut links = Vec::new();
     for name in &services {
         let service_file = dinit_dir.join(name);
@@ -140,14 +138,12 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
         ));
     }
 
-    let mut user_boot_dir = None;
-    if !user_services.is_empty() {
-        let dir = etc.join("xdg/userspawn/dinit.d/boot.d");
-        ensure_directory_chain(&etc, &dir)?;
-        user_boot_dir = Some(dir.clone());
+    let per_user_audio_enabled = !user_services.is_empty();
+    let user_boot_dir = etc.join("xdg/userspawn/dinit.d/boot.d");
+    if per_user_audio_enabled {
         for name in &user_services {
             links.push((
-                dir.join(name),
+                user_boot_dir.join(name),
                 PathBuf::from(format!("/etc/dinit.d/user/{name}")),
             ));
         }
@@ -155,6 +151,11 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
 
     for (link, target) in &links {
         verify_link_destination(link, target)?;
+    }
+
+    ensure_real_directory(&boot_dir)?;
+    if per_user_audio_enabled {
+        ensure_directory_chain(&etc, &user_boot_dir)?;
     }
 
     let mut created = Vec::new();
@@ -181,7 +182,7 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
     } else {
         ""
     };
-    let user_note = if user_boot_dir.is_some() {
+    let user_note = if per_user_audio_enabled {
         " Per-user PipeWire and WirePlumber services were linked for userspawn."
     } else {
         ""
