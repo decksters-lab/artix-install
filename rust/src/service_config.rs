@@ -375,7 +375,7 @@ fn verify_mount(mountpoint: &str, expected: &Path) -> Result<()> {
             "--raw",
             "--output",
             "SOURCE",
-            "--target",
+            "--mountpoint",
             mountpoint,
         ])
         .output()
