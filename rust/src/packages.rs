@@ -579,6 +579,7 @@ mod tests {
         use crate::config::{EfiPolicy, Filesystem, FirmwareMode, MountConfig, Partitioning};
 
         let mut config = InstallConfig::default();
+        config.disk.swap.mode = SwapMode::None;
         let plan = build_package_plan(&config);
         assert_eq!(plan.storage_packages, ["dosfstools"]);
         assert_eq!(plan.bootloader_packages, ["grub", "efibootmgr"]);
