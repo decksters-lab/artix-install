@@ -574,7 +574,7 @@ fn is_managed_marker(path: &Path) -> Result<bool> {
         Ok(metadata) if metadata.file_type().is_file() => {
             let contents = fs::read_to_string(path)
                 .with_context(|| format!("read AGSI marker {}", path.display()))?;
-            if contents != "Managed by AGSI.\\n" {
+            if contents != "Managed by AGSI.\n" {
                 bail!("{} exists but is not a recognized AGSI marker", path.display());
             }
             Ok(true)
