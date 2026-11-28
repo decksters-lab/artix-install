@@ -13,6 +13,7 @@ mod storage;
 mod system_config;
 mod tui;
 mod user_config;
+mod verify_install;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
 
@@ -178,6 +179,18 @@ struct Args {
         ]
     )]
     install_bootloader: bool,
+    /// Perform read-only verification of the installed target.
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan", "validate", "hardware", "preflight", "check_packages", "write_default",
+            "apply_partition_table", "format_root", "prepare_efi", "mount_target",
+            "generate_fstab", "install_base", "configure_system", "configure_user",
+            "configure_services", "install_bootloader"
+        ]
+    )]
+    verify_install: bool,
     /// Write the default configuration to FILE and exit.
     #[arg(long, value_name = "FILE")]
     write_default: Option<PathBuf>,
@@ -246,6 +259,14 @@ fn run() -> Result<()> {
             bail!("--install-bootloader requires an explicit --config file");
         }
         let result = bootloader::install_grub_uefi(&config)?;
+        println!("{result}");
+        return Ok(());
+    }
+    if args.verify_install {
+        if !has_explicit_config {
+            bail!("--verify-install requires an explicit --config file");
+        }
+        let result = verify_install::verify_installation(&config)?;
         println!("{result}");
         return Ok(());
     }
