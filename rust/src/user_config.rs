@@ -256,7 +256,8 @@ fn ensure_sudoers_dropin(etc: &Path, dropin: &Path) -> Result<()> {
         fs::read_to_string(etc.join("sudoers")).context("installed /etc/sudoers is missing")?;
     if !main.lines().any(|line| {
         let line = line.trim();
-        line.starts_with("#includedir") && line.split_whitespace().nth(1) == Some("/etc/sudoers.d")
+        (line.starts_with("#includedir") || line.starts_with("@includedir"))
+            && line.split_whitespace().nth(1) == Some("/etc/sudoers.d")
     }) {
         bail!(
             "installed /etc/sudoers does not include /etc/sudoers.d; refusing to write an inactive policy"
