@@ -285,7 +285,7 @@ fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
     items.push(PlanItem { title: "Configure networking, multilib and bootloader".into(),
         detail: format!("Network: {}; multilib: {}; bootloader: {}. --configure-services enables selected Dinit service links offline; --install-bootloader installs GRUB for UEFI only. OpenRC, runit, s6, zram setup, other bootloaders and BIOS boot remain pending.", config.software.network, config.software.multilib, config.software.bootloader), risk });
     items.push(PlanItem { title: "Verify boot and installed services".into(),
-        detail: "Future verification module: validate fstab, initramfs, kernel command line, bootloader entries, display manager and enabled services before offering reboot.".into(), risk });
+        detail: "The read-only --verify-install stage checks exact target mounts, UUID-based fstab, system identity, user/password/privilege policy, Dinit service links, kernel/initramfs and GRUB UEFI files. It does not reboot; firmware handoff and startup still require a VM boot test.".into(), risk });
     items
 }
 
