@@ -120,6 +120,7 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
 
     let mut user_services = Vec::new();
     if config.system.user_services == UserServices::Userspawn && needs_audio(config) {
+        verify_real_directory(&dinit_dir.join("user"))?;
         for name in ["pipewire-pulse", "wireplumber"] {
             let path = dinit_dir.join("user").join(name);
             verify_service_file(&path)?;
