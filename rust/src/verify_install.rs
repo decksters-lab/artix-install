@@ -29,11 +29,11 @@ pub fn verify_installation(config: &InstallConfig) -> Result<String> {
     if config.disk.partitioning != Partitioning::Automatic
         || config.disk.root_filesystem != Filesystem::Ext4
         || config.disk.encryption
-        || config.disk.swap.mode != SwapMode::None
+        || !matches!(config.disk.swap.mode, SwapMode::None | SwapMode::Zram)
         || !config.disk.additional_mounts.is_empty()
     {
         bail!(
-            "read-only verification currently supports automatic, unencrypted UEFI/ext4 installs with no swap or additional mounts"
+            "read-only verification currently supports automatic, unencrypted UEFI/ext4 installs with no disk swap partition or additional mounts (ZRAM is supported)"
         );
     }
     if config.system.firmware != FirmwareMode::Uefi
@@ -335,6 +335,10 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
         services.push("upower".to_owned());
     }
 
+    if config.disk.swap.mode == SwapMode::Zram {
+        verify_zramen(config, &etc, &dinit)?;
+    }
+
     for name in &services {
         verify_service_file(&dinit.join(name))?;
         verify_service_link(&boot.join(name), &format!("/etc/dinit.d/{name}"))?;
@@ -364,6 +368,30 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
             verify_service_link(&user_boot.join(name), &format!("/etc/dinit.d/user/{name}"))?;
         }
     }
+    Ok(())
+}
+
+fn verify_zramen(config: &InstallConfig, etc: &Path, dinit: &Path) -> Result<()> {
+    let packages = run_chroot_output(&["pacman", "-Q", "zramen", "zramen-dinit"])?;
+    let package_list = String::from_utf8_lossy(&packages.stdout);
+    for required in ["zramen ", "zramen-dinit "] {
+        if !package_list.lines().any(|line| line.starts_with(required)) {
+            bail!("required ZRAM package {} is not installed in the target", required.trim());
+        }
+    }
+
+    verify_service_file(&dinit.join("zramen"))?;
+    verify_service_link(&dinit.join("boot.d/zramen"), "/etc/dinit.d/zramen")?;
+
+    let config_path = dinit.join("config/zramen.conf");
+    let expected = format!(
+        "ZRAM_SIZE=100\\nZRAM_MAX_SIZE={}\\nZRAM_COMP_ALGORITHM=lz4\\nZRAM_PRIORITY=32767\\n",
+        u32::from(config.disk.swap.size_gib) * 1024
+    );
+    if read_regular_file(&config_path)? != expected {
+        bail!("Dinit zramen configuration does not match the selected ZRAM size and safe defaults");
+    }
+    let _ = etc;
     Ok(())
 }
 
