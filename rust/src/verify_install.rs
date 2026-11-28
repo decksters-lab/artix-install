@@ -32,7 +32,9 @@ pub fn verify_installation(config: &InstallConfig) -> Result<String> {
         || config.disk.swap.mode != SwapMode::None
         || !config.disk.additional_mounts.is_empty()
     {
-        bail!("read-only verification currently supports automatic, unencrypted UEFI/ext4 installs with no swap or additional mounts");
+        bail!(
+            "read-only verification currently supports automatic, unencrypted UEFI/ext4 installs with no swap or additional mounts"
+        );
     }
     if config.system.firmware != FirmwareMode::Uefi
         || config.system.init_system != InitSystem::Dinit
@@ -109,7 +111,9 @@ pub fn verify_installation(config: &InstallConfig) -> Result<String> {
     verify_grub_uefi(&etc, &Path::new(TARGET).join("boot"))?;
     for mountpoint in ["/mnt/dev", "/mnt/proc", "/mnt/sys"] {
         if is_mountpoint(mountpoint)? {
-            bail!("{mountpoint} is still mounted from the installer; unmount it before final verification");
+            bail!(
+                "{mountpoint} is still mounted from the installer; unmount it before final verification"
+            );
         }
     }
 
@@ -168,8 +172,8 @@ fn verify_system_identity(config: &InstallConfig, etc: &Path) -> Result<()> {
     let localtime = etc.join("localtime");
     let expected_timezone =
         PathBuf::from(format!("../usr/share/zoneinfo/{}", config.system.timezone));
-    let metadata = fs::symlink_metadata(&localtime)
-        .context("installed /etc/localtime is missing")?;
+    let metadata =
+        fs::symlink_metadata(&localtime).context("installed /etc/localtime is missing")?;
     if !metadata.file_type().is_symlink()
         || fs::read_link(&localtime).context("read installed timezone symlink")?
             != expected_timezone
@@ -229,7 +233,9 @@ fn verify_user_and_privileges(config: &InstallConfig, etc: &Path) -> Result<()> 
         bail!("configured user '{username}' is missing or has an invalid passwd entry");
     }
     if fields[5] != format!("/home/{username}") || fields[6] != "/bin/bash" {
-        bail!("configured user '{username}' does not have the expected home directory and Bash login shell");
+        bail!(
+            "configured user '{username}' does not have the expected home directory and Bash login shell"
+        );
     }
     let home = Path::new(TARGET).join(format!("home/{username}"));
     ensure_real_directory(&home)?;
@@ -244,7 +250,9 @@ fn verify_user_and_privileges(config: &InstallConfig, etc: &Path) -> Result<()> 
     let password = String::from_utf8_lossy(&password.stdout);
     let status = password.split_whitespace().nth(1).unwrap_or("");
     if status != "P" {
-        bail!("configured user '{username}' does not have an unlocked password (passwd status: {status})");
+        bail!(
+            "configured user '{username}' does not have an unlocked password (passwd status: {status})"
+        );
     }
 
     match config.system.privilege_escalation {
