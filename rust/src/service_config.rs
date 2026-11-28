@@ -338,7 +338,9 @@ fn verify_real_directory(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_dir() => Ok(()),
         Ok(_) => bail!("{} exists but is not a real directory", path.display()),
-        Err(error) => Err(error).with_context(|| format!("inspect required directory {}", path.display())),
+        Err(error) => {
+            Err(error).with_context(|| format!("inspect required directory {}", path.display()))
+        }
     }
 }
 
