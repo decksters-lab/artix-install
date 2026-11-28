@@ -4,7 +4,7 @@
 
 A Rust + Ratatui reimplementation track for [decksters-lab/artix-install](https://github.com/decksters-lab/artix-install).
 
-> **Status: experimental installer prototype.** The Rust binary now has guarded storage stages for automatic partitioning, ext4 root formatting, safe EFI preparation, target mounting, UUID-based fstab generation, and a separately confirmed Artix basestrap stage. Chroot configuration, bootloader setup, service activation, and full guided installation are not implemented yet. Keep using the existing `artix-install.sh` for real installs until the Rust port reaches feature parity and passes disposable-VM testing.
+> **Status: experimental installer prototype.** The Rust binary has guarded storage stages for automatic partitioning, ext4 root formatting, safe EFI preparation, target mounting, UUID-based fstab generation, Artix basestrap installation, and an initial post-install system-identity stage for hostname, timezone, locale generation, console keymap, X11 keyboard layout, and hosts. User/password setup, init-specific service activation, bootloader installation/configuration, and full guided installation are not implemented yet. Keep using the existing `artix-install.sh` for real installs until the Rust port reaches feature parity and passes disposable-VM testing.
 
 ## Build
 
@@ -25,6 +25,7 @@ cargo run -- --validate --config configs/gaming-dinit.toml
 cargo run -- --config configs/wayland-hyprland.toml --plan
 cargo run -- --write-default agsi.toml
 cargo run -- --hardware
+cargo run -- --config agsi.toml --configure-system
 ```
 
 Inside the TUI:
@@ -73,7 +74,7 @@ Btrfs layouts are configurable as flat, standard (`@`, `@home`, `@log`, `@cache`
 
 ## Safety model
 
-The storage and basestrap executors are deliberately narrow and guarded. Automatic partitioning, root formatting, EFI preparation, mounting, fstab generation, and base installation each revalidate their target and stop on uncertainty. Existing EFI filesystems and existing fstab files are preserved. The current executable path supports only unencrypted automatic UEFI/ext4 installs; chroot configuration and later setup stages are not implemented yet.
+The storage and basestrap executors are deliberately narrow and guarded. Automatic partitioning, root formatting, EFI preparation, mounting, fstab generation, and base installation each revalidate their target and stop on uncertainty. Existing EFI filesystems and existing fstab files are preserved. The current executable path supports only unencrypted automatic UEFI/ext4 installs without a swap partition. `--configure-system` verifies the configured disk's mounted root and EFI sources before writing hostname, locale, timezone, console keymap, X11 keyboard layout, and hosts files. It is not yet a complete chroot configuration stage; user/password setup, init-specific service activation, bootloader installation/configuration, and final boot verification remain unimplemented.
 
 Read [`docs/SAFETY_MODEL.md`](docs/SAFETY_MODEL.md) for the exact guarantees, limitations, and remaining release requirements.
 
