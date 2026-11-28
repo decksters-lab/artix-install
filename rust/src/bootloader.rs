@@ -8,9 +8,7 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 
-use crate::config::{
-    Bootloader, Filesystem, FirmwareMode, InstallConfig, Partitioning, SwapMode,
-};
+use crate::config::{Bootloader, Filesystem, FirmwareMode, InstallConfig, Partitioning, SwapMode};
 
 const TARGET: &str = "/mnt";
 const EFI_VENDOR: &str = "Artix";
@@ -29,14 +27,18 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     if config.software.bootloader != Bootloader::Grub
         || config.system.firmware != FirmwareMode::Uefi
     {
-        bail!("this stage currently supports GRUB on UEFI systems only; no boot files were changed");
+        bail!(
+            "this stage currently supports GRUB on UEFI systems only; no boot files were changed"
+        );
     }
     if config.disk.partitioning != Partitioning::Automatic
         || config.disk.root_filesystem != Filesystem::Ext4
         || config.disk.encryption
         || config.disk.swap.mode == SwapMode::Partition
     {
-        bail!("GRUB installation currently supports automatic, unencrypted UEFI/ext4 installs without a swap partition");
+        bail!(
+            "GRUB installation currently supports automatic, unencrypted UEFI/ext4 installs without a swap partition"
+        );
     }
 
     let selected_disk = config
@@ -132,7 +134,9 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     let grub_cfg = boot.join("grub/grub.cfg");
     let grub_cfg_existed = path_exists(&grub_cfg)?;
     if grub_cfg_existed && !marker_managed {
-        bail!("/boot/grub/grub.cfg already exists without the AGSI marker; refusing to overwrite it");
+        bail!(
+            "/boot/grub/grub.cfg already exists without the AGSI marker; refusing to overwrite it"
+        );
     }
     if grub_cfg_existed {
         ensure_regular_file(&grub_cfg)?;
@@ -281,11 +285,7 @@ fn verify_kernel_initramfs_pairs(boot: &Path) -> Result<()> {
                 .file_type()
                 .context("inspect kernel image type")?
                 .is_file()
-                && entry
-                    .metadata()
-                    .context("inspect kernel image size")?
-                    .len()
-                    > 0
+                && entry.metadata().context("inspect kernel image size")?.len() > 0
             {
                 kernels.push(kernel.to_owned());
             }
@@ -297,9 +297,7 @@ fn verify_kernel_initramfs_pairs(boot: &Path) -> Result<()> {
     for kernel in &kernels {
         let initramfs = boot.join(format!("initramfs-{kernel}.img"));
         if !initramfs.is_file() || fs::metadata(&initramfs)?.len() == 0 {
-            bail!(
-                "kernel {kernel} has no non-empty matching initramfs in /mnt/boot"
-            );
+            bail!("kernel {kernel} has no non-empty matching initramfs in /mnt/boot");
         }
     }
     Ok(())
@@ -318,7 +316,11 @@ fn verify_blkid_type(device: &Path, expected: &str) -> Result<()> {
         bail!(
             "expected {expected} filesystem on {}, found {}",
             device.display(),
-            if actual.is_empty() { "unknown" } else { &actual }
+            if actual.is_empty() {
+                "unknown"
+            } else {
+                &actual
+            }
         );
     }
     Ok(())
@@ -382,10 +384,7 @@ fn mount_chroot_pseudofilesystems() -> Result<Vec<PathBuf>> {
                 bail!("could not bind-mount {source} into {target}");
             }
             Err(error) => {
-                return Err(cleanup_mounts_after_error(
-                    &mounted,
-                    error.into(),
-                ));
+                return Err(cleanup_mounts_after_error(&mounted, error.into()));
             }
         }
 
@@ -473,10 +472,12 @@ fn ensure_directory(path: &Path) -> Result<()> {
 }
 
 fn copy_file_atomic(source: &Path, destination: &Path) -> Result<()> {
-    let parent = destination.parent().context("fallback EFI loader has no parent directory")?;
+    let parent = destination
+        .parent()
+        .context("fallback EFI loader has no parent directory")?;
     let temporary = parent.join(".agsi-grub-loader.tmp");
-    let mut input = fs::File::open(source)
-        .with_context(|| format!("open GRUB loader {}", source.display()))?;
+    let mut input =
+        fs::File::open(source).with_context(|| format!("open GRUB loader {}", source.display()))?;
     let mut output = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -486,7 +487,9 @@ fn copy_file_atomic(source: &Path, destination: &Path) -> Result<()> {
     let result = (|| -> Result<()> {
         std::io::copy(&mut input, &mut output)
             .context("copy GRUB loader to temporary fallback file")?;
-        output.sync_all().context("sync temporary fallback loader")?;
+        output
+            .sync_all()
+            .context("sync temporary fallback loader")?;
         Ok(())
     })();
     if let Err(error) = result {
@@ -497,7 +500,8 @@ fn copy_file_atomic(source: &Path, destination: &Path) -> Result<()> {
     drop(output);
     if let Err(error) = fs::rename(&temporary, destination) {
         let _ = fs::remove_file(&temporary);
-        return Err(error).with_context(|| format!("install fallback loader {}", destination.display()));
+        return Err(error)
+            .with_context(|| format!("install fallback loader {}", destination.display()));
     }
     Ok(())
 }
@@ -563,7 +567,10 @@ fn is_managed_marker(path: &Path) -> Result<bool> {
             let contents = fs::read_to_string(path)
                 .with_context(|| format!("read AGSI marker {}", path.display()))?;
             if contents != "Managed by AGSI.\n" {
-                bail!("{} exists but is not a recognized AGSI marker", path.display());
+                bail!(
+                    "{} exists but is not a recognized AGSI marker",
+                    path.display()
+                );
             }
             Ok(true)
         }
