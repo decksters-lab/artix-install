@@ -206,6 +206,8 @@ fn verify_system_identity(config: &InstallConfig, etc: &Path) -> Result<()> {
     if !hosts.contains(&config.system.hostname) {
         bail!("/etc/hosts does not contain the configured hostname");
     }
+    ensure_real_directory(&etc.join("X11"))?;
+    ensure_real_directory(&etc.join("X11/xorg.conf.d"))?;
     let xorg = read_regular_file(&etc.join("X11/xorg.conf.d/00-keyboard.conf"))?;
     if !xorg.contains(&format!(
         "Option \"XkbLayout\" \"{}\"",
@@ -235,7 +237,9 @@ fn verify_user_and_privileges(config: &InstallConfig, etc: &Path) -> Result<()> 
             "configured user '{username}' does not have the expected home directory and Bash login shell"
         );
     }
-    let home = Path::new(TARGET).join(format!("home/{username}"));
+    let home_root = Path::new(TARGET).join("home");
+    ensure_real_directory(&home_root)?;
+    let home = home_root.join(username);
     ensure_real_directory(&home)?;
 
     let groups = run_chroot_output(&["id", "-nG", username])?;
@@ -274,6 +278,7 @@ fn verify_doas(etc: &Path) -> Result<()> {
 }
 
 fn verify_sudo(etc: &Path) -> Result<()> {
+    ensure_real_directory(&etc.join("sudoers.d"))?;
     let path = etc.join("sudoers.d/10-agsi-wheel");
     let contents = read_regular_file(&path)?;
     if contents != "%wheel ALL=(ALL:ALL) ALL\n" {
@@ -349,6 +354,9 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
     {
         let user_dir = dinit.join("user");
         ensure_real_directory(&user_dir)?;
+        ensure_real_directory(&etc.join("xdg"))?;
+        ensure_real_directory(&etc.join("xdg/userspawn"))?;
+        ensure_real_directory(&etc.join("xdg/userspawn/dinit.d"))?;
         let user_boot = etc.join("xdg/userspawn/dinit.d/boot.d");
         ensure_real_directory(&user_boot)?;
         for name in ["pipewire-pulse", "wireplumber"] {
@@ -360,6 +368,10 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
 }
 
 fn verify_grub_uefi(etc: &Path, boot: &Path) -> Result<()> {
+    ensure_real_directory(boot)?;
+    ensure_real_directory(&boot.join("EFI"))?;
+    ensure_real_directory(&boot.join("EFI/Artix"))?;
+    ensure_real_directory(&boot.join("grub"))?;
     let marker = etc.join(GRUB_MARKER);
     if read_regular_file(&marker)? != "Managed by AGSI.\n" {
         bail!("AGSI GRUB installation marker is invalid");
@@ -368,6 +380,7 @@ fn verify_grub_uefi(etc: &Path, boot: &Path) -> Result<()> {
     ensure_nonempty_file(&boot.join("grub/grub.cfg"))?;
     let fallback_marker = boot.join("EFI/BOOT").join(GRUB_MARKER);
     if path_exists(&fallback_marker)? {
+        ensure_real_directory(&boot.join("EFI/BOOT"))?;
         ensure_nonempty_file(&boot.join("EFI/BOOT/BOOTX64.EFI"))?;
         if read_regular_file(&fallback_marker)? != "Managed by AGSI.\n" {
             bail!("AGSI fallback EFI marker is invalid");
@@ -456,6 +469,7 @@ fn verify_service_link(link: &Path, expected: &str) -> Result<()> {
 }
 
 fn verify_kernel_images(boot: &Path) -> Result<()> {
+    ensure_real_directory(boot)?;
     let mut kernels = Vec::new();
     for entry in fs::read_dir(boot).context("read installed /boot directory")? {
         let entry = entry.context("inspect /boot entry")?;
