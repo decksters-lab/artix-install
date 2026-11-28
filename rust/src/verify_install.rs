@@ -331,10 +331,7 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
 
     if needs_audio(config) {
         if verify_service_file(&dinit.join("rtkit-daemon")).is_ok() {
-            verify_service_link(
-                &boot.join("rtkit-daemon"),
-                "/etc/dinit.d/rtkit-daemon",
-            )?;
+            verify_service_link(&boot.join("rtkit-daemon"), "/etc/dinit.d/rtkit-daemon")?;
         } else if verify_service_file(&dinit.join("rtkit")).is_ok() {
             verify_service_link(&boot.join("rtkit"), "/etc/dinit.d/rtkit")?;
         }
@@ -350,10 +347,7 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
         ensure_real_directory(&user_boot)?;
         for name in ["pipewire-pulse", "wireplumber"] {
             verify_service_file(&user_dir.join(name))?;
-            verify_service_link(
-                &user_boot.join(name),
-                &format!("/etc/dinit.d/user/{name}"),
-            )?;
+            verify_service_link(&user_boot.join(name), &format!("/etc/dinit.d/user/{name}"))?;
         }
     }
     Ok(())
@@ -414,7 +408,10 @@ fn verify_service_file(path: &Path) -> Result<()> {
         return Ok(());
     }
     if !metadata.file_type().is_symlink() {
-        bail!("Dinit service {} is not a file or service symlink", path.display());
+        bail!(
+            "Dinit service {} is not a file or service symlink",
+            path.display()
+        );
     }
     let relative = path
         .strip_prefix(TARGET)
