@@ -170,11 +170,12 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
     let passwd = Command::new("chroot")
         .arg(TARGET)
         .args(["passwd", username])
-        .status()
-        .context("start passwd inside the installed target")?;
-    if !passwd.success() {
+        .status();
+    if !matches!(passwd, Ok(status) if status.success()) {
+        rollback_created_user(username);
+        rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
         bail!(
-            "user '{username}' was created, but passwd did not complete; rerun after resolving the password issue"
+            "password setup failed; the newly created user and AGSI privilege files were rolled back"
         );
     }
 
@@ -188,9 +189,10 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
             .status()
             .context("validate installed sudoers configuration")?;
         if !check.success() {
-            let _ = fs::remove_file(&sudo_dropin);
+            rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
+            rollback_created_user(username);
             bail!(
-                "visudo rejected the new sudoers configuration; the added sudoers drop-in was removed"
+                "visudo rejected the new privilege configuration; AGSI privilege files and the newly created user were rolled back"
             );
         }
     }
@@ -280,6 +282,13 @@ fn write_file(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
     file.sync_all()
         .with_context(|| format!("sync {}", path.display()))?;
     Ok(())
+}
+
+fn rollback_created_user(username: &str) {
+    let _ = Command::new("chroot")
+        .arg(TARGET)
+        .args(["userdel", "--remove", username])
+        .status();
 }
 
 fn rollback_privilege_files(mode: PrivilegeEscalation, doas: &Path, sudo: &Path) {
