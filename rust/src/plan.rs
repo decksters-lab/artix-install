@@ -78,18 +78,7 @@ pub fn format_plan(config: &InstallConfig) -> String {
         "Swap:              {} ({} GiB, zswap: {})\n",
         config.disk.swap.mode, config.disk.swap.size_gib, config.disk.swap.zswap
     ));
-    let efi_policy = if config.disk.partitioning == Partitioning::Automatic
-        && config.system.firmware == crate::config::FirmwareMode::Uefi
-    {
-        "automatic: preserve existing FAT filesystems; format only a blank EFI partition as FAT32"
-    } else if config.system.firmware == crate::config::FirmwareMode::Bios {
-        "not applicable (BIOS)"
-    } else {
-        match config.disk.efi_policy {
-            crate::config::EfiPolicy::Preserve => "preserve existing EFI partition",
-            crate::config::EfiPolicy::Format => "format selected EFI partition",
-        }
-    };
+    let efi_policy = efi_policy_description(config);
     output.push_str(&format!("EFI policy:        {efi_policy}\n"));
     output.push_str(&format!(
         "Bootloader:        {}\n",
@@ -191,7 +180,23 @@ pub fn format_plan(config: &InstallConfig) -> String {
     output
 }
 
+fn efi_policy_description(config: &InstallConfig) -> &'static str {
+    if config.disk.partitioning == Partitioning::Automatic
+        && config.system.firmware == crate::config::FirmwareMode::Uefi
+    {
+        "automatic: preserve existing FAT filesystems; format only a blank EFI partition as FAT32"
+    } else if config.system.firmware == crate::config::FirmwareMode::Bios {
+        "not applicable (BIOS)"
+    } else {
+        match config.disk.efi_policy {
+            crate::config::EfiPolicy::Preserve => "preserve existing EFI partition",
+            crate::config::EfiPolicy::Format => "format selected EFI partition",
+        }
+    }
+}
+
 fn build_items(config: &InstallConfig) -> Vec<PlanItem> {
+    let efi_policy = efi_policy_description(config);
     let storage_plan = partition::build_partition_plan(config);
     let validation_issues = config.validate().err().unwrap_or_default();
     let storage_ready = storage_plan.is_reviewable() && validation_issues.is_empty();
