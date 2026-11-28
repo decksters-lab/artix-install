@@ -1,8 +1,28 @@
 # artix-install
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b205cfde-ecda-4768-b45a-7ac6ae2faec3" />
 
-A whiptail-driven installer for Artix Linux. Originally based on a script from `github.com/feribsd/artix-install`, which no longer exists.
-(Feel free to fork this repo.. I wish I had done that with the original script. Luckily I found the script on my drive and adapted it from there. This is why my install instructions direct you to download the script rather than just piping it into bash. When you have a local copy nobody can delete a repo and take it away from you)
+A pair of installers for Artix Linux. The original whiptail-driven Bash installer is the established option; a separate Rust + Ratatui implementation is being developed alongside it.
+
+## Choose your installer
+
+### 1. Bash installer — stable, recommended
+
+This is the original, fully featured installer and remains the recommended option for real installations. Its script and existing usage instructions are preserved.
+
+[Jump to Bash installation instructions](#bash-installer-requirements-and-usage)
+
+### 2. Artix Granular System Installer — experimental
+
+The Rust implementation is a separate project under `rust/`. It is being developed toward feature parity and does **not** replace or modify the Bash installer.
+
+- Designed to run as a precompiled executable: **Rust and Cargo are not required on the Artix live ISO**.
+- GitHub Actions builds x86_64 GNU and musl binaries and attaches archives plus SHA-256 checksums to versioned GitHub Releases.
+- The musl build is statically linked and has been launched and smoke-tested on an Artix live ISO without Rust or Cargo.
+- It now has separately guarded storage and base-install stages, but it is **not a complete installer** and is not ready for real installations. See the Rust prototype status and safety notes below.
+
+When a tested release is available, download and extract the appropriate archive from [GitHub Releases](https://github.com/decksters-lab/artix-install/releases), then run `./agsi` from a terminal. Until then, use the Bash installer for actual installations.
+
+---
 
 ## Goal
 
@@ -10,7 +30,9 @@ This installer is meant for experienced and new Artix users alike but you should
 
 Window managers and Wayland compositors (Hyprland, MangoWM, Niri, Wayfire, labwc, Sway, and so on) are **installed, not configured**. You get the compositor and what it needs to start, and nothing more: no bar, launcher, wallpaper, theme or keybind setup. At most the installer drops in the package's own stock config plus one line that starts audio, so the rest of the setup is yours to build the way you like it.
 
-## Requirements
+## Bash installer requirements and usage
+
+The following requirements and commands apply to the stable Bash installer only. The experimental Rust executable has separate build and run instructions below.
 
 - Booted from the Artix live ISO, with a network connection (can be found at https://artixlinux.org/download.php .. you can use any weekly or official iso. Use one with a graphical session if its easier for you. It doesn't matter which kind you choose.) note: with a graphical installer it makes it easy to copy the install script, or the folder containing the install script to another location like a second hdd or a usb drive that isn't running the iso then the script is always available to you locally.
 - Script Must be run as root either with su before all other commands or with sudo right before running ./artix-install.sh
@@ -139,3 +161,24 @@ Things flagged during review but intentionally left as-is:
 - Removed **ZFS**. ZFS isn't part of the Linux kernel, so its modules have to be built against each kernel version (DKMS) and can lag behind the newest kernels. It also isn't in Artix's main repos (it lives in `[universe]` or the third-party archzfs repo), and a ZFS root needs an initramfs hook, boot parameters and import services that this installer never set up. Choosing it would format the disk and then leave a system that couldn't boot, so I took the option out rather than ship a broken one. If you want ZFS, follow the [Artix ZFS installation guide](https://wiki.artixlinux.org/Main/InstallationOnZFS)
 - Removed **XMonad** — along with it, a `git clone` of `github.com/feribsd/xmonad-dotfiles`, a repo whose owning account no longer exists and could be re-registered by anyone
 - Fixed a display-manager/autologin ordering bug where bare window managers combined with another desktop could incorrectly get tty1 autologin
+
+
+## Rust installer prototype (experimental)
+
+The Rust implementation lives in `rust/` and is still under development; it does not replace the Bash installer yet. It is built ahead of time for the live environment, so **users do not need Rust, Cargo, or a compiler installed on the Artix ISO**.
+
+The GitHub Actions workflow [Build standalone Linux binaries](.github/workflows/standalone-binaries.yml) builds x86_64 GNU and musl executables, smoke-tests them, and packages each with a SHA-256 checksum. The workflow runs on pushes to this feature branch and can also be started manually from the Actions tab to produce downloadable workflow artifacts. Push a version tag beginning with `v` to publish both archives as GitHub Release assets.
+
+The musl build is intended to be statically linked and is checked for an ELF interpreter in CI. It has now been tested on an Artix live ISO: the executable launched, its SHA-256 checksum verified, configuration validation passed, and all 17 packages in the test profile were found in the enabled sync databases. This test did not run any disk-writing or package-installation stage. The GNU build is provided as a compatibility fallback.
+
+For source-build instructions, checksum guidance, and verification of GitHub's signed build-provenance attestations, see [SUPPLY_CHAIN.md](rust/docs/SUPPLY_CHAIN.md). A committed Cargo.lock, locked builds, reproducible-build checks, and an Artix package recipe are still outstanding.
+
+The executable is named `agsi`. Extract the archive and run it from a terminal:
+
+```sh
+tar -xzf agsi-x86_64-linux-musl.tar.gz
+cd agsi-musl
+./agsi
+```
+
+This prototype currently supports guarded automatic partition-table writing, unencrypted ext4 root formatting, EFI preparation, mounting, fstab generation, and a separately confirmed Artix basestrap stage for automatic UEFI/ext4 targets. It does not yet configure the installed system, users, bootloader, services, or reboot, so it is not a complete installer. Do not use it for an actual installation yet.

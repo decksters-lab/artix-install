@@ -1,0 +1,33 @@
+schema_version = 1
+
+[system]
+init_system = "dinit"
+hostname = "artix"
+username = "user"
+locale = "en_US.UTF-8"
+timezone = "Europe/London"
+keyboard_layout = "us"
+firmware = "uefi"
+privilege_escalation = "doas"
+user_services = "none"
+
+[disk]
+partitioning = "automatic"
+root_filesystem = "ext4"
+encryption = false
+efi_policy = "preserve"
+
+[disk.swap]
+mode = "zram"
+size_gib = 4
+zswap = false
+
+[software]
+desktop_environments = []
+kernels = ["linux"]
+cpu_vendor = "other"
+gpu = "vm"
+bootloader = "grub"
+network = "network-manager"
+multilib = false
+noctalia_greeter = false

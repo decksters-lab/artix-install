@@ -1,0 +1,33 @@
+schema_version = 1
+
+[system]
+init_system = "dinit"
+hostname = "artix-wayland"
+username = "user"
+locale = "en_US.UTF-8"
+timezone = "Europe/London"
+keyboard_layout = "us"
+firmware = "uefi"
+privilege_escalation = "doas"
+user_services = "userspawn"
+
+[disk]
+partitioning = "automatic"
+root_filesystem = "btrfs"
+encryption = false
+efi_policy = "preserve"
+
+[disk.swap]
+mode = "zram"
+size_gib = 4
+zswap = false
+
+[software]
+desktop_environments = ["hyprland"]
+kernels = ["linux", "linux-zen"]
+cpu_vendor = "amd"
+gpu = "amd"
+bootloader = "limine"
+network = "network-manager"
+multilib = false
+noctalia_greeter = false
