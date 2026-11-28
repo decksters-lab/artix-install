@@ -4,7 +4,7 @@
 
 A Rust + Ratatui reimplementation track for [decksters-lab/artix-install](https://github.com/decksters-lab/artix-install).
 
-> **Status: experimental installer prototype.** The Rust binary has guarded storage stages for automatic partitioning, ext4 root formatting, safe EFI preparation, target mounting, UUID-based fstab generation, Artix basestrap installation, and an initial post-install system-identity stage for hostname, timezone, locale generation, console keymap, X11 keyboard layout, and hosts. User/password setup, init-specific service activation, bootloader installation/configuration, and full guided installation are not implemented yet. Keep using the existing `artix-install.sh` for real installs until the Rust port reaches feature parity and passes disposable-VM testing.
+> **Status: experimental installer prototype.** The Rust binary has guarded storage stages for automatic partitioning, ext4 root formatting, safe EFI preparation, target mounting, UUID-based fstab generation, Artix basestrap installation, an initial post-install system-identity stage, and a guarded target-user stage that creates the configured account, prompts for its password interactively, and configures the selected doas/sudo wheel policy. Init-specific service activation, bootloader installation/configuration, and full guided installation are not implemented yet. Keep using the existing `artix-install.sh` for real installs until the Rust port reaches feature parity and passes disposable-VM testing.
 
 ## Build
 
@@ -26,6 +26,7 @@ cargo run -- --config configs/wayland-hyprland.toml --plan
 cargo run -- --write-default agsi.toml
 cargo run -- --hardware
 cargo run -- --config agsi.toml --configure-system
+cargo run -- --config agsi.toml --configure-user
 ```
 
 Inside the TUI:
@@ -48,8 +49,8 @@ The schema is based on the current shell wizard and covers:
 - Init systems: dinit, OpenRC, runit and s6.
 - Firmware and boot: UEFI/BIOS, GRUB2, Limine and rEFInd (BIOS is GRUB-only).
 - Storage: automatic/manual/dual-boot layout planning; ext4, Btrfs, XFS, F2FS, JFS and NILFS2 root filesystems; optional manual additional mountpoints; LUKS2 intent; zram, swap partition, swapfile, combined zram+swapfile, swap size and zswap intent; configurable Btrfs subvolume/compression plans.
-- Locale, timezone, keyboard layout, hostname and username. Passwords/passphrases are deliberately not part of saved profiles.
-- Privilege escalation: doas, sudo, or both. Selecting both includes both packages in the install plan; final chroot configuration will configure both without a passwordless pacman exception.
+- Locale, timezone, keyboard layout, hostname and username. Passwords/passphrases are deliberately not part of saved profiles; `--configure-user` prompts through `passwd` inside the target.
+- Privilege escalation: doas, sudo, or both. Selecting both includes both packages in the install plan; `--configure-user` configures the selected wheel access policy without a passwordless pacman exception.
 - User services are init-specific: Dinit offers `userspawn-dinit` or `turnstile-dinit`; OpenRC offers native per-user services (OpenRC 0.62+, with XDG_RUNTIME_DIR and PAM session auto-start configured) or `turnstile-openrc`; runit offers `userspawn-runit`; s6 is explicitly marked for manual, user-managed setup. The planner does not install or configure a generic Turnstile service across init systems.
 - Multi-select desktop/window-manager choices: Plasma, XFCE, Cinnamon, MATE, LXQt, Moksha, COSMIC, Hyprland, Niri, Wayfire, labwc, Sway, SwayFX, Umbriel, MangoWM, Cosmalia, i3, Openbox, Fluxbox and Qtile.
 - Multi-select kernels: linux, linux-lts, linux-zen, linux-lqx and linux-cachyos. `linux` is retained as a guaranteed fallback.
