@@ -357,8 +357,7 @@ fn mount_chroot_pseudofilesystems() -> Result<Vec<PathBuf>> {
     ] {
         let target_path = Path::new(target);
         if let Err(error) = verify_real_directory(target_path) {
-            cleanup_mounts_after_error(&mounted, error)?;
-            unreachable!();
+            return Err(cleanup_mounts_after_error(&mounted, error));
         }
         match is_mountpoint(target) {
             Ok(true) => {
@@ -366,10 +365,7 @@ fn mount_chroot_pseudofilesystems() -> Result<Vec<PathBuf>> {
                 bail!("{target} is already a mountpoint; refusing to replace it");
             }
             Ok(false) => {}
-            Err(error) => {
-                cleanup_mounts_after_error(&mounted, error)?;
-                unreachable!();
-            }
+            Err(error) => return Err(cleanup_mounts_after_error(&mounted, error)),
         }
 
         let status = Command::new("mount")
@@ -382,11 +378,10 @@ fn mount_chroot_pseudofilesystems() -> Result<Vec<PathBuf>> {
                 bail!("could not bind-mount {source} into {target}");
             }
             Err(error) => {
-                cleanup_mounts_after_error(
+                return Err(cleanup_mounts_after_error(
                     &mounted,
                     error.into(),
-                )?;
-                unreachable!();
+                ));
             }
         }
 
@@ -400,25 +395,23 @@ fn mount_chroot_pseudofilesystems() -> Result<Vec<PathBuf>> {
                 bail!("could not make {target} a slave mount");
             }
             Err(error) => {
-                cleanup_mounts_after_error(
+                return Err(cleanup_mounts_after_error(
                     &mounted,
                     error.into(),
-                )?;
-                unreachable!();
+                ));
             }
         }
     }
     Ok(mounted)
 }
 
-fn cleanup_mounts_after_error(
-    mounted: &[PathBuf],
-    error: anyhow::Error,
-) -> Result<Vec<PathBuf>> {
-    if let Err(cleanup_error) = unmount_chroot_pseudofilesystems(mounted) {
-        bail!("{error:#}; additionally, chroot mount cleanup failed: {cleanup_error:#}");
+fn cleanup_mounts_after_error(mounted: &[PathBuf], error: anyhow::Error) -> anyhow::Error {
+    match unmount_chroot_pseudofilesystems(mounted) {
+        Ok(()) => error,
+        Err(cleanup_error) => anyhow::anyhow!(
+            "{error:#}; additionally, chroot mount cleanup failed: {cleanup_error:#}"
+        ),
     }
-    Err(error)
 }
 
 fn unmount_chroot_pseudofilesystems(mounted: &[PathBuf]) -> Result<()> {
