@@ -9,6 +9,7 @@ mod plan;
 mod preflight;
 mod storage;
 mod system_config;
+mod user_config;
 mod tui;
 
 use std::{fs, io::IsTerminal, path::PathBuf, process::ExitCode};
@@ -141,6 +142,17 @@ struct Args {
         ]
     )]
     configure_system: bool,
+    /// Create the configured target user and set its password interactively.
+    #[arg(
+        long,
+        requires = "config",
+        conflicts_with_all = [
+            "plan", "validate", "hardware", "preflight", "check_packages", "write_default",
+            "apply_partition_table", "format_root", "prepare_efi", "mount_target",
+            "generate_fstab", "install_base", "configure_system"
+        ]
+    )]
+    configure_user: bool,
     /// Write the default configuration to FILE and exit.
     #[arg(long, value_name = "FILE")]
     write_default: Option<PathBuf>,
@@ -185,6 +197,14 @@ fn run() -> Result<()> {
             bail!("--configure-system requires an explicit --config file");
         }
         let result = system_config::configure_system(&config)?;
+        println!("{result}");
+        return Ok(());
+    }
+    if args.configure_user {
+        if !has_explicit_config {
+            bail!("--configure-user requires an explicit --config file");
+        }
+        let result = user_config::configure_user(&config)?;
         println!("{result}");
         return Ok(());
     }
