@@ -3,7 +3,7 @@
 
 use crate::config::{
     Bootloader, CpuVendor, Desktop, Filesystem, FirmwareMode, GpuChoice, InitSystem, InstallConfig,
-    Kernel, NetworkStack, Partitioning, PrivilegeEscalation, UserServices,
+    Kernel, NetworkStack, Partitioning, PrivilegeEscalation, SwapMode, UserServices,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,6 +129,15 @@ pub fn build_package_plan(config: &InstallConfig) -> PackagePlan {
     }
     if config.disk.encryption {
         storage_packages.push("cryptsetup");
+    }
+    if matches!(config.disk.swap.mode, SwapMode::Zram | SwapMode::Both) {
+        storage_packages.push("zramen");
+        storage_packages.push(match config.system.init_system {
+            InitSystem::Dinit => "zramen-dinit",
+            InitSystem::OpenRc => "zramen-openrc",
+            InitSystem::Runit => "zramen-runit",
+            InitSystem::S6 => "zramen-s6",
+        });
     }
     for filesystem in filesystems {
         let package = match filesystem {
@@ -570,6 +579,7 @@ mod tests {
         use crate::config::{EfiPolicy, Filesystem, FirmwareMode, MountConfig, Partitioning};
 
         let mut config = InstallConfig::default();
+        config.disk.swap.mode = SwapMode::None;
         let plan = build_package_plan(&config);
         assert_eq!(plan.storage_packages, ["dosfstools"]);
         assert_eq!(plan.bootloader_packages, ["grub", "efibootmgr"]);
@@ -617,6 +627,37 @@ mod tests {
         let plan = build_package_plan(&config);
         assert!(plan.storage_packages.is_empty());
         assert_eq!(plan.bootloader_packages, ["grub"]);
+    }
+
+    #[test]
+    fn zram_packages_follow_swap_mode_and_init_system() {
+        let mut config = InstallConfig::default();
+        let plan = build_package_plan(&config);
+        assert!(plan.storage_packages.contains(&"zramen"));
+        assert!(plan.storage_packages.contains(&"zramen-dinit"));
+        config.disk.swap.mode = SwapMode::None;
+        let plan = build_package_plan(&config);
+        assert!(!plan.storage_packages.contains(&"zramen"));
+        assert!(!plan.storage_packages.contains(&"zramen-dinit"));
+        config.disk.swap.mode = SwapMode::Zram;
+        config.system.init_system = InitSystem::OpenRc;
+        assert!(
+            build_package_plan(&config)
+                .storage_packages
+                .contains(&"zramen-openrc")
+        );
+        config.system.init_system = InitSystem::Runit;
+        assert!(
+            build_package_plan(&config)
+                .storage_packages
+                .contains(&"zramen-runit")
+        );
+        config.system.init_system = InitSystem::S6;
+        assert!(
+            build_package_plan(&config)
+                .storage_packages
+                .contains(&"zramen-s6")
+        );
     }
 
     #[test]
