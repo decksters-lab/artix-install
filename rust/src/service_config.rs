@@ -89,12 +89,22 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
     verify_mount("/mnt/boot", &efi)?;
 
     let etc = Path::new(TARGET).join("etc");
+    verify_real_directory(&etc)?;
+    if !etc.join("fstab").is_file() || !etc.join("hostname").is_file() {
+        bail!("run --generate-fstab and --configure-system before --configure-services");
+    }
     let dinit_dir = etc.join("dinit.d");
-    ensure_real_directory(&dinit_dir)?;
-    let boot_dir = dinit_dir.join("boot.d");
-    ensure_real_directory(&boot_dir)?;
+    verify_real_directory(&dinit_dir)?;
 
     let mut services = selected_services(config)?;
+    if services.iter().any(|name| name == "userspawn") {
+        services.retain(|name| name != "userspawn");
+        let selected = ["userspawn", "dinit-user-spawn"]
+            .into_iter()
+            .find(|name| valid_service_file(&dinit_dir.join(name)).is_ok())
+            .context("neither userspawn nor dinit-user-spawn exists in the target Dinit service directory")?;
+        services.push(selected.to_owned());
+    }
     if needs_audio(config) {
         for optional in ["rtkit-daemon", "rtkit"] {
             if valid_service_file(&dinit_dir.join(optional)).is_ok() {
@@ -112,6 +122,9 @@ pub fn configure_services(config: &InstallConfig) -> Result<String> {
             user_services.push(name.to_owned());
         }
     }
+
+    let boot_dir = dinit_dir.join("boot.d");
+    ensure_real_directory(&boot_dir)?;
 
     let mut links = Vec::new();
     for name in &services {
@@ -281,6 +294,14 @@ fn verify_link_destination(link: &Path, expected: &Path) -> Result<()> {
         ),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error).with_context(|| format!("inspect {}", link.display())),
+    }
+}
+
+fn verify_real_directory(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_dir() => Ok(()),
+        Ok(_) => bail!("{} exists but is not a real directory", path.display()),
+        Err(error) => Err(error).with_context(|| format!("inspect required directory {}", path.display())),
     }
 }
 
