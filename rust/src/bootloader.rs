@@ -105,8 +105,8 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     verify_mount("/mnt/boot", &efi)?;
 
     let etc = Path::new(TARGET).join("etc");
-    verify_real_directory(&etc)?;
-    verify_real_directory(&etc.join("default"))?;
+    ensure_real_directory(&etc)?;
+    ensure_real_directory(&etc.join("default"))?;
     for required in ["fstab", "hostname", "default/grub"] {
         let path = etc.join(required);
         ensure_regular_file(&path)?;
