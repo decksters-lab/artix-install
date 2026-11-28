@@ -136,19 +136,26 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
 
     let sudo_dropin = etc.join("sudoers.d/10-agsi-wheel");
     let doas_conf = etc.join("doas.conf");
-    match config.system.privilege_escalation {
-        PrivilegeEscalation::Doas => {
-            ensure_absent(&doas_conf)?;
-            write_file(&doas_conf, b"permit :wheel\n", 0o400)?;
+    let policy_result = (|| -> Result<()> {
+        match config.system.privilege_escalation {
+            PrivilegeEscalation::Doas => {
+                ensure_absent(&doas_conf)?;
+                write_file(&doas_conf, b"permit :wheel\n", 0o400)?;
+            }
+            PrivilegeEscalation::Sudo => {
+                ensure_sudoers_dropin(&etc, &sudo_dropin)?;
+            }
+            PrivilegeEscalation::Both => {
+                ensure_absent(&doas_conf)?;
+                ensure_sudoers_dropin(&etc, &sudo_dropin)?;
+                write_file(&doas_conf, b"permit :wheel\n", 0o400)?;
+            }
         }
-        PrivilegeEscalation::Sudo => {
-            ensure_sudoers_dropin(&etc, &sudo_dropin)?;
-        }
-        PrivilegeEscalation::Both => {
-            ensure_absent(&doas_conf)?;
-            ensure_sudoers_dropin(&etc, &sudo_dropin)?;
-            write_file(&doas_conf, b"permit :wheel\n", 0o400)?;
-        }
+        Ok(())
+    })();
+    if let Err(error) = policy_result {
+        rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
+        return Err(error);
     }
 
     let useradd = Command::new("chroot")
@@ -162,11 +169,10 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
             "/bin/bash",
             username,
         ])
-        .status()
-        .context("create the configured target user")?;
-    if !useradd.success() {
+        .status();
+    if !matches!(useradd, Ok(status) if status.success()) {
         rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
-        bail!("useradd failed inside /mnt; no password was set");
+        bail!("useradd failed inside /mnt; privilege configuration was rolled back and no password was set");
     }
 
     eprintln!("Set the password for '{username}' in the target system:");
@@ -192,9 +198,8 @@ pub fn configure_user(config: &InstallConfig) -> Result<String> {
         let check = Command::new("chroot")
             .arg(TARGET)
             .args(["visudo", "-cf", "/etc/sudoers"])
-            .status()
-            .context("validate installed sudoers configuration")?;
-        if !check.success() {
+            .status();
+        if !matches!(check, Ok(status) if status.success()) {
             rollback_privilege_files(config.system.privilege_escalation, &doas_conf, &sudo_dropin);
             if !rollback_created_user(username) {
                 bail!(
@@ -287,10 +292,19 @@ fn write_file(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
         .open(path)
         .with_context(|| format!("create {}", path.display()))?;
     use std::io::Write;
-    file.write_all(contents)
-        .with_context(|| format!("write {}", path.display()))?;
-    file.sync_all()
-        .with_context(|| format!("sync {}", path.display()))?;
+    let result = (|| -> Result<()> {
+        use std::io::Write;
+        file.write_all(contents)
+            .with_context(|| format!("write {}", path.display()))?;
+        file.sync_all()
+            .with_context(|| format!("sync {}", path.display()))?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(error);
+    }
     Ok(())
 }
 
