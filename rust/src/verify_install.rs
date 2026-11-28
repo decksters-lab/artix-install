@@ -117,9 +117,7 @@ pub fn verify_installation(config: &InstallConfig) -> Result<String> {
         }
     }
 
-    Ok(format!(
-        "ARTIX INSTALL VERIFICATION\n===========================\n[PASS] GPT target disk and exact root/EFI mount sources\n[PASS] ext4 root, FAT EFI, and UUID-based fstab entries\n[PASS] hostname, timezone, locale, and keyboard configuration\n[PASS] target user, password state, wheel access, and privilege policy\n[PASS] kernel/initramfs pairs and Dinit service enablement\n[PASS] UEFI GRUB loader and generated menu\n[PASS] no installer bind mounts remain under /mnt\n\nStatic verification passed. This is not a boot test; reboot the VM to verify firmware handoff and a successful Artix startup."
-    ))
+    Ok("ARTIX INSTALL VERIFICATION\n===========================\n[PASS] GPT target disk and exact root/EFI mount sources\n[PASS] ext4 root, FAT EFI, and UUID-based fstab entries\n[PASS] hostname, timezone, locale, and keyboard configuration\n[PASS] target user, password state, wheel access, and privilege policy\n[PASS] kernel/initramfs pairs and Dinit service enablement\n[PASS] UEFI GRUB loader and generated menu\n[PASS] no installer bind mounts remain under /mnt\n\nStatic verification passed. This is not a boot test; reboot the VM to verify firmware handoff and a successful Artix startup.".to_owned())
 }
 
 fn verify_system_identity(config: &InstallConfig, etc: &Path) -> Result<()> {
