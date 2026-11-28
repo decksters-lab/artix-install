@@ -336,7 +336,7 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
     }
 
     if config.disk.swap.mode == SwapMode::Zram {
-        verify_zramen(config, &etc, &dinit)?;
+        verify_zramen(config, &dinit)?;
     }
 
     for name in &services {
@@ -371,7 +371,7 @@ fn verify_dinit_services(config: &InstallConfig, etc: &Path) -> Result<()> {
     Ok(())
 }
 
-fn verify_zramen(config: &InstallConfig, etc: &Path, dinit: &Path) -> Result<()> {
+fn verify_zramen(config: &InstallConfig, dinit: &Path) -> Result<()> {
     let packages = run_chroot_output(&["pacman", "-Q", "zramen", "zramen-dinit"])?;
     let package_list = String::from_utf8_lossy(&packages.stdout);
     for required in ["zramen ", "zramen-dinit "] {
@@ -385,13 +385,12 @@ fn verify_zramen(config: &InstallConfig, etc: &Path, dinit: &Path) -> Result<()>
 
     let config_path = dinit.join("config/zramen.conf");
     let expected = format!(
-        "ZRAM_SIZE=100\\nZRAM_MAX_SIZE={}\\nZRAM_COMP_ALGORITHM=lz4\\nZRAM_PRIORITY=32767\\n",
+        "ZRAM_SIZE=100\nZRAM_MAX_SIZE={}\nZRAM_COMP_ALGORITHM=lz4\nZRAM_PRIORITY=32767\n",
         u32::from(config.disk.swap.size_gib) * 1024
     );
     if read_regular_file(&config_path)? != expected {
         bail!("Dinit zramen configuration does not match the selected ZRAM size and safe defaults");
     }
-    let _ = etc;
     Ok(())
 }
 
