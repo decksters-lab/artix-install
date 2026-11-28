@@ -16,6 +16,9 @@ use crate::{
 const GIB: u64 = 1024 * 1024 * 1024;
 const MIN_ROOT_GIB: u64 = 8;
 const PARTITION_ALIGNMENT_MARGIN_BYTES: u64 = 16 * 1024 * 1024;
+// Clear signatures on the disk itself, but preserve signatures on partitions
+// so the EFI preparation stage can retain an existing FAT filesystem.
+const SFDISK_WRITE_ARGS: [&str; 5] = ["--wipe", "always", "--wipe-partitions", "never", "--"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TargetIdentity {
@@ -93,7 +96,7 @@ pub fn apply_automatic_partition_table(
         bail!("target no longer resolves to a block device; refusing to write");
     }
     let mut child = Command::new("sfdisk")
-        .args(["--wipe", "always", "--wipe-partitions", "never", "--"])
+        .args(SFDISK_WRITE_ARGS)
         .arg(&canonical_target)
         .stdin(Stdio::piped())
         .stdout(Stdio::inherit())
@@ -1551,7 +1554,7 @@ mod tests {
         // The EFI preparation step preserves an existing FAT filesystem, so
         // sfdisk must not erase signatures from the newly-created partitions.
         assert_eq!(
-            ["--wipe", "always", "--wipe-partitions", "never", "--"],
+            SFDISK_WRITE_ARGS,
             ["--wipe", "always", "--wipe-partitions", "never", "--"]
         );
     }
@@ -1573,7 +1576,7 @@ mod tests {
 
         let script = build_sfdisk_script(&InstallConfig::default()).unwrap();
         let mut child = Command::new("sfdisk")
-            .args(["--wipe", "always", "--wipe-partitions", "never", "--"])
+            .args(SFDISK_WRITE_ARGS)
             .arg(&image)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
