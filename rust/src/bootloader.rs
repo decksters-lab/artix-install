@@ -203,8 +203,8 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     }
 
     let vendor_loader = vendor_dir.join("grubx64.efi");
-    let verification = ensure_nonempty_file(&vendor_loader)
-        .and_then(|()| ensure_nonempty_file(&grub_cfg));
+    let verification =
+        ensure_nonempty_file(&vendor_loader).and_then(|()| ensure_nonempty_file(&grub_cfg));
     if let Err(error) = verification {
         if !vendor_existed {
             let _ = fs::remove_dir_all(&vendor_dir);
