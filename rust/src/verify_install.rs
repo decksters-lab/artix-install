@@ -376,7 +376,10 @@ fn verify_zramen(config: &InstallConfig, dinit: &Path) -> Result<()> {
     let package_list = String::from_utf8_lossy(&packages.stdout);
     for required in ["zramen ", "zramen-dinit "] {
         if !package_list.lines().any(|line| line.starts_with(required)) {
-            bail!("required ZRAM package {} is not installed in the target", required.trim());
+            bail!(
+                "required ZRAM package {} is not installed in the target",
+                required.trim()
+            );
         }
     }
 
@@ -407,9 +410,7 @@ fn verify_zramen(config: &InstallConfig, dinit: &Path) -> Result<()> {
             })
             .collect();
         if values.as_slice() != [expected_value.as_str()] {
-            bail!(
-                "Dinit zramen setting {key} does not have exactly one expected value"
-            );
+            bail!("Dinit zramen setting {key} does not have exactly one expected value");
         }
     }
     Ok(())
