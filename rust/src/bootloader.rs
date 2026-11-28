@@ -3,7 +3,7 @@ use std::{
     fs::{self, OpenOptions},
     os::unix::fs::{FileTypeExt, OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::Command,
 };
 
 use anyhow::{Context, Result, bail};
@@ -104,6 +104,7 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
 
     let etc = Path::new(TARGET).join("etc");
     verify_real_directory(&etc)?;
+    verify_real_directory(&etc.join("default"))?;
     for required in ["fstab", "hostname", "default/grub"] {
         let path = etc.join(required);
         ensure_regular_file(&path)?;
@@ -142,11 +143,15 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     ensure_directory_or_absent(&grub_dir)?;
 
     let fallback_dir = efi_root.join("BOOT");
-    let fallback_existed = path_exists(&fallback_dir.join("BOOTX64.EFI"))?;
+    let fallback_loader = fallback_dir.join("BOOTX64.EFI");
+    let fallback_existed = path_exists(&fallback_loader)?;
     ensure_directory_or_absent(&fallback_dir)?;
     if fallback_existed {
-        ensure_regular_file(&fallback_dir.join("BOOTX64.EFI"))?;
+        ensure_regular_file(&fallback_loader)?;
     }
+    let fallback_marker = fallback_dir.join(GRUB_MARKER);
+    ensure_regular_or_absent(&fallback_marker)?;
+    let fallback_managed = fallback_marker.is_file();
 
     for tool in ["grub-install", "grub-mkconfig"] {
         let output = Command::new("chroot")
@@ -190,15 +195,14 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
     ensure_nonempty_file(&grub_cfg)?;
     write_marker(&vendor_dir.join(GRUB_MARKER))?;
 
-    let fallback_loader = fallback_dir.join("BOOTX64.EFI");
-    let fallback_status = if fallback_existed {
+    let fallback_status = if fallback_existed && !fallback_managed {
         "preserved the existing EFI fallback loader"
     } else {
         ensure_real_directory(&fallback_dir)?;
         fs::copy(&vendor_loader, &fallback_loader)
             .context("copy GRUB to the UEFI fallback boot path")?;
-        write_marker(&fallback_dir.join(GRUB_MARKER))?;
-        "installed the UEFI fallback loader"
+        write_marker(&fallback_marker)?;
+        "installed or updated the AGSI-managed UEFI fallback loader"
     };
     write_marker(&marker)?;
 
@@ -215,14 +219,11 @@ pub fn install_grub_uefi(config: &InstallConfig) -> Result<String> {
 }
 
 fn register_nvram_entry(disk: &Path, partition: &str) -> String {
-    let efivars = Path::new("/sys/firmware/efi/efivars");
-    if !efivars.is_dir() {
+    let efivars = "/sys/firmware/efi/efivars";
+    if !is_mountpoint(efivars).unwrap_or(false) {
         return "UEFI NVRAM is unavailable in the live environment; the fallback loader remains available.".into();
     }
-    let existing = Command::new("chroot")
-        .arg(TARGET)
-        .args(["efibootmgr", "-v"])
-        .output();
+    let existing = Command::new("efibootmgr").arg("-v").output();
     if let Ok(output) = existing {
         let text = String::from_utf8_lossy(&output.stdout);
         if text.contains("\\EFI\\Artix\\grubx64.efi") {
@@ -230,10 +231,8 @@ fn register_nvram_entry(disk: &Path, partition: &str) -> String {
         }
     }
     let disk = disk.to_string_lossy();
-    let status = Command::new("chroot")
-        .arg(TARGET)
+    let status = Command::new("efibootmgr")
         .args([
-            "efibootmgr",
             "--create",
             "--disk",
             &disk,
@@ -276,6 +275,11 @@ fn verify_kernel_initramfs_pairs(boot: &Path) -> Result<()> {
                 .file_type()
                 .context("inspect kernel image type")?
                 .is_file()
+                && entry
+                    .metadata()
+                    .context("inspect kernel image size")?
+                    .len()
+                    > 0
             {
                 kernels.push(kernel.to_owned());
             }
