@@ -75,7 +75,8 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
         bail!("selected timezone resolves outside the installed zoneinfo database");
     }
 
-    verify_keymap(&config.system.keyboard_layout)?;
+    let console_keymap = console_keymap(&config.system.keyboard_layout);
+    verify_keymap(console_keymap)?;
 
     let locale_gen = etc.join("locale.gen");
     let locale_contents = fs::read_to_string(&locale_gen)
@@ -85,8 +86,9 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
     let hostname = etc.join("hostname");
     let locale_conf = etc.join("locale.conf");
     let vconsole = etc.join("vconsole.conf");
+    let hosts = etc.join("hosts");
     let localtime = etc.join("localtime");
-    for path in [&hostname, &locale_conf, &vconsole, &locale_gen] {
+    for path in [&hostname, &locale_conf, &vconsole, &hosts, &locale_gen] {
         ensure_regular_file_or_absent(path)?;
     }
     let timezone_link = PathBuf::from(format!("../usr/share/zoneinfo/{}", config.system.timezone));
@@ -143,6 +145,30 @@ fn verify_mount(mountpoint: &str, expected: &Path) -> Result<()> {
         bail!("{mountpoint} is mounted from {}, not the expected {}", actual.display(), expected.display());
     }
     Ok(())
+}
+
+fn console_keymap(layout: &str) -> &str {
+    match layout {
+        "us-intl" => "us",
+        "cz-qwerty" => "cz-qwerty",
+        "fr-bepo" => "fr-bepo",
+        "br-abnt2" => "br-abnt2",
+        "de-latin1" => "de-latin1",
+        "jp106" => "jp106",
+        other => other,
+    }
+}
+
+fn ensure_directory(path: &Path) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_dir() => Ok(()),
+        Ok(_) => bail!("{} exists but is not a real directory", path.display()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir(path).with_context(|| format!("create {}", path.display()))?;
+            Ok(())
+        }
+        Err(error) => Err(error).with_context(|| format!("inspect {}", path.display())),
+    }
 }
 
 fn verify_keymap(layout: &str) -> Result<()> {
