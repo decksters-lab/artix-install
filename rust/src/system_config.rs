@@ -106,7 +106,18 @@ pub fn configure_system(config: &InstallConfig) -> Result<String> {
     atomic_write(&locale_gen, updated_locale_gen.as_bytes())?;
     atomic_write(&hostname, format!("{}\n", config.system.hostname).as_bytes())?;
     atomic_write(&locale_conf, format!("LANG={}\n", config.system.locale).as_bytes())?;
-    atomic_write(&vconsole, format!("KEYMAP={}\n", config.system.keyboard_layout).as_bytes())?;
+    atomic_write(&vconsole, format!("KEYMAP={}\nFONT=default8x16\n", console_keymap).as_bytes())?;
+    atomic_write(&hosts, format!("127.0.0.1\\tlocalhost\\n127.0.1.1\\t{}.localdomain {}\\n::1\\t\\tlocalhost\\n", config.system.hostname, config.system.hostname).as_bytes())?;
+    let xorg_dir = etc.join("X11");
+    ensure_directory(&xorg_dir)?;
+    let xorg_dropins = xorg_dir.join("xorg.conf.d");
+    ensure_directory(&xorg_dropins)?;
+    let xorg_keyboard = xorg_dropins.join("00-keyboard.conf");
+    ensure_regular_file_or_absent(&xorg_keyboard)?;
+    atomic_write(&xorg_keyboard, format!(
+        "Section \\"InputClass\\"\\n    Identifier \\"system-keyboard\\"\\n    MatchIsKeyboard \\"on\\"\\n    Option \\"XkbLayout\\" \\"{}\\"\\nEndSection\\n",
+        config.system.keyboard_layout
+    ).as_bytes())?;
     if !localtime.exists() {
         std::os::unix::fs::symlink(&timezone_link, &localtime)
             .context("create installed /etc/localtime timezone symlink")?;
