@@ -279,15 +279,34 @@ fn verify_service_file(path: &Path) -> Result<()> {
 }
 
 fn valid_service_file(path: &Path) -> Result<PathBuf> {
-    let canonical = fs::canonicalize(path)
+    let metadata = fs::symlink_metadata(path)
         .with_context(|| format!("required Dinit service {} is missing", path.display()))?;
-    if !canonical.starts_with(TARGET) || !canonical.is_file() {
+    if metadata.file_type().is_file() {
+        return Ok(path.to_path_buf());
+    }
+    if !metadata.file_type().is_symlink() {
         bail!(
-            "Dinit service {} does not resolve to a regular file inside the installed target",
+            "Dinit service {} is not a regular file or a service symlink",
             path.display()
         );
     }
-    Ok(canonical)
+
+    let relative = path
+        .strip_prefix(TARGET)
+        .context("Dinit service path is outside the installed target")?;
+    let target_path = format!("/{}", relative.display());
+    let status = Command::new("chroot")
+        .arg(TARGET)
+        .args(["test", "-f", &target_path])
+        .status()
+        .context("chroot is required to verify symlinked Dinit service files inside the target")?;
+    if !status.success() {
+        bail!(
+            "Dinit service symlink {} does not resolve to a regular file inside the installed target",
+            path.display()
+        );
+    }
+    Ok(path.to_path_buf())
 }
 
 fn verify_link_destination(link: &Path, expected: &Path) -> Result<()> {
