@@ -121,7 +121,7 @@ fn plan_automatic(config: &InstallConfig, plan: &mut PartitionPlan, target: &str
     let mut next_number = 1_u8;
     if uefi {
         plan.operations.push(format!(
-            "Create partition {next_number}: 1 GiB EFI System Partition (FAT32), then format it as FAT32."
+            "Create partition {next_number}: 1 GiB EFI System Partition; preserve an existing FAT filesystem, or format the partition as FAT32 only if it is blank."
         ));
         next_number += 1;
     }
@@ -467,6 +467,8 @@ mod tests {
         assert!(text.contains("GPT"));
         assert!(text.contains("1 GiB EFI System Partition"));
         assert!(text.contains("FAT32"));
+        assert!(text.contains("preserve an existing FAT filesystem"));
+        assert!(text.contains("only if it is blank"));
         assert!(text.contains("remaining space as the Linux root"));
         assert!(plan.is_reviewable());
     }
